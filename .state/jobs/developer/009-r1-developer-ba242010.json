@@ -1,0 +1,42 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T20:57:30.145Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "009-r1-developer-ba242010-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "009-r1-developer-ba242010",
+    "role": "developer",
+    "goal": "009",
+    "round": 1,
+    "type": "IMPLEMENTATION",
+    "migrationAcceptedBaseline": "1dc170eb8b04d6ee8a706dca089cfe4538175125",
+    "executionBase": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktreeInitialHead": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-009",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\009-disponibilidade-pessoal-recorrencia.md",
+    "blockers": [],
+    "previousImplementationReport": null,
+    "changedFiles": [],
+    "developerProfile": "SONNET_HIGH",
+    "developerProfileReason": "Planning chose OPUS_MEDIUM; adaptive routing starts on SONNET_HIGH and escalates on evidence.",
+    "routing": {
+      "role": "developer",
+      "stage": "implementation",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": null,
+      "riskScore": null,
+      "signals": [],
+      "reason": "PROFILE_SONNET_HIGH",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-09T21:47:33.382Z"
+}

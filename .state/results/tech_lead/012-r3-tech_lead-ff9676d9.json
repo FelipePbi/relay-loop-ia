@@ -1,0 +1,19 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T21:20:16.795Z",
+  "attemptId": "012-r3-tech_lead-ff9676d9-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r3-tech_lead-ff9676d9",
+      "goal": "012",
+      "round": 3,
+      "decision": "ACCEPTED",
+      "blockers": [],
+      "summary": "Review DEEP dirigido do Goal 012, rodada 3 (correção FIX-001 sobre a worktree `goal-012`, base 4116149, baseline aceita a87dd5b). A rodada tocou só `assistant.service.ts`, um comentário em `internal/routes.ts` e dois arquivos de teste da IA; nenhum outro app mudou desde a rodada 2, então os gates completos que reproduzi lá continuam válidos (`validate:core` 14 passed / 3 skips explícitos do Goal002; `validate:integration` 22/22 com ensaio 012, BFF 70 e integração da IA 52 contra PostgreSQL). Nesta rodada: `git diff --check` limpo; `npm run typecheck` e `npm run lint` da IA limpos; suíte completa da IA 417 passed / 52 skipped (integração sem banco), 0 falhas. B1 residual FECHADO: `generateSuggestions` recusa `NO_TEXTUAL_MESSAGE` quando a última mensagem INBOUND não tem corpo textual, antes de recuperar conhecimento, montar prompt ou criar `AiRun` (mesma posição das outras quatro recusas), o código entrou em `SuggestionRefusalReason`, o teste de rota parametrizado cobre a quinta recusa e o eval prova a recusa no serviço real sem chamar o modelo e sem `AiRun`; `PUBLIC_API_V1.md` já descrevia a recusa por descrição, como as demais, e agora o código a honra. Critérios 1–13 do Goal atendidos no diff acumulado: conhecimento editável por rota com versão nova e inativação atômica, embedding antes da transação, checksum, campo livre único e seed pelo serviço; recuperação por tenant, ACTIVE e serviço em foco com a precedência do produto e regra de pergunta desconhecida; hash de versão cobrindo os módulos novos; `CustomerMemory` com origem, permissão por linha, substituição sem apagar, reforço, idade, inferência só de atendimento confirmado pelo ledger de tools e recorrência só de série confirmada; resumo só de material autorizado e sempre auditado; sugestões fora do grafo com binding somente leitura, cinco recusas próprias e contrato coerente entre IA, BFF e frontend; evals novos; ensaio sem pgvector expandindo o banco de durabilidade; resíduos do review011 fechados. Observações não bloqueantes para o fechamento/planejamento: (1) a primeira confirmação já cria `PREFERRED_DAY`/`PREFERRED_PERIOD` inferidos e permitidos e a confirmação seguinte em outro dia substitui — a memória se comporta como \\\"último dia marcado\\\" rotulado de preferência; recomendar ao próximo Goal que tocar memória (015 exibe a lista) levar `AI_INFERRED` ao prompt só depois de reforço por conversa diferente; (2) o modo sugestão recupera conhecimento sem `focusServiceIds`; (3) FAQ por serviço só é recuperável depois de o serviço entrar no rascunho ou na ação pendente, limite do próprio Goal; (4) `PUBLIC_API_V1.md` descreve as recusas de sugestão por situação, sem listar os códigos (`CONTACT_IGNORED`, `SESSION_PERSONAL`, `HUMAN_HANDLING_REQUIRED`, `AI_DISABLED`, `NO_TEXTUAL_MESSAGE`) — vale listar no fechamento; (5) `RECURRING_SERVICE` inferido nasce apenas de série confirmada porque não existe porta de histórico de atendimentos na IA — registrar como limite; (6) 13 arquivos com LF no working copy CRLF, cosmético. Nenhum arquivo editado por mim; nenhum cluster meu permanece ativo.",
+      "nextAction": "STOP"
+    },
+    "attemptId": "012-r3-tech_lead-ff9676d9-a1"
+  }
+}

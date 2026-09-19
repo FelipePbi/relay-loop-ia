@@ -1,0 +1,22 @@
+{
+  "jobId": "013-r1-tech_lead-25ce8d06",
+  "attemptId": "013-r1-tech_lead-25ce8d06-a1",
+  "agent": "tech_lead",
+  "goal": "013",
+  "round": 1,
+  "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-013",
+  "kind": "job",
+  "key": "013-r1-tech_lead-25ce8d06",
+  "workerInstanceId": "25844-e9bba0aa",
+  "hostname": "Borges",
+  "bootAt": "2026-09-12T17:27:49.371Z",
+  "pid": 25844,
+  "processStartedAt": "2026-09-13T17:44:31.359Z",
+  "status": "SUPERSEDED",
+  "version": 325,
+  "acquiredAt": "2026-09-13T23:29:39.886Z",
+  "heartbeatAt": "2026-09-14T00:23:32.543Z",
+  "expiresAt": "2026-09-14T00:25:02.543Z",
+  "supersededAt": "2026-09-14T01:07:06.322Z",
+  "supersededProof": "DIFFERENT_BOOT"
+}

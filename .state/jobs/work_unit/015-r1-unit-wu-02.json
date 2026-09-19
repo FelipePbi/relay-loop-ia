@@ -1,0 +1,65 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T08:46:40.763Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "015-r1-unit-wu-02-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "015-r1-unit-wu-02-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_ESCALATION",
+      "startedAt": "2026-09-14T08:46:40.763Z",
+      "endedAt": "2026-09-14T08:47:23.535Z",
+      "role": "work_unit",
+      "escalationReason": "TOOLING_PERMISSION_DENIED",
+      "routedTo": {
+        "modelKey": "sonnet",
+        "model": "claude-sonnet-5",
+        "family": "sonnet",
+        "effort": "high",
+        "reason": "TOOLING_PERMISSION_DENIED",
+        "fallbackAllowed": true
+      },
+      "fromModel": "haiku"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "015-r1-unit-wu-02",
+    "role": "work_unit",
+    "goal": "015",
+    "round": 1,
+    "workUnitId": "WU-02",
+    "unitType": "MECHANICAL",
+    "complexity": "LOW",
+    "risk": "LOW",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-015",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\015-ui-clientes-servicos.md",
+    "parentJobId": "015-r1-developer-314bf39b",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "haiku",
+      "model": "claude-haiku-4-5-20251001",
+      "family": "haiku",
+      "effort": "high",
+      "complexity": "LOW",
+      "riskScore": null,
+      "signals": [
+        "MECHANICAL",
+        "RISK_LOW"
+      ],
+      "reason": "MECHANICAL_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T08:49:31.159Z",
+  "attemptStartedAt": "2026-09-14T08:47:23.535Z",
+  "requeuedAt": "2026-09-14T08:47:23.535Z"
+}

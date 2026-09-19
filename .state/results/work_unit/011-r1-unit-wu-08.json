@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T06:52:33.434Z",
+  "attemptId": "011-r1-unit-wu-08-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "011-r1-unit-wu-08",
+      "goal": "011",
+      "round": 1,
+      "workUnitId": "WU-08",
+      "status": "COMPLETED",
+      "summary": "Frontend legado (schemas, telas de settings/onboarding) migrado para os três estilos PROFESSIONAL/BALANCED/CASUAL do contrato do BFF, resíduo de lint do BffCalendarService corrigido; lint, typecheck e testes passam.",
+      "report": "Mudanças: `aiToneSchema` em publicApiSchemas.ts passou de `[\"PROFESSIONAL_OBJECTIVE\",\"LIGHT_CLOSE\"]` para `[\"PROFESSIONAL\",\"BALANCED\",\"CASUAL\"]`, alinhado ao contrato do BFF (PUBLIC_API_V1.md linha 87-89, WU-07) e ao vocabulário de produto (AGENTS.md: Profissional/Equilibrada/Descontraída). BffSettingsService.ts e BffOnboardingService.ts não precisaram mudar (só referenciam o tipo `AiTone`/schema, sem hardcode de valores). ProductSettingsScreen.tsx: `AiSettings` ganhou a terceira opção `ToneChoice` (Profissional/Equilibrada/Descontraída), fallback de estado passou de `PROFESSIONAL_OBJECTIVE` para `BALANCED` (mesmo default do backend), `toneLabel` atualizado para os três valores, e a copy \"escolha um dos dois tons\" virou \"três estilos\". ProductOnboardingScreen.tsx: passo `tom-da-ia` ganhou a terceira `Choice` e usa os três valores novos; mensagem de erro \"dois tons\" virou \"três estilos\". scenarios.ts: copy do passo `tom-da-ia` atualizada de \"dois tons\" para \"três estilos\". BffCalendarService.ts: rodei `npx eslint --fix` que reordenou `timeBlockSchema`/`TimeBlockKind` no import (única correção pendente de import-sort). Verifiquei os dois arquivos apontados no review010 (publicApiSchemas.ts e tests/goal010-import-schema.test.ts): ambos já estão 100% CRLF, consistentes com o resto do checkout frontend (amostra de outros arquivos confirma CRLF é a convenção) — nenhuma normalização foi necessária, e não havia trabalho a fazer nesse ponto além de confirmar. Não toquei em tests/goal010-import-schema.test.ts porque não referencia estilo/tom de IA e já estava correto. Nenhum outro arquivo do frontend referenciava `PROFESSIONAL_OBJECTIVE`/`LIGHT_CLOSE` (busca ampla confirmou). Comandos executados nesta worktree (apps/frontend), todos com sucesso: `npm ci` (instala deps a partir do lockfile, node_modules não versionado); `npm run lint` (limpo, 0 erros/avisos); `npx eslint src/data/services/BffCalendarService.ts --fix` (aplicou a correção de ordenação); `npm run typecheck` (`tsc --noEmit`, sem erros); `npm test` (`vitest run`, 5 arquivos / 31 testes passando); `git diff --check` no repositório e especificamente nos dois arquivos do review010 (limpo, exit 0). Não criei commit, não mudei de branch, não toquei em docs/goals/reviews.",
+      "changedFiles": [
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffCalendarService.ts",
+        "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+        "apps/frontend/src/features/onboarding/scenarios.ts",
+        "apps/frontend/src/features/settings/ProductSettingsScreen.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Schemas e serviços de dados aceitam e enviam os três estilos com os nomes do contrato do BFF; telas legadas não oferecem valor recusado pelo backend",
+          "met": true,
+          "detail": "aiToneSchema agora é PROFESSIONAL/BALANCED/CASUAL (igual ao contrato do BFF); as telas de settings e onboarding oferecem as três opções (Profissional/Equilibrada/Descontraída), nenhuma tela oferece mais os valores legados que o backend só aceita como alias de entrada."
+        },
+        {
+          "criterion": "Lint do frontend passa com zero avisos, incluindo BffCalendarService.ts",
+          "met": true,
+          "detail": "`npm run lint` (eslint src --max-warnings=0) executado após as mudanças terminou sem nenhum erro ou aviso; BffCalendarService.ts corrigido via eslint --fix (import-sort)."
+        },
+        {
+          "criterion": "Finais de linha dos dois arquivos apontados no review010 normalizados; git diff --check limpo",
+          "met": true,
+          "detail": "Verificação de bytes confirmou publicApiSchemas.ts e tests/goal010-import-schema.test.ts já 100% CRLF (convenção do checkout, confirmada por amostra de outros arquivos); `git diff --check` no repo inteiro e nos dois arquivos especificamente retornou limpo (exit 0, sem output)."
+        }
+      ]
+    },
+    "attemptId": "011-r1-unit-wu-08-a1"
+  }
+}

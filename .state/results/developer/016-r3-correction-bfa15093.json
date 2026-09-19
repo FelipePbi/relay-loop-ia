@@ -1,0 +1,70 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:43:10.489Z",
+  "attemptId": "016-r3-correction-bfa15093-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r3-correction-bfa15093",
+      "goal": "016",
+      "round": 3,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 016, rodada 3\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 2 blocker(s) registrados pelo Tech Lead na revisão da rodada 2, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (2): apps/frontend/src/features/agenda/AgendaBoard.tsx, apps/frontend/src/features/agenda/DayView.tsx\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: A Agenda trava num esqueleto de carregamento permanente quando a aba da visualizacao ja ativa e tocada. — AgendaBoard.tsx changeView agora retorna cedo quando nextView === view, evitando setLoading(true) sem efeito correspondente para religar loading=false; testes goal016-agenda-views/reachability (22) passam.\n- OK: Blocker 2 resolvido: A grade do Dia desenha no dia errado o bloqueio que atravessa a meia-noite. — DayView.tsx agora chama entriesForDate(entries, date) antes de layoutDayEntries/timeGridBounds, igualando o filtro por dia já usado em WeekView.tsx:71; typecheck e suíte de testes de agenda passam sem regressão.\n\nBlocker 1 (AgendaBoard.tsx:184-188, `changeView`): quando `nextView === view`, `setLoading(true)` era chamado mas `range` não mudava, então o `useEffect` de fetch ([range.endDate, range.startDate, reload]) nunca rodava e `setLoading(false)` nunca era disparado — a aba já ativa travava a tela num esqueleto permanente. Corrigido com um early return: `if (nextView === view) return;` antes de mexer em loading/selectedBlock/view, tornando o toque na aba já ativa um no-op que preserva o board renderizado.\n\nBlocker 2 (DayView.tsx:41,48): `layoutDayEntries(entries)` e `timeGridBounds(entries)` recebiam `entries` inteiro (a janela completa vinda de AgendaBoard), sem filtrar pelo dia exibido. Um bloqueio que atravessa a meia-noite tem `date` = dia de início (occupancy.ts:285) mas pode ser incluído na busca por overlap com o dia seguinte; sem filtro, esse trecho aparecia posicionado (via `entryPlacement`) no dia errado do grid. Corrigido importando `entriesForDate` de `./occupancy` (mesma função que WeekView já usa por dia, WeekView.tsx:71) e aplicando `entriesForDate(entries, date)` antes de calcular `laid`, `appointmentCount`, `blockCount` e `timeGridBounds`, alinhando o comportamento do Dia ao da Semana.\n\nComandos executados (dentro da worktree):\n- `npx vitest run tests/goal016-agenda-views.test.tsx tests/goal016-agenda-reachability.test.tsx` → 2 arquivos, 22 testes, todos passando.\n- `npx vitest run tests/goal016-a11y.test.tsx tests/goal016-appointment-create.test.tsx` → 2 arquivos, 24 testes, todos passando.\n- `npx tsc --noEmit -p tsconfig.json` (em apps/frontend) → sem erros, sem output.\n- `git status --porcelain` nos dois arquivos → confirma que apenas AgendaBoard.tsx e DayView.tsx foram tocados.\n\nNenhum commit, push ou mudança de branch foi realizado.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/frontend/src/features/agenda/AgendaBoard.tsx",
+              "apps/frontend/src/features/agenda/DayView.tsx"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 8821,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "016-r3-correction-bfa15093-a1"
+  }
+}

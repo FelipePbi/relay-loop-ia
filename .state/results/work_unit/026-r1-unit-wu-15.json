@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T22:51:37.647Z",
+  "attemptId": "026-r1-unit-wu-15-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "026-r1-unit-wu-15",
+      "goal": "026",
+      "round": 1,
+      "workUnitId": "WU-15",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "gate-tests",
+      "argv": [
+        "npm",
+        "run",
+        "test:gate"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 515,
+      "summary": "Validation gate scripts passou (exit 0, 515ms).",
+      "report": "\n> atendly-ia@0.1.0 test:gate\n> node --test scripts/tests/**/*.test.mjs\n\n✔ no_legacy_calendar_migration_routes: passes on a tree without the legacy paths (1.0909ms)\n✔ no_legacy_calendar_migration_routes: fails when a public route path comes back (0.2123ms)\n✔ no_legacy_calendar_migration_routes: fails when an internal route path comes back (0.0865ms)\n✔ no_calendar_migration_service_reference: passes on a tree that only mentions the removed service in prose (0.2669ms)\n✔ no_calendar_migration_service_reference: fails when the file itself comes back (0.1681ms)\n✔ no_calendar_migration_service_reference: fails when it is imported again (0.1317ms)\n✔ no_calendar_migration_service_reference: fails when it is exported again (0.1269ms)\n✔ no_calendar_migration_service_reference: fails when the class is declared again (0.11ms)\n✔ no_calendar_migration_service_reference: fails when it is instantiated again (0.1573ms)\n✔ minha_agenda_origin_has_no_writer: passes on a read-only origin (0.2379ms)\n✔ minha_agenda_origin_has_no_writer: fails when MinhaAgendaCalendarProvider comes back (0.1314ms)\n✔ minha_agenda_origin_has_no_writer: fails when a new writer implements CalendarProvider (0.0897ms)\n✔ frontend_mocks_directory_is_absent: passes when apps/frontend/src/mocks does not exist (0.7889ms)\n✔ frontend_mocks_directory_is_absent: fails when apps/frontend/src/mocks comes back (1.7826ms)\n✔ an unconfigured health check is reported as skipped, not as passed (209.3684ms)\nsynthetic failing step\n\n[synthetic] synthetic-success: node scripts/tests/fixtures/passing-step.mjs (.)\nsynthetic passing step\n\n[synthetic] synthetic-failure: node scripts/tests/fixtures/failing-step.mjs (.)\nsynthetic failing step\n\n[synthetic] synthetic-failure: node scripts/tests/fixtures/failing-step.mjs (.)\nsynthetic failing step\n'atendly-command-that-does-not-exist' n�o � reconhecido como um comando interno\nou externo, um programa oper�vel ou um arquivo em lotes.\n✔ a failing subprocess is reported as failed and never as exit 0 (165.484ms)\n✔ steps after a failure are not_run instead of passed (51.6974ms)\n✔ a command that cannot be executed is a failure (19.9491ms)\n✔ a declared skip never counts as passed (0.1601ms)\n✔ validate:core declares the Scheduling Service build (0.7178ms)\n✔ validate:core does not run the BFF integration suite (0.09ms)\n✔ the backfill map is the one declared in the migration headers, and CASUAL is untouched (1.1674ms)\n✔ derives two distinct disposable databases for the AI and BFF rehearsals (0.4518ms)\n✔ refuses to run without an explicit test database URL (69.4723ms)\n✔ refuses a database that is not recognised as disposable (65.7886ms)\n✔ refuses a non-loopback host (65.035ms)\n✔ derives a disposable database dedicated to the Goal012 rehearsal (0.8608ms)\n✔ refuses to run without an explicit test database URL (65.0518ms)\n✔ refuses a database that is not recognised as disposable (62.3834ms)\n✔ refuses a non-loopback host (65.0414ms)\n✔ derives a disposable database dedicated to the Goal013 rehearsal (0.8474ms)\n✔ refuses to run without an explicit test database URL (60.5857ms)\n✔ refuses a database that is not recognised as disposable (63.1702ms)\n✔ refuses a non-loopback host (64.997ms)\n✔ derives a disposable database dedicated to the Goal019 rehearsal (0.8856ms)\n✔ refuses to run without an explicit test database URL (62.7834ms)\n✔ refuses a database that is not recognised as disposable (65.8878ms)\n✔ refuses a non-loopback host (63.7475ms)\n✔ refuses to run without an explicit test database URL (0.714ms)\n✔ refuses an inherited DATABASE_URL as a substitute (0.0723ms)\n✔ refuses a database that is not marked as disposable (0.1435ms)\n✔ refuses a non-loopback host (0.1652ms)\n✔ refuses a non-postgres protocol (0.1112ms)\n✔ accepts a disposable loopback database without leaking credentials (1.6773ms)\n✔ points the subprocess at the declared test database with synthetic secrets (1.0213ms)\n✔ derives the Evolution rehearsal database from the validated target (0.2959ms)\n✔ generates the Prisma client before migrating or testing (0.2904ms)\n✔ refuses a URL whose query can redirect the driver: host=outside.invalid&port=6432 (0.2203ms)\n✔ refuses a URL whose query can redirect the driver: host=outside.invalid (0.1573ms)\n✔ refuses a URL whose query can redirect the driver: port=6432 (0.1207ms)\n✔ refuses a URL whose query can redirect the driver: hostaddr=203.0.113.7 (0.0893ms)\n✔ refuses a URL whose query can redirect the driver: dbname=another_test (0.0888ms)\n✔ refuses a URL whose query can redirect the driver: service=production (0.0721ms)\n✔ refuses a URL whose query can redirect the driver: servicefile=C:/synthetic/pg_service.conf (0.0727ms)\n✔ refuses a URL whose query can redirect the driver: passfile=C:/synthetic/pgpass (0.1031ms)\n✔ refuses a URL whose query can redirect the driver: options=-c%20search_path%3Dinjected (0.0851ms)\n✔ the reported bypass really moves the driver, and is now refused (0.2014ms)\n✔ the effective destination is compared against the validated one (0.478ms)\n✔ keeps accepting harmless connection options (0.3335ms)\n✔ the CLI exits non-zero and runs no step when the URL is missing (41.1558ms)\n✔ derives the Goal004 transport rehearsal database from the validated target (0.3133ms)\n✔ derives the Scheduling identity database from the validated target (0.2272ms)\n✔ runs the Goal012 knowledge/memory rehearsal before the AI durability suite (0.252ms)\n✔ runs the Goal013 media rehearsal before the AI durability suite (0.1791ms)\n✔ runs the Goal019 activation test rehearsal before the AI durability suite (0.2132ms)\n✔ runs the Goal021 reminder rehearsal before the Scheduling suite (0.2967ms)\nℹ tests 66\nℹ suites 0\nℹ pass 66\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 304.3917\n",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "026-r1-unit-wu-15-a1"
+  }
+}

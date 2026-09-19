@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T12:00:58.740Z",
+  "attemptId": "015-r1-unit-wu-07-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Existe teste que monta ShellConfigProvider mais a tela autenticada real de Clientes e a de Serviços e falha em Maximum update depth se a invariante de uma chamada de useShellConfig por árvore for violada",
+          "met": true,
+          "detail": "tests/goal015-shell-invariant.test.tsx monta ShellConfigProvider + ProductCustomersScreen (list/new/detail) e ProductServicesScreen (list/new/edit) com dados reais mockados, interage (digitação, cliques em filtro/radio) para forçar múltiplos re-renders, e deixa qualquer 'Maximum update depth exceeded' propagar sem captura. 6/6 testes passam (npx vitest run)."
+        },
+        {
+          "criterion": "Um teste por superfície (nota, tag, memória) prova que a criação sai não autorizada e que a autorização só muda por ação explícita",
+          "met": true,
+          "detail": "goal015-customers.test.tsx > 'autorização de uso pela IA nasce negada...' tem um teste por CustomerNotes, CustomerTags e CustomerMemory: cada um cria o registro, afirma 'IA não autorizada a usar', depois clica em 'Autorizar uso pela IA' e afirma a mudança apenas após essa ação."
+        },
+        {
+          "criterion": "Um teste sobre a requisição emitida prova que o perfil usa customerId e que nenhuma chamada do perfil usa customerPhone",
+          "met": true,
+          "detail": "goal015-customers.test.tsx > 'a agenda do perfil pede por customerId...' renderiza CustomerProfile de verdade, inspeciona calendarListAppointments.mock.calls e afirma query.customerId e query sem a chave customerPhone, inclusive com dois clientes que compartilham telefone."
+        },
+        {
+          "criterion": "Cliente sem nome e sem telefone são renderizados sem placeholder fabricado; as quatro semânticas de preço, a pendência de revisão e a recusa de FIXED sem valor têm cobertura",
+          "met": true,
+          "detail": "goal015-customers.test.tsx cobre cliente sem nome/telefone na lista e no perfil ('Cliente sem nome'/'Telefone não informado', sem 'null'/'undefined'). goal015-services.test.tsx cobre FIXED/STARTING_AT/ON_REQUEST/NOT_INFORMED, badges 'Revisar · importado'/'Revisar · cadastro manual', e a recusa de salvar FIXED sem valor (mensagem inline + create não chamado)."
+        },
+        {
+          "criterion": "A verificação de axe nas telas novas não acusa violação nova",
+          "met": true,
+          "detail": "expectNoA11yViolations rodou sobre CustomerList/CustomerForm/CustomerProfile e ServiceList/ServiceForm com dados carregados. Corrigi uma violação real (aria-required-children) encontrada em ListItem.tsx — role=\"listitem\" ausente nos itens de role=\"list\" usados por CustomerList, CustomerForm (candidatos) e PrimaryGuardianPanel — antes disso 1 teste falhava; agora os 22 testes novos passam."
+        },
+        {
+          "criterion": "Nenhum teste afirma comportamento de largura, contraste ou foco em tela autenticada como provado",
+          "met": true,
+          "detail": "Nenhuma asserção nos três arquivos novos usa viewport, cor computada ou ordem de foco; a regra color-contrast do axe permanece desligada via tests/support/a11y.ts, herdada sem alteração."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/frontend/tests/goal015-customers.test.tsx",
+        "apps/frontend/tests/goal015-services.test.tsx",
+        "apps/frontend/tests/goal015-shell-invariant.test.tsx",
+        "apps/frontend/src/shared/ui/ListItem.tsx"
+      ],
+      "goal": "015",
+      "jobId": "015-r1-unit-wu-07",
+      "protocolVersion": 2,
+      "report": "Escrevi os três arquivos de teste renderizado previstos pela WU-07, seguindo o precedente goal014-auth.test.tsx e o helper tests/support/a11y.ts.\n\n1. `tests/goal015-shell-invariant.test.tsx` — monta `ShellConfigProvider` com `ProductCustomersScreen` (list/new/detail) e `ProductServicesScreen` (list/new/edit) usando `getProductServices` mockado (customers/calendar/serviceCatalog) e `next/navigation` mockado, depois interage (digitação em busca, alternância de filtro/tipo de preço) para forçar vários re-renders reais. Nenhuma captura de erro é usada de propósito: se a invariante de `useShellConfig` for violada, \"Maximum update depth exceeded\" derruba o teste.\n\n2. `tests/goal015-customers.test.tsx` — cliente sem nome/telefone (lista e perfil) sem placeholder fabricado; um teste por superfície (CustomerNotes, CustomerTags, CustomerMemory) provando criação não autorizada e mudança só por ação explícita; a requisição de agenda do perfil (CustomerProfile → CustomerAgenda) inspecionada para confirmar `customerId` e ausência de `customerPhone`, inclusive com dois clientes compartilhando telefone; o fluxo de candidatos por telefone compartilhado em CustomerForm, exigindo confirmação explícita antes de criar uma pessoa nova; e três checagens de axe.\n\n3. `tests/goal015-services.test.tsx` — as quatro semânticas de preço (FIXED/STARTING_AT/ON_REQUEST/NOT_INFORMED), a pendência de revisão por origem (IMPORT/MANUAL), a recusa de salvar FIXED sem valor (mensagem inline junto ao campo, `serviceCatalog.create` não chamado), e duas checagens de axe.\n\nDurante a primeira rodada de `npx vitest run` a checagem de axe da lista de Clientes falhou com uma violação real e pré-existente: `role=\"list\"` em CustomerList/CustomerForm/PrimaryGuardianPanel envolve `<ListItem>` (que renderiza `<a>`/`<button>`/`<div>`) sem `role=\"listitem\"`, violando `aria-required-children`. Corrigi isso no componente compartilhado `apps/frontend/src/shared/ui/ListItem.tsx`, adicionando `role=\"listitem\"` às três variantes de renderização — correção mínima e necessária para que o critério de axe da própria WU-07 pudesse ser cumprido honestamente, sem tocar em layout, texto ou lógica.\n\nTambém corrigi um teste de preço que comparava a string formatada por `toLocaleString` (que pode conter espaço não separável) contra o texto normalizado pelo Testing Library, trocando para regex tolerante a espaço.\n\nComandos executados com resultado:\n- `npx vitest run tests/goal015-shell-invariant.test.tsx tests/goal015-customers.test.tsx tests/goal015-services.test.tsx` → 22/22 passam.\n- `npx vitest run` (suíte completa do frontend) → 17 arquivos, 123/123 testes passam.\n- `npx tsc --noEmit` → sem erros.\n- `npx eslint src tests --max-warnings=0` → sem erros/avisos novos; os 2 erros e 5 avisos remanescentes são pré-existentes em `tests/bff-http-client.test.ts`, `tests/goal013-media-schema.test.ts` e `tests/support/a11y.test.tsx`, nenhum dos quais foi tocado nesta unidade (confirmado via `git status --porcelain`).\n\nNão criei commit, não mudei de branch, não editei documentos de controle da migração, e não toquei em nenhum arquivo fora do escopo desta Work Unit além da correção pontual de acessibilidade descrita acima.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Adicionei os três testes renderizados da WU-07 (invariante de shell, domínio de Clientes, domínio de Serviços) e corrigi uma violação real de acessibilidade em ListItem.tsx que os testes de axe expuseram.",
+      "workUnitId": "WU-07"
+    },
+    "attemptId": "015-r1-unit-wu-07-a1"
+  }
+}

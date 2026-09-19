@@ -1,0 +1,48 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:19:23.830Z",
+  "attemptId": "018-r1-unit-wu-02-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-02",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-02",
+      "status": "COMPLETED",
+      "summary": "Estendido businessContextSchema com version/segment/modalities/address (todos com default seguro) e o prompt de contexto do negócio para imprimir cada campo novo, avisando explicitamente quando não configurado.",
+      "report": "Mudei apps/ai-orchestrator/src/modules/tenant-config/business-context.ts: businessContextSchema ganhou version (default 1, espelha BusinessProfile.businessContextVersion do BFF), segment (default \"\"), modalities (array de enum ON_SITE/AT_HOME/ONLINE, default []) e address (default \"\"). Todos os campos novos têm .default(), então settings antigo gravado só com businessName/timezone continua parseando via safeParse sem cair no DEFAULT_BUSINESS_CONTEXT inteiro (esse era o risco apontado no implementationHints — testado explicitamente). Também exportei BUSINESS_MODALITY_LABELS (rótulos em pt-BR para cada modalidade) para uso no prompt.\n\nEm apps/ai-orchestrator/src/modules/prompts/tenant-context.ts, buildTenantContextPrompt passou a imprimir Segmento, Modalidades de atendimento (só as escolhidas, unidas por vírgula — nunca afirma modalidade que o negócio não marcou) e Endereço, cada um caindo em \"[nao configurado]\" quando vazio, seguindo o padrão já usado para Nome.\n\nEssa mudança de conteúdo do prompt entra no hash estável de apps/ai-orchestrator/src/modules/prompts/system.ts (buildStablePromptContent usa DEFAULT_BUSINESS_CONTEXT via buildTenantContextPrompt), então bumpei PROMPT_TEMPLATE_VERSION de \"v3\" para \"v4\" com o comentário do motivo (convenção já estabelecida no arquivo para \"bump consciente\"), e atualizei os 3 hashes esperados em tests/prompts/system.test.ts (professional/balanced/casual) recalculando com derivePromptVersion via script local descartável.\n\nCriei apps/ai-orchestrator/tests/tenant-config/business-context.test.ts cobrindo: (1) settings legado com só businessName+timezone normaliza sem virar DEFAULT_BUSINESS_CONTEXT inteiro; (2) formato novo completo é aceito e normalizado igual; (3) valor inválido ainda cai no default inteiro; (4) businessContextConfigured continua só businessName.length>=2; (5) prompt diz \"[nao configurado]\" para segmento/modalidades/endereço ausentes sem mencionar nenhuma modalidade; (6) prompt lista só a modalidade escolhida quando presente.\n\nComandos executados (na worktree, apps/ai-orchestrator): `npm ci` (node_modules não existia), `npx prisma generate` (client gerado, gitignored, necessário para tests/internal e tests/integration que não são desta unidade), `npx vitest run tests/tenant-config/business-context.test.ts` (6/6 passou), `npx vitest run` completo (548 passed, 59 skipped, 0 failed), `npx eslint src --max-warnings=0` (script de lint configurado, limpo) e `npx eslint tests/tenant-config/business-context.test.ts --max-warnings=0` (limpo — os 248 erros vistos num `eslint src tests` mais amplo são pré-existentes em arquivos de teste não tocados por esta unidade e fora do escopo do script `lint` do package.json, que só cobre `src`), `npx tsc -p tsconfig.json --noEmit` (limpo). `git status` confirma que só os arquivos esperados mudaram; node_modules/generated prisma continuam ignorados.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/tenant-config/business-context.ts",
+        "apps/ai-orchestrator/src/modules/prompts/tenant-context.ts",
+        "apps/ai-orchestrator/src/modules/prompts/system.ts",
+        "apps/ai-orchestrator/tests/prompts/system.test.ts",
+        "apps/ai-orchestrator/tests/tenant-config/business-context.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "settings gravado com apenas businessName e timezone continua parseando e NÃO cai no DEFAULT_BUSINESS_CONTEXT inteiro",
+          "met": true,
+          "detail": "business-context.test.ts: 'aceita settings antigo com so businessName e timezone sem cair no default inteiro' — normalizeBusinessContext({businessName, timezone}) preserva os dois valores e difere de DEFAULT_BUSINESS_CONTEXT; passou em vitest."
+        },
+        {
+          "criterion": "O formato novo completo é aceito e normalizado",
+          "met": true,
+          "detail": "business-context.test.ts: 'aceita o formato novo completo e normaliza cada campo' — objeto com version/segment/modalities/address é retornado idêntico por normalizeBusinessContext; passou em vitest."
+        },
+        {
+          "criterion": "O prompt imprime segmento, modalidades e endereço, e para cada um ausente diz que não está configurado, sem afirmar modalidade que o negócio não escolheu",
+          "met": true,
+          "detail": "tenant-context.ts imprime as três linhas com fallback '[nao configurado]'; business-context.test.ts cobre o caso vazio (nenhuma modalidade mencionada) e o caso com ON_SITE escolhido (só essa modalidade aparece, sem mencionar domicilio/online); passou em vitest."
+        },
+        {
+          "criterion": "businessContextConfigured continua sendo businessName.length >= 2 e não é endurecido",
+          "met": true,
+          "detail": "Função não foi alterada; business-context.test.ts confirma 'Ok' (len 2) true e 'O' (len 1) false."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-02-a1"
+  }
+}

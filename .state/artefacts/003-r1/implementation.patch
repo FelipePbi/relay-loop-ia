@@ -1,0 +1,2654 @@
+diff --git a/apps/ai-orchestrator/.env.example b/apps/ai-orchestrator/.env.example
+index 458f5cd..d4d6821 100644
+--- a/apps/ai-orchestrator/.env.example
++++ b/apps/ai-orchestrator/.env.example
+@@ -62,3 +62,16 @@ SCHEDULING_SERVICE_BASE_URL=http://localhost:3003
+ 
+ # Token de autenticacao service-to-service
+ INTERNAL_SERVICE_TOKEN=
++
++# Credenciais internas aceitas, por uso. Vazias, sao derivadas de
++# INTERNAL_SERVICE_TOKEN por HMAC, com o mesmo contrato do lado do BFF.
++INTERNAL_SERVICE_TOKEN=
++INTERNAL_PROVISIONING_TOKEN=
++INTERNAL_COMMAND_TOKEN=
++# Credencial que a IA apresenta ao scheduling-service.
++SCHEDULING_SERVICE_COMMAND_TOKEN=
++
++# Cifra da projecao da credencial de instancia recebida do BFF. Mesmo formato e
++# mesma politica de rotacao das chaves do BFF, com material proprio.
++CHANNEL_CREDENTIAL_KEYS=v1:
++CHANNEL_CREDENTIAL_ACTIVE_KEY_ID=v1
+diff --git a/apps/ai-orchestrator/prisma/schema.prisma b/apps/ai-orchestrator/prisma/schema.prisma
+index 6562ba9..a1d3c62 100644
+--- a/apps/ai-orchestrator/prisma/schema.prisma
++++ b/apps/ai-orchestrator/prisma/schema.prisma
+@@ -79,6 +79,12 @@ model ChannelConnection {
+   displayName        String?
+   status             ChannelConnectionStatus @default(ACTIVE)
+   metadata           Json?
++  /// Projecao cifrada da credencial da instancia, entregue pelo BFF no
++  /// provisionamento. Nula enquanto o vinculo nao foi reprovisionado.
++  credentialCipher   String?
++  credentialKeyId    String?
++  credentialVersion  Int                     @default(0)
++  credentialRotatedAt DateTime?
+   createdAt          DateTime                @default(now())
+   updatedAt          DateTime                @updatedAt
+ 
+diff --git a/apps/ai-orchestrator/src/config/env.ts b/apps/ai-orchestrator/src/config/env.ts
+index 64b595c..b853d1a 100644
+--- a/apps/ai-orchestrator/src/config/env.ts
++++ b/apps/ai-orchestrator/src/config/env.ts
+@@ -65,6 +65,17 @@ const envSchema = z.object({
+   AI_PROMPT_VERSION: stringEnv("scheduling_v1.0.0"),
+   SCHEDULING_SERVICE_BASE_URL: stringEnv("http://localhost:3003"),
+   INTERNAL_SERVICE_TOKEN: serviceTokenEnv(),
++  // Credenciais que a IA aceita, por uso. Vazias, são derivadas de
++  // INTERNAL_SERVICE_TOKEN por HMAC; o valor bruto do segredo compartilhado
++  // deixa de ser aceito, então provisionamento e comando não se substituem.
++  INTERNAL_PROVISIONING_TOKEN: serviceTokenEnv(),
++  INTERNAL_COMMAND_TOKEN: serviceTokenEnv(),
++  // Credencial que a IA apresenta ao scheduling-service.
++  SCHEDULING_SERVICE_COMMAND_TOKEN: serviceTokenEnv(),
++  // Cifra da projeção da credencial de instância: "<keyId>:<chave base64 de 32
++  // bytes>", separadas por vírgula.
++  CHANNEL_CREDENTIAL_KEYS: stringEnv(),
++  CHANNEL_CREDENTIAL_ACTIVE_KEY_ID: stringEnv(),
+ });
+ 
+ export const env = envSchema.parse(process.env);
+diff --git a/apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts b/apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts
+index de2ad3a..167acaf 100644
+--- a/apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts
++++ b/apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts
+@@ -1,4 +1,9 @@
+ import type { PrismaClient } from "../../generated/prisma/client.js";
++import {
++  CHANNEL_CREDENTIAL_VERSION,
++  openChannelCredential,
++  sealChannelCredential,
++} from "../../lib/channel-credentials.js";
+ import { AppError } from "../../lib/errors.js";
+ import {
+   type AiTenantSettings,
+@@ -20,6 +25,11 @@ export interface ProvisionEvolutionChannelInput {
+   userId: string;
+   externalInstanceId: string;
+   displayName?: string;
++  /**
++   * Projeção da credencial da instância, entregue pelo BFF no provisionamento.
++   * Guardada cifrada e ligada ao vínculo; é a única origem aceita para o envio.
++   */
++  instanceCredential: string;
+ }
+ 
+ export interface UpdateAiTenantConfigInput {
+@@ -53,6 +63,17 @@ export class ChannelConnectionService {
+       );
+     }
+ 
++    const sealed = sealChannelCredential(input.instanceCredential, {
++      tenantId: input.tenantId,
++      externalInstanceId: input.externalInstanceId,
++    });
++    const credential = {
++      credentialCipher: sealed.envelope,
++      credentialKeyId: sealed.keyId,
++      credentialVersion: sealed.version,
++      credentialRotatedAt: new Date(),
++    };
++
+     const connection = await this.prisma.channelConnection.upsert({
+       where: {
+         tenantId_provider: {
+@@ -65,6 +86,7 @@ export class ChannelConnectionService {
+         externalInstanceId: input.externalInstanceId,
+         displayName: input.displayName,
+         status: "ACTIVE",
++        ...credential,
+       },
+       create: {
+         tenantId: input.tenantId,
+@@ -72,6 +94,7 @@ export class ChannelConnectionService {
+         provider: EVOLUTION_PROVIDER,
+         externalInstanceId: input.externalInstanceId,
+         displayName: input.displayName,
++        ...credential,
+       },
+     });
+ 
+@@ -109,6 +132,28 @@ export class ChannelConnectionService {
+     businessContext?: BusinessContext;
+     aiSettings?: AiTenantSettings;
+   }): Promise<ChannelInboundMessage> {
++    return (await this.resolveEvolutionInboundContext(input)).message;
++  }
++
++  /**
++   * Mesma resolução do inbound, devolvendo também o vínculo persistido: a
++   * credencial de resposta sai daqui, não do corpo do evento.
++   */
++  async resolveEvolutionInboundContext(input: {
++    message: MappedChannelInboundMessage;
++    requestId: string;
++    businessContext?: BusinessContext;
++    aiSettings?: AiTenantSettings;
++  }): Promise<{
++    message: ChannelInboundMessage;
++    connection: {
++      id: string;
++      tenantId: string;
++      externalInstanceId: string;
++      credentialCipher: string | null;
++      credentialVersion: number;
++    };
++  }> {
+     const connection = await this.prisma.channelConnection.findUnique({
+       where: {
+         provider_externalInstanceId: {
+@@ -137,17 +182,52 @@ export class ChannelConnectionService {
+     });
+ 
+     return {
+-      ...input.message,
+-      tenantId: connection.tenantId,
+-      channelId: connection.id,
+-      userId: connection.userId,
+-      requestId: input.requestId,
+-      businessContext:
+-        input.businessContext ?? normalizeBusinessContext(config?.settings),
+-      aiSettings: input.aiSettings ?? aiSettings,
++      message: {
++        ...input.message,
++        tenantId: connection.tenantId,
++        channelId: connection.id,
++        userId: connection.userId,
++        requestId: input.requestId,
++        businessContext:
++          input.businessContext ?? normalizeBusinessContext(config?.settings),
++        aiSettings: input.aiSettings ?? aiSettings,
++      },
++      connection,
+     };
+   }
+ 
++  /**
++   * Resolve a credencial de envio pelo vínculo, nunca por dado de requisição.
++   *
++   * Vínculo sem projeção — porque ainda não foi reprovisionado — falha aqui e
++   * interrompe o envio. Não existe caminho que caia na chave global nem que
++   * aceite um token vindo do corpo do webhook.
++   */
++  resolveChannelCredential(connection: {
++    tenantId: string;
++    externalInstanceId: string;
++    credentialCipher: string | null;
++    credentialVersion: number;
++  }): string {
++    if (
++      !connection.credentialCipher ||
++      connection.credentialVersion < CHANNEL_CREDENTIAL_VERSION
++    ) {
++      throw new AppError(
++        "Channel credential is not provisioned for this connection.",
++        {
++          statusCode: 409,
++          code: "CHANNEL_CREDENTIAL_NOT_PROVISIONED",
++        },
++      );
++    }
++
++    return openChannelCredential(connection.credentialCipher, {
++      tenantId: connection.tenantId,
++      externalInstanceId: connection.externalInstanceId,
++    });
++  }
++
+   async resolveTenantEvolutionChannel(tenantId: string) {
+     const connection = await this.prisma.channelConnection.findUnique({
+       where: {
+diff --git a/apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts b/apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts
+index d93858d..715a369 100644
+--- a/apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts
++++ b/apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts
+@@ -17,14 +17,17 @@ import type { EvolutionSendTextResponse } from "./EvolutionTypes.js";
+ export class EvolutionProvider implements WhatsAppProvider {
+   constructor(
+     private readonly logger: DiagnosticLogger = noopDiagnosticLogger,
+-    private readonly instanceTokenOverride?: string,
++    private readonly instanceToken?: string,
+     private readonly instanceIdOverride?: string,
+   ) {}
+ 
+   async sendText(input: SendTextInput): Promise<SendTextResult> {
+     requireEnv(["EVOLUTION_BASE_URL"]);
+     const instanceId = this.instanceIdOverride;
+-    const apiKey = this.instanceTokenOverride || env.EVOLUTION_API_KEY;
++    // Sem queda para EVOLUTION_API_KEY: a chave global não substitui a
++    // credencial da instância. Sem credencial resolvida pelo vínculo, o envio
++    // falha em vez de sair assinado por outra identidade.
++    const apiKey = this.instanceToken;
+     if (!instanceId || !apiKey) {
+       throw new AppError("Evolution channel credentials are not configured.", {
+         statusCode: 500,
+@@ -70,7 +73,7 @@ export class EvolutionProvider implements WhatsAppProvider {
+         {
+           statusCode: response.status,
+           code: "EVOLUTION_SEND_FAILED",
+-          details: raw,
++          details: redactSensitive(raw),
+         },
+       );
+     }
+@@ -90,7 +93,8 @@ export class EvolutionProvider implements WhatsAppProvider {
+     return {
+       provider: "evolution-go",
+       messageId,
+-      raw,
++      // `raw` é persistido em Message.rawPayload; sai daqui já sem segredo.
++      raw: redactSensitive(raw),
+     };
+   }
+ }
+diff --git a/apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts b/apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts
+index 7d2f4b5..7227127 100644
+--- a/apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts
++++ b/apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts
+@@ -5,6 +5,7 @@ import { env } from "../../../config/env.js";
+ import type { PrismaClient } from "../../../generated/prisma/client.js";
+ import { channelMessageLogContext } from "../../../lib/diagnostic-log.js";
+ import { toErrorMessage } from "../../../lib/errors.js";
++import { redactSensitive } from "../../../lib/redact.js";
+ import { AssistantService } from "../../assistant/assistant.service.js";
+ import { PrismaGraphRuntime } from "../../graph/graph-runtime.js";
+ import { HandoffService } from "../../handoff/HandoffService.js";
+@@ -39,8 +40,13 @@ export async function registerEvolutionWebhookRoutes(
+         return reply.code(401).send({ ok: false, error: "Unauthorized" });
+       }
+ 
+-      const inspection = inspectEvolutionInboundPayload(request.body);
+-      const mappedMessage = mapEvolutionInbound(request.body);
++      // Saneamento antes de qualquer mapeamento: o payload que segue adiante —
++      // e que termina em `rawPayload` de Message/ProcessedEvent — já não
++      // carrega token, apikey nem authorization. Nada aqui é tratado como
++      // autoridade: `instanceToken` no corpo é descartado junto.
++      const payload = redactSensitive(request.body);
++      const inspection = inspectEvolutionInboundPayload(payload);
++      const mappedMessage = mapEvolutionInbound(payload);
+       if (!mappedMessage) {
+         app.log.warn(
+           { requestId: request.id, ...inspection },
+@@ -53,17 +59,20 @@ export async function registerEvolutionWebhookRoutes(
+         });
+       }
+ 
+-      const message = await channelConnections.resolveEvolutionInbound({
+-        message: mappedMessage,
+-        requestId: request.id,
+-      });
++      const { message, connection } =
++        await channelConnections.resolveEvolutionInboundContext({
++          message: mappedMessage,
++          requestId: request.id,
++        });
+       const processor = buildInboundMessageProcessor({
+         app,
+         prisma,
+         tenantId: message.tenantId,
+         channelId: message.channelId,
+         instanceId: message.instanceId,
+-        instanceToken: readInstanceToken(request.body),
++        // Credencial resolvida pelo vínculo autenticado internamente. Um token
++        // adulterado no corpo do evento não muda o que é usado para responder.
++        instanceToken: channelConnections.resolveChannelCredential(connection),
+         checkpointer,
+       });
+ 
+@@ -108,7 +117,7 @@ export function buildInboundMessageProcessor(input: {
+   tenantId: string;
+   channelId: string;
+   instanceId: string;
+-  instanceToken?: string;
++  instanceToken: string;
+   checkpointer?: BaseCheckpointSaver;
+ }) {
+   const knowledge = new PGVectorKnowledgeStore(
+@@ -158,11 +167,3 @@ function isValidWebhookToken(request: FastifyRequest): boolean {
+   const query = request.query as Record<string, string | undefined>;
+   return query.token === env.EVOLUTION_WEBHOOK_TOKEN;
+ }
+-
+-function readInstanceToken(payload: unknown): string | undefined {
+-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+-    return undefined;
+-  }
+-  const value = (payload as Record<string, unknown>).instanceToken;
+-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+-}
+diff --git a/apps/ai-orchestrator/src/modules/internal/routes.ts b/apps/ai-orchestrator/src/modules/internal/routes.ts
+index ad329ad..d90c9e4 100644
+--- a/apps/ai-orchestrator/src/modules/internal/routes.ts
++++ b/apps/ai-orchestrator/src/modules/internal/routes.ts
+@@ -7,6 +7,10 @@ import { env } from "../../config/env.js";
+ import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+ import { startOfTodayInTimeZone } from "../../lib/dates.js";
+ import { AppError } from "../../lib/errors.js";
++import {
++  authorizeInternalRequest,
++  type InternalScope,
++} from "../../lib/internal-credentials.js";
+ import { EvolutionProvider } from "../channel/adapters/evolution/EvolutionProvider.js";
+ import { ChannelConnectionService } from "../channel/ChannelConnectionService.js";
+ import { BOT_OFF_PAUSE_UNTIL } from "../handoff/HandoffService.js";
+@@ -18,6 +22,9 @@ import {
+ const provisionChannelSchema = z.object({
+   externalInstanceId: z.string().min(1),
+   displayName: z.string().min(1).optional(),
++  // Projeção da credencial entregue pelo BFF na mesma chamada de
++  // provisionamento, sob a credencial interna de provisionamento.
++  instanceCredential: z.string().min(16).max(512),
+ });
+ 
+ const aiTenantConfigSchema = z.object({
+@@ -38,7 +45,10 @@ const conversationQuerySchema = z.object({
+ 
+ const sendOwnerMessageSchema = z.object({
+   text: z.string().trim().min(1).max(4_000),
+-  instanceToken: z.string().min(16).max(512),
++  // Aceito e ignorado durante a troca de produtor: o consumer compatível entra
++  // primeiro, o BFF para de enviar em seguida. O valor nunca é usado como
++  // credencial — quem resolve o envio é o vínculo.
++  instanceToken: z.string().min(16).max(512).optional(),
+ });
+ 
+ export async function registerInternalRoutes(
+@@ -47,15 +57,16 @@ export async function registerInternalRoutes(
+ ): Promise<void> {
+   const channelConnections = new ChannelConnectionService(prisma);
+ 
+-  app.addHook("preHandler", async (request, reply) => {
++  // Autorização por escopo, com negação por omissão: um caminho `/internal/`
++  // sem escopo declarado no mapa abaixo é recusado, então rota nova não nasce
++  // aberta por esquecimento. A recusa acontece antes de qualquer efeito.
++  app.addHook("preHandler", async (request) => {
+     if (!request.url.startsWith("/internal/")) return;
+-    if (!isAuthorized(request)) {
+-      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+-    }
++    authorizeInternalRequest(request, requiredScope(request));
+   });
+ 
+   app.put("/internal/channel-connections/evolution", async (request, reply) => {
+-    const context = await trustedTenantContext(prisma, request, true);
++    const context = trustedTenantContext(request);
+     const parsed = provisionChannelSchema.safeParse(request.body);
+     if (!parsed.success) {
+       return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+@@ -78,7 +89,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.put("/internal/ai-tenant-config", async (request, reply) => {
+-    const context = await trustedTenantContext(prisma, request, true);
++    const context = trustedTenantContext(request);
+     const parsed = aiTenantConfigSchema.safeParse(request.body);
+     if (!parsed.success) {
+       return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+@@ -103,7 +114,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.get("/internal/conversations", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const query = parseOrThrow(conversationQuerySchema, request.query);
+     const conversations = await prisma.conversation.findMany({
+       where: {
+@@ -139,7 +150,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.get("/internal/conversations/:id", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     return internalData(
+       request,
+@@ -148,7 +159,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.get("/internal/conversations/:id/messages", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     await requireConversation(prisma, tenantId, id);
+     const messages = await prisma.message.findMany({
+@@ -160,7 +171,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.post("/internal/conversations/:id/messages", async (request, reply) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     const body = parseOrThrow(sendOwnerMessageSchema, request.body);
+     const conversation = await requireConversation(prisma, tenantId, id);
+@@ -185,11 +196,15 @@ export async function registerInternalRoutes(
+       },
+     });
+ 
++    const credential = channelConnections.resolveChannelCredential(
++      conversation.channel,
++    );
++
+     let sent;
+     try {
+       sent = await new EvolutionProvider(
+         app.log,
+-        body.instanceToken,
++        credential,
+         conversation.channel.externalInstanceId,
+       ).sendText({
+         to: contactNumber(conversation.externalContactId),
+@@ -216,7 +231,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.post("/internal/conversations/:id/takeover", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     const conversation = await requireConversation(prisma, tenantId, id);
+     const existingOwnerTakeover = await prisma.handoff.findFirst({
+@@ -250,7 +265,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.post("/internal/conversations/:id/release", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     await requireConversation(prisma, tenantId, id);
+     await resolveConversationHandoffs(prisma, tenantId, id);
+@@ -265,7 +280,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.post("/internal/conversations/:id/resolve", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const { id } = parseOrThrow(conversationParamsSchema, request.params);
+     await requireConversation(prisma, tenantId, id);
+     await resolveConversationHandoffs(prisma, tenantId, id);
+@@ -280,7 +295,7 @@ export async function registerInternalRoutes(
+   });
+ 
+   app.get("/internal/dashboard", async (request) => {
+-    const { tenantId } = await trustedTenantContext(prisma, request, true);
++    const { tenantId } = trustedTenantContext(request);
+     const tenantConfig = await prisma.aiTenantConfig.findUnique({
+       where: { tenantId },
+       select: { settings: true },
+@@ -452,32 +467,21 @@ function jsonValue(value: unknown): Prisma.InputJsonValue {
+   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
+ }
+ 
+-async function trustedTenantContext(
+-  prisma: PrismaClient,
+-  request: FastifyRequest,
+-  requireExplicitTenant = false,
+-): Promise<{
++/**
++ * Contexto de negócio recebido de chamador interno já autenticado.
++ *
++ * Os headers não autenticam: eles só são lidos depois de a credencial ter sido
++ * verificada e o escopo concedido. O tenant precisa vir explícito — não existe
++ * mais a inferência pela primeira associação ativa do usuário, que escolhia um
++ * dono quando a associação era ambígua.
++ */
++function trustedTenantContext(request: FastifyRequest): {
+   tenantId: string;
+   userId: string;
+-}> {
+-  let tenantId = stringHeader(request.headers["x-tenant-id"]);
++} {
++  const tenantId = stringHeader(request.headers["x-tenant-id"]);
+   const userId = stringHeader(request.headers["x-user-id"]);
+-  if (!userId) {
+-    throw new AppError("Trusted tenant context is required.", {
+-      statusCode: 400,
+-      code: "TENANT_CONTEXT_REQUIRED",
+-    });
+-  }
+-  if (!tenantId && !requireExplicitTenant) {
+-    tenantId = (
+-      await prisma.channelConnection.findFirst({
+-        where: { userId, status: "ACTIVE" },
+-        select: { tenantId: true },
+-        orderBy: { createdAt: "asc" },
+-      })
+-    )?.tenantId;
+-  }
+-  if (!tenantId) {
++  if (!tenantId || !userId) {
+     throw new AppError("Trusted tenant context is required.", {
+       statusCode: 400,
+       code: "TENANT_CONTEXT_REQUIRED",
+@@ -492,9 +496,34 @@ function stringHeader(
+   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+ }
+ 
+-function isAuthorized(request: FastifyRequest): boolean {
+-  const token = env.INTERNAL_SERVICE_TOKEN;
+-  if (!token) return false;
+-  const authorization = request.headers.authorization;
+-  return authorization === `Bearer ${token}`;
++/**
++ * Escopo exigido por operação interna.
++ *
++ * Provisionamento e comando comum são credenciais distintas: a credencial de
++ * provisionamento não lista os escopos de conversa, e a de comando não lista
++ * `channel:provision` nem `tenant-config:write`. Caminho sem escopo declarado
++ * cai em `internal:unmapped`, que nenhuma credencial possui.
++ */
++export function requiredScope(request: FastifyRequest): InternalScope {
++  const path = request.url.split("?")[0] ?? "";
++  const method = request.method.toUpperCase();
++
++  if (path === "/internal/channel-connections/evolution" && method === "PUT") {
++    return "channel:provision";
++  }
++  if (path === "/internal/ai-tenant-config" && method === "PUT") {
++    return "tenant-config:write";
++  }
++  if (path === "/internal/dashboard" && method === "GET") {
++    return "dashboard:read";
++  }
++  if (path.startsWith("/internal/conversations")) {
++    if (method === "GET") return "conversations:read";
++    if (path.endsWith("/messages") && method === "POST") {
++      return "messages:send";
++    }
++    if (method === "POST") return "conversations:write";
++  }
++
++  return "internal:unmapped";
+ }
+diff --git a/apps/ai-orchestrator/src/modules/scheduling-service/client.ts b/apps/ai-orchestrator/src/modules/scheduling-service/client.ts
+index eac150d..ec26084 100644
+--- a/apps/ai-orchestrator/src/modules/scheduling-service/client.ts
++++ b/apps/ai-orchestrator/src/modules/scheduling-service/client.ts
+@@ -3,6 +3,10 @@ import { z } from "zod";
+ import { env } from "../../config/env.js";
+ import { addDays, todayInTimeZone } from "../../lib/dates.js";
+ import { AppError } from "../../lib/errors.js";
++import {
++  CALLER_ID,
++  deriveInternalToken,
++} from "../../lib/internal-credentials.js";
+ import type { BusinessContext } from "../tenant-config/business-context.js";
+ import type {
+   RescheduleAppointmentInput,
+@@ -234,7 +238,10 @@ export class SchedulingClient implements SchedulingGateway {
+       method: options.method ?? "GET",
+       headers: {
+         accept: "application/json",
+-        authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
++        // Credencial própria deste chamador/uso, distinta da que o BFF
++        // apresenta e da que a IA aceita nas rotas internas.
++        authorization: `Bearer ${schedulingCommandToken()}`,
++        "x-service-audience": "scheduling-service",
+         "x-tenant-id": context.tenantId,
+         "x-user-id": context.userId,
+         "x-request-id": context.requestId,
+@@ -283,7 +290,7 @@ function requireContext(
+       code: "SCHEDULING_CONTEXT_REQUIRED",
+     });
+   }
+-  if (!env.INTERNAL_SERVICE_TOKEN) {
++  if (!schedulingCommandToken()) {
+     throw new AppError("Scheduling Service authentication is not configured.", {
+       statusCode: 500,
+       code: "SCHEDULING_AUTH_NOT_CONFIGURED",
+@@ -292,6 +299,19 @@ function requireContext(
+   return context;
+ }
+ 
++function schedulingCommandToken(): string {
++  if (env.SCHEDULING_SERVICE_COMMAND_TOKEN) {
++    return env.SCHEDULING_SERVICE_COMMAND_TOKEN;
++  }
++  if (!env.INTERNAL_SERVICE_TOKEN) return "";
++  return deriveInternalToken(
++    env.INTERNAL_SERVICE_TOKEN,
++    CALLER_ID,
++    "scheduling-service",
++    "command",
++  );
++}
++
+ function toService(
+   service: z.output<typeof serviceSchema>,
+ ): SchedulingServiceDefinition {
+diff --git a/apps/ai-orchestrator/tests/channel/evolution.provider.test.ts b/apps/ai-orchestrator/tests/channel/evolution.provider.test.ts
+index 97a0e60..b282f36 100644
+--- a/apps/ai-orchestrator/tests/channel/evolution.provider.test.ts
++++ b/apps/ai-orchestrator/tests/channel/evolution.provider.test.ts
+@@ -86,7 +86,7 @@ describe("EvolutionProvider", () => {
+       await import("../../src/modules/channel/adapters/evolution/EvolutionProvider.js");
+ 
+     await expect(
+-      new EvolutionProvider(undefined, undefined, "instance-1").sendText({
++      new EvolutionProvider(undefined, "instance-token", "instance-1").sendText({
+         to: "5511999999999",
+         text: "ok",
+       }),
+@@ -114,10 +114,64 @@ describe("EvolutionProvider", () => {
+       await import("../../src/modules/channel/adapters/evolution/EvolutionProvider.js");
+ 
+     await expect(
+-      new EvolutionProvider(undefined, undefined, "instance-1").sendText({
++      new EvolutionProvider(undefined, "instance-token", "instance-1").sendText({
+         to: "5511999999999",
+         text: "ok",
+       }),
+     ).rejects.toThrow("Evolution Go send failed with HTTP 500");
+   });
++
++  it("refuses to send with the global key when the instance credential is missing", async () => {
++    vi.stubEnv("EVOLUTION_BASE_URL", "http://evolution-go:8080");
++    vi.stubEnv("EVOLUTION_API_KEY", "global-key");
++    vi.resetModules();
++
++    const fetchMock = vi.fn();
++    vi.stubGlobal("fetch", fetchMock);
++
++    const { EvolutionProvider } = await import(
++      "../../src/modules/channel/adapters/evolution/EvolutionProvider.js"
++    );
++
++    await expect(
++      new EvolutionProvider(undefined, undefined, "instance-1").sendText({
++        to: "5511999999999",
++        text: "ok",
++      }),
++    ).rejects.toThrow("Evolution channel credentials are not configured.");
++    // Falha de resolução impede o envio: nada sai assinado pela chave global.
++    expect(fetchMock).not.toHaveBeenCalled();
++  });
++
++  it("keeps secrets out of the raw payload it returns for persistence", async () => {
++    vi.stubEnv("EVOLUTION_BASE_URL", "http://evolution-go:8080");
++    vi.resetModules();
++
++    vi.stubGlobal(
++      "fetch",
++      vi.fn().mockResolvedValue(
++        new Response(
++          JSON.stringify({
++            messageId: "message-1",
++            instanceToken: "wa_secret_token_value",
++            apikey: "wa_secret_token_value",
++            data: { credentials: { token: "wa_secret_token_value" } },
++          }),
++          { status: 200, headers: { "content-type": "application/json" } },
++        ),
++      ),
++    );
++
++    const { EvolutionProvider } = await import(
++      "../../src/modules/channel/adapters/evolution/EvolutionProvider.js"
++    );
++
++    const result = await new EvolutionProvider(
++      undefined,
++      "instance-token",
++      "instance-1",
++    ).sendText({ to: "5511999999999", text: "ok" });
++
++    expect(JSON.stringify(result.raw)).not.toContain("wa_secret_token_value");
++  });
+ });
+diff --git a/apps/bff/.env.example b/apps/bff/.env.example
+index 147573a..170e6ab 100644
+--- a/apps/bff/.env.example
++++ b/apps/bff/.env.example
+@@ -33,3 +33,21 @@ PASSWORD_RESET_DELIVERY_TOKEN=
+ 
+ # Token compartilhado com EVOLUTION_WEBHOOK_TOKEN no AI Orchestrator.
+ EVOLUTION_WEBHOOK_SECRET=change-me
++
++# Sessao revogavel: TTL da sessao no servidor e cookie legivel do token de CSRF.
++SESSION_TTL_HOURS=168
++CSRF_COOKIE_NAME=atendly_csrf
++CSRF_HEADER_NAME=x-csrf-token
++
++# Credenciais internas por chamador/uso. Vazias, sao derivadas de
++# INTERNAL_SERVICE_TOKEN por HMAC; o valor bruto nunca e aceito por um receptor.
++AI_ORCHESTRATOR_PROVISIONING_TOKEN=
++AI_ORCHESTRATOR_COMMAND_TOKEN=
++SCHEDULING_SERVICE_COMMAND_TOKEN=
++
++# Cifra da credencial da instancia WhatsApp. Formato "<keyId>:<chave base64 de
++# 32 bytes>", separadas por virgula. Rotacao: adicione a chave nova e aponte
++# WHATSAPP_CREDENTIAL_ACTIVE_KEY_ID para ela; so remova a antiga depois de o
++# estoque ter sido regravado. Gere com: openssl rand -base64 32
++WHATSAPP_CREDENTIAL_KEYS=v1:
++WHATSAPP_CREDENTIAL_ACTIVE_KEY_ID=v1
+diff --git a/apps/bff/PUBLIC_API_V1.md b/apps/bff/PUBLIC_API_V1.md
+index aed305d..4bb5438 100644
+--- a/apps/bff/PUBLIC_API_V1.md
++++ b/apps/bff/PUBLIC_API_V1.md
+@@ -22,6 +22,25 @@ Para comportamento vigente, prevalece [`../../docs/product-vault/00-HOME.md`](..
+ 
+ As rotas autenticadas resolvem o negócio a partir da sessão; `tenantId` enviado isoladamente pelo browser não concede autorização.
+ 
++## Sessão, CSRF e origem
++
++O portador continua sendo o JWT, no cookie de sessão ou em `Authorization: Bearer`. O que mudou é que ele carrega uma identidade de sessão (`sid`) verificada no servidor a cada requisição:
++
++- sessão inexistente, expirada ou revogada devolve `401 UNAUTHORIZED`, mesmo com o JWT ainda dentro da validade;
++- um JWT emitido antes desta identidade não tem `sid` e devolve `401 SESSION_REAUTH_REQUIRED`: é preciso autenticar de novo, e nenhuma sessão é criada a partir dele;
++- `POST /v1/auth/logout` revoga a sessão no servidor; `PATCH /v1/auth/password` e `POST /v1/auth/reset-password` revogam **todas** as sessões do usuário, cookie e Bearer.
++
++Mutações autenticadas por cookie exigem duas provas, ambas verificadas antes de qualquer efeito:
++
++| Prova | Como é enviada | Recusa |
++| --- | --- | --- |
++| Origem | `Origin` (ou origem de `Referer`) na allowlist de `FRONTEND_ORIGIN` | `403 CSRF_ORIGIN_REJECTED` |
++| Token de CSRF | header `x-csrf-token` com o valor do cookie legível `atendly_csrf` | `403 CSRF_TOKEN_REJECTED` |
++
++O token de CSRF é emitido junto com a sessão e conferido contra o valor guardado **naquela** sessão: o token de outra sessão não passa. Requisições autenticadas por Bearer não usam credencial ambiente e não exigem CSRF; a distinção vem da credencial efetivamente verificada, não de um header declarado.
++
++`POST /v1/auth/register`, `POST /v1/auth/login`, `POST /v1/auth/logout`, `POST /v1/auth/forgot-password` e `POST /v1/auth/reset-password` exigem origem permitida mesmo sem sessão estabelecida.
++
+ ## Contratos legados ainda ativos
+ 
+ As rotas abaixo também estão registradas e possuem consumidores no frontend atual:
+diff --git a/apps/bff/prisma/schema.prisma b/apps/bff/prisma/schema.prisma
+index 5e6befc..823fe63 100644
+--- a/apps/bff/prisma/schema.prisma
++++ b/apps/bff/prisma/schema.prisma
+@@ -38,6 +38,26 @@ model User {
+   legalAcceptances    LegalAcceptance[]
+   passwordResetTokens PasswordResetToken[]
+   tenantMemberships   TenantMember[]
++  sessions            UserSession[]
++}
++
++/// Identidade de sessão revogável consultada a cada autenticação. O JWT carrega
++/// apenas o `sid`; expiração, revogação e o segredo de CSRF vivem aqui, de modo
++/// que logout e troca de senha invalidam cookie e Bearer no servidor.
++model UserSession {
++  id            String    @id @default(cuid())
++  userId        String
++  csrfTokenHash String
++  createdAt     DateTime  @default(now())
++  expiresAt     DateTime
++  lastUsedAt    DateTime?
++  revokedAt     DateTime?
++  revokedReason String?
++
++  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
++
++  @@index([userId, revokedAt])
++  @@index([expiresAt])
+ }
+ 
+ model PasswordResetToken {
+@@ -59,9 +79,10 @@ model Tenant {
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
+ 
+-  members         TenantMember[]
+-  businessProfile BusinessProfile?
+-  aiSettings      AiSettings?
++  members          TenantMember[]
++  businessProfile  BusinessProfile?
++  aiSettings       AiSettings?
++  whatsappInstance WhatsAppInstance?
+ }
+ 
+ model TenantMember {
+@@ -107,11 +128,19 @@ model LegalAcceptance {
+ }
+ 
+ model WhatsAppInstance {
+-  id                     String                 @id @default(cuid())
+-  userId                 String                 @unique
++  id     String @id @default(cuid())
++  userId String @unique
++  /// Dono de negócio do vínculo. Nulo apenas para estoque legado cuja
++  /// proveniência ficou ambígua na migração: essas linhas não autorizam uso.
++  tenantId String? @unique
+   evolutionInstanceId    String?
+   evolutionInstanceName  String                 @unique
++  /// Envelope cifrado `v1.<keyId>.<iv>.<ct>` a partir de credentialVersion >= 1.
++  /// credentialVersion 0 identifica o estoque legado ainda em texto puro.
+   evolutionInstanceToken String
++  credentialKeyId        String?
++  credentialVersion      Int                    @default(0)
++  credentialRotatedAt    DateTime?
+   phoneNumber            String?
+   status                 WhatsAppInstanceStatus @default(CREATED)
+   qrcode                 String?
+@@ -120,10 +149,12 @@ model WhatsAppInstance {
+   createdAt              DateTime               @default(now())
+   updatedAt              DateTime               @updatedAt
+ 
+-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
++  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
++  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+ 
+   @@index([evolutionInstanceId])
+   @@index([status])
++  @@index([credentialVersion])
+ }
+ 
+ model AiSettings {
+diff --git a/apps/bff/src/clients/ai-orchestrator/index.ts b/apps/bff/src/clients/ai-orchestrator/index.ts
+index 262eaa8..6a7106b 100644
+--- a/apps/bff/src/clients/ai-orchestrator/index.ts
++++ b/apps/bff/src/clients/ai-orchestrator/index.ts
+@@ -72,10 +72,12 @@ export class AiOrchestratorClient {
+     ).data;
+   }
+ 
++  // A credencial da instância não viaja mais aqui: a IA a resolve pelo vínculo
++  // interno projetado no provisionamento.
+   async sendMessage(
+     context: InternalRequestContext,
+     id: string,
+-    input: { text: string; instanceToken: string },
++    input: { text: string },
+   ) {
+     return (
+       await this.http.request({
+@@ -127,19 +129,25 @@ export class AiOrchestratorClient {
+       path: "/internal/ai-tenant-config",
+       context,
+       body: input,
++      use: "provisioning",
+       schema: z.object({ ok: z.literal(true), config: z.unknown() }),
+     });
+   }
+ 
+   async provisionEvolutionChannel(
+     context: InternalRequestContext,
+-    input: { externalInstanceId: string; displayName?: string },
++    input: {
++      externalInstanceId: string;
++      displayName?: string;
++      instanceCredential: string;
++    },
+   ): Promise<void> {
+     await this.http.request({
+       method: "PUT",
+       path: "/internal/channel-connections/evolution",
+       context,
+       body: input,
++      use: "provisioning",
+       schema: z.object({ ok: z.literal(true), connection: z.unknown() }),
+     });
+   }
+diff --git a/apps/bff/src/clients/internal-http-client.ts b/apps/bff/src/clients/internal-http-client.ts
+index 7bdc1c6..7863d19 100644
+--- a/apps/bff/src/clients/internal-http-client.ts
++++ b/apps/bff/src/clients/internal-http-client.ts
+@@ -1,7 +1,12 @@
+ import type { z } from "zod";
+ 
+-import { env, requireEnv } from "../config/env.js";
++import { env } from "../config/env.js";
+ import { AppError } from "../lib/errors.js";
++import {
++  type InternalAudience,
++  internalToken,
++  type InternalUse,
++} from "../lib/internal-credentials.js";
+ 
+ export interface InternalRequestContext {
+   tenantId: string;
+@@ -18,6 +23,13 @@ export class InternalHttpClient {
+     private readonly authMode: "internal" | "custom" = "internal",
+   ) {}
+ 
++  // `x-service-audience` continua sendo informação de roteamento/observação; a
++  // autorização vem da credencial escolhida por (audiência, uso), distinta para
++  // provisionamento e para comando comum.
++  private credential(use: InternalUse): string {
++    return internalToken(this.audience as InternalAudience, use);
++  }
++
+   async request<T>(input: {
+     method: HttpMethod;
+     path: string;
+@@ -28,6 +40,7 @@ export class InternalHttpClient {
+     idempotencyKey?: string;
+     headers?: Record<string, string>;
+     requestId?: string;
++    use?: InternalUse;
+   }): Promise<T> {
+     const attempts =
+       input.method === "GET" ? env.INTERNAL_HTTP_GET_RETRIES + 1 : 1;
+@@ -56,6 +69,7 @@ export class InternalHttpClient {
+     idempotencyKey?: string;
+     headers?: Record<string, string>;
+     requestId?: string;
++    use?: InternalUse;
+   }): Promise<T> {
+     const url = new URL(input.path, normalizedBaseUrl(this.baseUrl));
+     for (const [key, value] of Object.entries(input.query ?? {})) {
+@@ -75,7 +89,7 @@ export class InternalHttpClient {
+           "x-service-audience": this.audience,
+           ...(this.authMode === "internal"
+             ? {
+-                authorization: `Bearer ${requireEnv("INTERNAL_SERVICE_TOKEN")}`,
++                authorization: `Bearer ${this.credential(input.use ?? "command")}`,
+               }
+             : {}),
+           ...(input.context
+diff --git a/apps/bff/src/config/env.ts b/apps/bff/src/config/env.ts
+index 10611f2..e4e9632 100644
+--- a/apps/bff/src/config/env.ts
++++ b/apps/bff/src/config/env.ts
+@@ -39,6 +39,9 @@ const envSchema = z.object({
+   JWT_SECRET: stringEnv("dev-only-change-me-with-at-least-32-characters"),
+   JWT_EXPIRES_IN: stringEnv("7d"),
+   SESSION_COOKIE_NAME: stringEnv("atendly_session"),
++  CSRF_COOKIE_NAME: stringEnv("atendly_csrf"),
++  CSRF_HEADER_NAME: stringEnv("x-csrf-token"),
++  SESSION_TTL_HOURS: intEnv(24 * 7),
+   COOKIE_SECURE: boolEnv(false),
+   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+   FRONTEND_ORIGIN: stringEnv("http://localhost:3001"),
+@@ -47,6 +50,16 @@ const envSchema = z.object({
+   EVOLUTION_GO_BASE_URL: stringEnv("http://localhost:8080"),
+   EVOLUTION_GO_API_KEY: stringEnv(),
+   INTERNAL_SERVICE_TOKEN: serviceTokenEnv(),
++  // Credenciais por chamador/uso. Vazias, são derivadas de
++  // INTERNAL_SERVICE_TOKEN por HMAC — nunca o próprio valor bruto, para que o
++  // token de provisionamento não sirva de fallback de comando comum.
++  AI_ORCHESTRATOR_PROVISIONING_TOKEN: serviceTokenEnv(),
++  AI_ORCHESTRATOR_COMMAND_TOKEN: serviceTokenEnv(),
++  SCHEDULING_SERVICE_COMMAND_TOKEN: serviceTokenEnv(),
++  // Cifra da credencial de instância: "<keyId>:<chave base64 de 32 bytes>",
++  // separadas por vírgula. A chave ativa é a usada em novas gravações.
++  WHATSAPP_CREDENTIAL_KEYS: stringEnv(),
++  WHATSAPP_CREDENTIAL_ACTIVE_KEY_ID: stringEnv(),
+   INTERNAL_HTTP_TIMEOUT_MS: intEnv(10_000),
+   INTERNAL_HTTP_GET_RETRIES: intEnv(2),
+   PASSWORD_RESET_TOKEN_TTL_MINUTES: intEnv(30),
+@@ -65,6 +78,11 @@ if (env.NODE_ENV === "production") {
+   if (insecureJwtSecret) {
+     throw new Error("JWT_SECRET must be set to a strong value in production.");
+   }
++  if (!env.WHATSAPP_CREDENTIAL_KEYS) {
++    throw new Error(
++      "WHATSAPP_CREDENTIAL_KEYS must be configured in production: the WhatsApp instance credential is never stored in plain text.",
++    );
++  }
+ }
+ 
+ export function requireEnv(key: keyof Env): string {
+diff --git a/apps/bff/src/lib/auth.ts b/apps/bff/src/lib/auth.ts
+index 4993c17..2ef9560 100644
+--- a/apps/bff/src/lib/auth.ts
++++ b/apps/bff/src/lib/auth.ts
+@@ -1,18 +1,40 @@
+ import type { FastifyReply, FastifyRequest } from "fastify";
+-import { jwtVerify, SignJWT } from "jose";
++import { type JWTPayload, jwtVerify, SignJWT } from "jose";
+ 
+ import { env } from "../config/env.js";
++import { assertAllowedOrigin, assertCsrfToken, isSafeMethod } from "./csrf.js";
+ import { AppError } from "./errors.js";
++import {
++  type ActiveSession,
++  type IssuedSession,
++  loadActiveSession,
++  sessionTtlSeconds,
++} from "./session.js";
+ 
+ export type AuthenticatedUser = {
+   id: string;
+   email: string;
++  sessionId: string;
+ };
+ 
++/**
++ * Qual credencial autenticou a requisição.
++ *
++ * A distinção não vem de header declaratório: `bearer` só é escolhido quando um
++ * `Authorization: Bearer` foi apresentado **e** verificado com sucesso. O
++ * navegador não consegue anexar esse header a uma requisição cross-site sem
++ * preflight, e o CORS do app não libera origem estranha; por isso a proteção de
++ * CSRF é exigida exatamente no caso `cookie`, o único com credencial ambiente.
++ */
++export type AuthCredentialKind = "cookie" | "bearer";
++
+ const secretKey = () => new TextEncoder().encode(env.JWT_SECRET);
+ 
+-export async function signSession(user: AuthenticatedUser): Promise<string> {
+-  return new SignJWT({ email: user.email })
++export async function signSession(
++  user: { id: string; email: string },
++  sessionId: string,
++): Promise<string> {
++  return new SignJWT({ email: user.email, sid: sessionId })
+     .setProtectedHeader({ alg: "HS256" })
+     .setSubject(user.id)
+     .setIssuedAt()
+@@ -20,56 +42,146 @@ export async function signSession(user: AuthenticatedUser): Promise<string> {
+     .sign(secretKey());
+ }
+ 
++export interface SessionTokenClaims {
++  userId: string;
++  email: string;
++  sessionId: string;
++}
++
++/**
++ * Verifica o portador e exige identidade de sessão.
++ *
++ * JWTs antigos, emitidos antes deste Goal, não têm `sid` e portanto não têm
++ * prova revogável associada. Eles são recusados com `SESSION_REAUTH_REQUIRED`:
++ * exigir nova autenticação é a única alternativa segura, porque criar uma
++ * sessão a partir de um token que nunca passou por revogação reabriria o
++ * caminho que logout e troca de senha precisam fechar.
++ */
+ export async function verifySessionToken(
+   token: string,
+-): Promise<AuthenticatedUser> {
++): Promise<SessionTokenClaims> {
++  let payload: JWTPayload;
+   try {
+-    const { payload } = await jwtVerify(token, secretKey());
+-    if (!payload.sub || typeof payload.email !== "string") {
+-      throw new AppError("UNAUTHORIZED", "Invalid session.", 401);
+-    }
+-
+-    return {
+-      id: payload.sub,
+-      email: payload.email,
+-    };
+-  } catch (error) {
+-    if (error instanceof AppError) throw error;
++    ({ payload } = await jwtVerify(token, secretKey()));
++  } catch {
+     throw new AppError("UNAUTHORIZED", "Invalid or expired session.", 401);
+   }
++
++  const subject = payload.sub;
++  const email = payload.email;
++  const sessionId = payload.sid;
++
++  if (!subject || typeof email !== "string") {
++    throw new AppError("UNAUTHORIZED", "Invalid session.", 401);
++  }
++
++  if (typeof sessionId !== "string" || !sessionId) {
++    throw new AppError(
++      "SESSION_REAUTH_REQUIRED",
++      "This session predates revocable session identity. Sign in again.",
++      401,
++    );
++  }
++
++  return { userId: subject, email, sessionId };
++}
++
++export function sessionCookieOptions() {
++  return {
++    httpOnly: true,
++    secure: env.COOKIE_SECURE || env.COOKIE_SAME_SITE === "none",
++    sameSite: env.COOKIE_SAME_SITE,
++    path: "/",
++  } as const;
+ }
+ 
+ export function setSessionCookie(reply: FastifyReply, token: string): void {
+   reply.setCookie(env.SESSION_COOKIE_NAME, token, {
+-    httpOnly: true,
++    ...sessionCookieOptions(),
++    maxAge: sessionTtlSeconds(),
++  });
++}
++
++/**
++ * Cookie de CSRF legível pelo script da própria origem: o adapter do frontend
++ * copia o valor para o header. O valor não autoriza nada por si — o par
++ * esperado está guardado na sessão, no servidor.
++ */
++export function setCsrfCookie(reply: FastifyReply, csrfToken: string): void {
++  reply.setCookie(env.CSRF_COOKIE_NAME, csrfToken, {
++    httpOnly: false,
+     secure: env.COOKIE_SECURE || env.COOKIE_SAME_SITE === "none",
+     sameSite: env.COOKIE_SAME_SITE,
+     path: "/",
+-    maxAge: 60 * 60 * 24 * 7,
++    maxAge: sessionTtlSeconds(),
+   });
+ }
+ 
++export async function establishSession(
++  reply: FastifyReply,
++  user: { id: string; email: string },
++  session: IssuedSession,
++): Promise<void> {
++  setSessionCookie(reply, await signSession(user, session.sessionId));
++  setCsrfCookie(reply, session.csrfToken);
++}
++
+ export function clearSessionCookie(reply: FastifyReply): void {
+-  reply.clearCookie(env.SESSION_COOKIE_NAME, {
++  const options = {
+     secure: env.COOKIE_SECURE || env.COOKIE_SAME_SITE === "none",
+     sameSite: env.COOKIE_SAME_SITE,
+     path: "/",
+-  });
++  } as const;
++  reply.clearCookie(env.SESSION_COOKIE_NAME, options);
++  reply.clearCookie(env.CSRF_COOKIE_NAME, options);
+ }
+ 
+-export async function requireAuth(request: FastifyRequest): Promise<void> {
++export interface PresentedCredential {
++  token: string;
++  kind: AuthCredentialKind;
++}
++
++export function presentedCredential(
++  request: FastifyRequest,
++): PresentedCredential | null {
+   const header = request.headers.authorization;
+   const bearerToken = header?.startsWith("Bearer ")
+     ? header.slice("Bearer ".length).trim()
+     : "";
++  if (bearerToken) return { token: bearerToken, kind: "bearer" };
++
+   const cookieToken = request.cookies[env.SESSION_COOKIE_NAME];
+-  const token = bearerToken || cookieToken;
++  if (cookieToken) return { token: cookieToken, kind: "cookie" };
+ 
+-  if (!token) {
++  return null;
++}
++
++export async function requireAuth(request: FastifyRequest): Promise<void> {
++  const credential = presentedCredential(request);
++  if (!credential) {
+     throw new AppError("UNAUTHORIZED", "Authentication required.", 401);
+   }
+ 
+-  request.user = await verifySessionToken(token);
++  const claims = await verifySessionToken(credential.token);
++  const session = await loadActiveSession(claims.sessionId);
++  if (!session || session.userId !== claims.userId) {
++    // Sessão revogada, expirada no servidor ou usuário removido: um único erro,
++    // sem revelar qual das condições ocorreu.
++    throw new AppError("UNAUTHORIZED", "Invalid or expired session.", 401);
++  }
++
++  if (credential.kind === "cookie" && !isSafeMethod(request.method)) {
++    assertAllowedOrigin(request);
++    assertCsrfToken(request, session);
++  }
++
++  request.authCredentialKind = credential.kind;
++  request.session = session;
++  request.user = {
++    id: session.userId,
++    email: session.email,
++    sessionId: session.id,
++  };
+ }
+ 
+ export function currentUser(request: FastifyRequest): AuthenticatedUser {
+@@ -79,3 +191,11 @@ export function currentUser(request: FastifyRequest): AuthenticatedUser {
+ 
+   return request.user;
+ }
++
++export function currentSession(request: FastifyRequest): ActiveSession {
++  if (!request.session) {
++    throw new AppError("UNAUTHORIZED", "Authentication required.", 401);
++  }
++
++  return request.session;
++}
+diff --git a/apps/bff/src/lib/errors.ts b/apps/bff/src/lib/errors.ts
+index 045f0fa..c4c7ace 100644
+--- a/apps/bff/src/lib/errors.ts
++++ b/apps/bff/src/lib/errors.ts
+@@ -1,12 +1,21 @@
+ export type ErrorCode =
+   | "UNAUTHORIZED"
++  // Portador válido, mas sem identidade de sessão revogável: exige novo login.
++  | "SESSION_REAUTH_REQUIRED"
+   | "FORBIDDEN"
++  // Origem e token de CSRF são recusas distintas de FORBIDDEN para que o
++  // frontend saiba renovar o token em vez de deslogar o usuário.
++  | "CSRF_ORIGIN_REJECTED"
++  | "CSRF_TOKEN_REJECTED"
+   | "VALIDATION_ERROR"
+   | "NOT_FOUND"
+   | "CONFLICT"
+   | "RATE_LIMITED"
+   | "UPSTREAM_ERROR"
+   | "CONFIGURATION_ERROR"
++  // Credencial de instância indisponível: chave ausente, envelope inválido ou
++  // vínculo não resolvido. Nunca degrada para chave global.
++  | "CREDENTIAL_UNAVAILABLE"
+   | "INTERNAL_ERROR";
+ 
+ export class AppError extends Error {
+diff --git a/apps/bff/src/modules/auth/routes.ts b/apps/bff/src/modules/auth/routes.ts
+index c9f1350..ef211ef 100644
+--- a/apps/bff/src/modules/auth/routes.ts
++++ b/apps/bff/src/modules/auth/routes.ts
+@@ -1,6 +1,6 @@
+ import { createHash, randomBytes } from "node:crypto";
+ 
+-import type { FastifyInstance } from "fastify";
++import type { FastifyInstance, FastifyRequest } from "fastify";
+ import { z } from "zod";
+ 
+ import { PasswordResetDeliveryClient } from "../../clients/password-reset-delivery.js";
+@@ -9,14 +9,22 @@ import { CURRENT_LEGAL_VERSIONS } from "../../config/legal-versions.js";
+ import {
+   clearSessionCookie,
+   currentUser,
+-  setSessionCookie,
+-  signSession,
++  establishSession,
++  presentedCredential,
++  verifySessionToken,
+ } from "../../lib/auth.js";
++import { assertAllowedOrigin, assertCsrfToken } from "../../lib/csrf.js";
+ import { businessProfileDto, tenantDto, userDto } from "../../lib/dto.js";
+ import { AppError } from "../../lib/errors.js";
+ import { dataResponse, parseBody } from "../../lib/http.js";
+ import { hashPassword, verifyPassword } from "../../lib/password.js";
+ import { getPrisma } from "../../lib/prisma.js";
++import {
++  createUserSession,
++  loadActiveSession,
++  revokeAllUserSessions,
++  revokeSession,
++} from "../../lib/session.js";
+ import {
+   currentTenantContext,
+   requireTenantContext,
+@@ -72,7 +80,19 @@ export async function registerV1AuthRoutes(
+   app: FastifyInstance,
+ ): Promise<void> {
+   const passwordResetDelivery = new PasswordResetDeliveryClient();
+-  app.post("/v1/auth/register", async (request, reply) => {
++
++  // Os fluxos de autenticação não têm sessão estabelecida para carregar um
++  // token de CSRF, então a barreira aqui é a origem: um formulário hospedado em
++  // outro site não consegue cadastrar, logar nem derrubar sessão.
++  // Hook async de propósito: o Fastify só encadeia hooks de aridade 3 por
++  // callback, e um guard síncrono de um argumento travaria a requisição.
++  const originGuard = {
++    preHandler: async (request: FastifyRequest) => {
++      assertAllowedOrigin(request);
++    },
++  };
++
++  app.post("/v1/auth/register", originGuard, async (request, reply) => {
+     const body = parseBody(registerSchema, request.body);
+     const prisma = getPrisma();
+     if (
+@@ -121,7 +141,11 @@ export async function registerV1AuthRoutes(
+       return { user, tenant };
+     });
+ 
+-    setSessionCookie(reply, await signSession(result.user));
++    await establishSession(
++      reply,
++      result.user,
++      await createUserSession(result.user.id),
++    );
+     return reply.code(201).send(
+       dataResponse(request, {
+         user: userDto(result.user),
+@@ -132,7 +156,10 @@ export async function registerV1AuthRoutes(
+ 
+   app.post(
+     "/v1/auth/login",
+-    { config: { rateLimit: { max: 10, timeWindow: "15 minutes" } } },
++    {
++      ...originGuard,
++      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
++    },
+     async (request, reply) => {
+       const body = parseBody(loginSchema, request.body);
+       const user = await getPrisma().user.findUnique({
+@@ -141,15 +168,32 @@ export async function registerV1AuthRoutes(
+       if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+         throw new AppError("UNAUTHORIZED", "Invalid credentials.", 401);
+       }
+-      setSessionCookie(
++      await establishSession(
+         reply,
+-        await signSession({ id: user.id, email: user.email }),
++        { id: user.id, email: user.email },
++        await createUserSession(user.id),
+       );
+       return dataResponse(request, { user: userDto(user) });
+     },
+   );
+ 
+-  app.post("/v1/auth/logout", async (request, reply) => {
++  // Logout revoga a sessão no servidor antes de limpar o cookie. Um token já
++  // emitido — cookie ou Bearer — deixa de autorizar a partir daqui, e repetir a
++  // chamada não reativa nada.
++  app.post("/v1/auth/logout", originGuard, async (request, reply) => {
++    const credential = presentedCredential(request);
++    if (credential) {
++      const claims = await verifySessionToken(credential.token).catch(
++        () => null,
++      );
++      const session = claims
++        ? await loadActiveSession(claims.sessionId)
++        : null;
++      if (session && claims && session.userId === claims.userId) {
++        if (credential.kind === "cookie") assertCsrfToken(request, session);
++        await revokeSession(session.id, "LOGOUT");
++      }
++    }
+     clearSessionCookie(reply);
+     return dataResponse(request, { ok: true });
+   });
+@@ -184,7 +228,7 @@ export async function registerV1AuthRoutes(
+   app.patch(
+     "/v1/auth/password",
+     { preHandler: requireTenantContext },
+-    async (request) => {
++    async (request, reply) => {
+       const sessionUser = currentUser(request);
+       const body = parseBody(passwordSchema, request.body);
+       const user = await getPrisma().user.findUnique({
+@@ -202,13 +246,25 @@ export async function registerV1AuthRoutes(
+         where: { id: user.id },
+         data: { passwordHash: await hashPassword(body.newPassword) },
+       });
++      // Troca efetiva de senha invalida todas as sessões do usuário, inclusive
++      // a que fez a chamada e qualquer Bearer emitido antes. O dispositivo
++      // corrente recebe uma sessão nova, com CSRF novo, no mesmo response.
++      await revokeAllUserSessions(user.id, "PASSWORD_CHANGED");
++      await establishSession(
++        reply,
++        { id: user.id, email: user.email },
++        await createUserSession(user.id),
++      );
+       return dataResponse(request, { ok: true });
+     },
+   );
+ 
+   app.post(
+     "/v1/auth/forgot-password",
+-    { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } },
++    {
++      ...originGuard,
++      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
++    },
+     async (request) => {
+       if (!env.PASSWORD_RESET_DELIVERY_URL) {
+         throw new AppError(
+@@ -262,7 +318,7 @@ export async function registerV1AuthRoutes(
+     },
+   );
+ 
+-  app.post("/v1/auth/reset-password", async (request) => {
++  app.post("/v1/auth/reset-password", originGuard, async (request) => {
+     const body = parseBody(resetPasswordSchema, request.body);
+     const prisma = getPrisma();
+     const reset = await prisma.passwordResetToken.findUnique({
+@@ -299,6 +355,10 @@ export async function registerV1AuthRoutes(
+       await transaction.passwordResetToken.deleteMany({
+         where: { userId: reset.userId, id: { not: reset.id } },
+       });
++      await transaction.userSession.updateMany({
++        where: { userId: reset.userId, revokedAt: null },
++        data: { revokedAt: new Date(), revokedReason: "PASSWORD_RESET" },
++      });
+     });
+     return dataResponse(request, { ok: true });
+   });
+diff --git a/apps/bff/src/modules/conversations/routes.ts b/apps/bff/src/modules/conversations/routes.ts
+index 9a392fc..40a6156 100644
+--- a/apps/bff/src/modules/conversations/routes.ts
++++ b/apps/bff/src/modules/conversations/routes.ts
+@@ -9,12 +9,12 @@ import {
+   parseParams,
+   parseQuery,
+ } from "../../lib/http.js";
+-import { getPrisma } from "../../lib/prisma.js";
+ import {
+   currentTenantContext,
+   requireTenantContext,
+ } from "../../lib/tenant-context.js";
+ import { internalContext } from "../tenant/context.js";
++import { findLinkedInstance } from "../whatsapp/instance-link.js";
+ 
+ const idSchema = z.object({ id: z.string().trim().min(1).max(128) });
+ const querySchema = z.object({
+@@ -72,15 +72,14 @@ export async function registerV1ConversationRoutes(
+       const { id } = parseParams(idSchema, request.params);
+       const body = parseBody(messageSchema, request.body);
+       const tenant = currentTenantContext(request);
+-      const instance = await getPrisma().whatsAppInstance.findUnique({
+-        where: { userId: tenant.userId },
+-      });
++      // O vínculo é resolvido pelo tenant autenticado, e a credencial não sai
++      // daqui: quem envia é a IA, com a projeção que ela já guarda cifrada.
++      const instance = await findLinkedInstance(tenant);
+       if (!instance || instance.status !== "CONNECTED") {
+         throw new AppError("CONFLICT", "WhatsApp is not connected.", 409);
+       }
+       const message = await ai.sendMessage(internalContext(request), id, {
+         text: body.text,
+-        instanceToken: instance.evolutionInstanceToken,
+       });
+       return reply.code(201).send(dataResponse(request, message));
+     },
+diff --git a/apps/bff/src/modules/whatsapp/routes.ts b/apps/bff/src/modules/whatsapp/routes.ts
+index 45919f2..1451d27 100644
+--- a/apps/bff/src/modules/whatsapp/routes.ts
++++ b/apps/bff/src/modules/whatsapp/routes.ts
+@@ -14,6 +14,13 @@ import {
+   requireTenantContext,
+ } from "../../lib/tenant-context.js";
+ import { internalContext } from "../tenant/context.js";
++import {
++  findLinkedInstance,
++  type LinkedInstance,
++  requireLinkedInstance,
++  resolveInstanceCredential,
++  sealedInstanceCredentialData,
++} from "./instance-link.js";
+ 
+ const connectSchema = z
+   .object({
+@@ -36,12 +43,10 @@ export async function registerV1WhatsAppRoutes(
+     { preHandler: requireTenantContext },
+     async (request) => {
+       const tenant = currentTenantContext(request);
+-      const instance = await getPrisma().whatsAppInstance.findUnique({
+-        where: { userId: tenant.userId },
+-      });
++      const instance = await findLinkedInstance(tenant);
+       if (!instance) return dataResponse(request, null);
+       const status = await evolution.getStatus(
+-        instance.evolutionInstanceToken,
++        await resolveInstanceCredential(instance),
+         request.id,
+       );
+       const updated = await getPrisma().whatsAppInstance.update({
+@@ -75,17 +80,9 @@ export async function registerV1WhatsAppRoutes(
+     { preHandler: requireTenantContext },
+     async (request) => {
+       const body = parseBody(connectSchema, request.body ?? {});
+-      const tenant = currentTenantContext(request);
+-      const instance = await getPrisma().whatsAppInstance.findUnique({
+-        where: { userId: tenant.userId },
+-      });
+-      if (!instance) {
+-        throw new AppError(
+-          "NOT_FOUND",
+-          "WhatsApp connection was not found.",
+-          404,
+-        );
+-      }
++      const instance = await requireLinkedInstance(
++        currentTenantContext(request),
++      );
+       return dataResponse(
+         request,
+         await connect(request, instance, body, evolution, ai),
+@@ -98,13 +95,10 @@ export async function registerV1WhatsAppRoutes(
+     { preHandler: requireTenantContext },
+     async (request) => {
+       const tenant = currentTenantContext(request);
+-      const instance = await getPrisma().whatsAppInstance.findUnique({
+-        where: { userId: tenant.userId },
+-      });
++      const instance = await findLinkedInstance(tenant);
+       if (!instance) return dataResponse(request, { disconnected: true });
+-      await evolution
+-        .logoutInstance(instance.evolutionInstanceToken, request.id)
+-        .catch(() => null);
++      const credential = await resolveInstanceCredential(instance);
++      await evolution.logoutInstance(credential, request.id).catch(() => null);
+       await evolution
+         .deleteInstance(
+           instance.evolutionInstanceId ?? instance.evolutionInstanceName,
+@@ -121,11 +115,9 @@ async function ensureInstance(
+   request: FastifyRequest,
+   evolution: EvolutionClient,
+   ai: AiOrchestratorClient,
+-) {
++): Promise<LinkedInstance> {
+   const tenant = currentTenantContext(request);
+-  const existing = await getPrisma().whatsAppInstance.findUnique({
+-    where: { userId: tenant.userId },
+-  });
++  const existing = await findLinkedInstance(tenant);
+   if (existing) {
+     await provisionChannel(request, existing, ai);
+     return existing;
+@@ -144,13 +136,20 @@ async function ensureInstance(
+     },
+     request.id,
+   );
++  const evolutionInstanceName = created.data?.name ?? name;
++  // O vínculo nasce com dono explícito e credencial já cifrada: nenhuma
++  // gravação nova depende do backfill nem guarda o token em texto puro.
+   const instance = await getPrisma().whatsAppInstance.create({
+     data: {
+       userId: tenant.userId,
++      tenantId: tenant.tenantId,
+       evolutionInstanceId: created.data?.id ?? created.data?.name ?? name,
+-      evolutionInstanceName: created.data?.name ?? name,
+-      evolutionInstanceToken: created.data?.token ?? token,
++      evolutionInstanceName,
+       status: "CREATED",
++      ...sealedInstanceCredentialData(created.data?.token ?? token, {
++        tenantId: tenant.tenantId,
++        evolutionInstanceName,
++      }),
+     },
+   });
+   await provisionChannel(request, instance, ai);
+@@ -159,20 +158,15 @@ async function ensureInstance(
+ 
+ async function connect(
+   request: FastifyRequest,
+-  instance: {
+-    id: string;
+-    evolutionInstanceId: string | null;
+-    evolutionInstanceName: string;
+-    evolutionInstanceToken: string;
+-    phoneNumber: string | null;
+-  },
++  instance: LinkedInstance,
+   body: z.output<typeof connectSchema>,
+   evolution: EvolutionClient,
+   ai: AiOrchestratorClient,
+ ) {
+   await provisionChannel(request, instance, ai);
++  const credential = await resolveInstanceCredential(instance);
+   await evolution.connectInstance(
+-    instance.evolutionInstanceToken,
++    credential,
+     evolution.webhookUrl(),
+     request.id,
+   );
+@@ -185,11 +179,7 @@ async function connect(
+         400,
+       );
+     }
+-    const pairing = await evolution.pairInstance(
+-      instance.evolutionInstanceToken,
+-      phone,
+-      request.id,
+-    );
++    const pairing = await evolution.pairInstance(credential, phone, request.id);
+     const updated = await getPrisma().whatsAppInstance.update({
+       where: { id: instance.id },
+       data: { status: "CONNECTING", phoneNumber: phone },
+@@ -202,7 +192,7 @@ async function connect(
+     };
+   }
+ 
+-  const qr = await evolution.getQr(instance.evolutionInstanceToken, request.id);
++  const qr = await evolution.getQr(credential, request.id);
+   const updated = await getPrisma().whatsAppInstance.update({
+     where: { id: instance.id },
+     data: {
+@@ -220,17 +210,19 @@ async function connect(
+ 
+ async function provisionChannel(
+   request: FastifyRequest,
+-  instance: {
+-    evolutionInstanceId: string | null;
+-    evolutionInstanceName: string;
+-  },
++  instance: LinkedInstance,
+   ai: AiOrchestratorClient,
+ ): Promise<void> {
+   const tenant = currentTenantContext(request);
++  // Projeção controlada da credencial: o BFF entrega o segredo à IA pelo canal
++  // interno autenticado com a credencial de provisionamento, e a IA a guarda
++  // cifrada no próprio vínculo. Depois disso a IA nunca precisa do token vindo
++  // do corpo de um webhook.
+   await ai.provisionEvolutionChannel(internalContext(request), {
+     externalInstanceId:
+       instance.evolutionInstanceId ?? instance.evolutionInstanceName,
+     displayName: instance.evolutionInstanceName,
++    instanceCredential: await resolveInstanceCredential(instance),
+   });
+   const [settings, businessProfile] = await Promise.all([
+     getPrisma().aiSettings.upsert({
+diff --git a/apps/bff/src/types.d.ts b/apps/bff/src/types.d.ts
+index b96a339..e6c1191 100644
+--- a/apps/bff/src/types.d.ts
++++ b/apps/bff/src/types.d.ts
+@@ -1,9 +1,12 @@
+-import type { AuthenticatedUser } from "./lib/auth.js";
++import type { AuthCredentialKind, AuthenticatedUser } from "./lib/auth.js";
++import type { ActiveSession } from "./lib/session.js";
+ import type { TenantContext } from "./lib/tenant-context.js";
+ 
+ declare module "fastify" {
+   interface FastifyRequest {
+     user?: AuthenticatedUser;
++    session?: ActiveSession;
++    authCredentialKind?: AuthCredentialKind;
+     tenantContext?: TenantContext;
+   }
+ }
+diff --git a/apps/bff/tests/auth-register.integration.test.ts b/apps/bff/tests/auth-register.integration.test.ts
+index ea449e3..6232dfc 100644
+--- a/apps/bff/tests/auth-register.integration.test.ts
++++ b/apps/bff/tests/auth-register.integration.test.ts
+@@ -93,6 +93,8 @@ describe.skipIf(!runIntegration)("auth registration persistence", () => {
+     const response = await app.inject({
+       method: "POST",
+       url: "/v1/auth/register",
++      // Cadastro é mutação: a origem passou a ser exigida.
++      headers: { origin: env.FRONTEND_ORIGIN },
+       payload: {
+         email,
+         password: "Integration-only-123",
+diff --git a/apps/evolution-go/cmd/evolution-go/main.go b/apps/evolution-go/cmd/evolution-go/main.go
+index aa96ade..20f3c6c 100644
+--- a/apps/evolution-go/cmd/evolution-go/main.go
++++ b/apps/evolution-go/cmd/evolution-go/main.go
+@@ -272,6 +272,30 @@ func migrate(db *gorm.DB) {
+ 	if err != nil {
+ 		log.Fatal(err)
+ 	}
++
++	// Fase EXPAND já está aplicada pelo AutoMigrate acima: coluna instance_id e
++	// índice único composto passam a existir, e a unicidade global de
++	// message_id continua no lugar.
++	report, err := message_repository.InspectMessageOwnership(db)
++	if err != nil {
++		log.Fatal(err)
++	}
++	log.Printf(
++		"message ownership: composite_index=%t legacy_unique=%t messages=%d without_owner=%d",
++		report.CompositeIndexPresent,
++		report.LegacyUniquePresent,
++		report.TotalMessages,
++		report.MessagesWithoutOwner,
++	)
++
++	// Fase CUTOVER, explícita: remove a unicidade global só quando pedida, e
++	// somente depois de o índice composto existir.
++	if os.Getenv("EVOLUTION_MESSAGE_OWNERSHIP_CUTOVER") == "true" {
++		if err := message_repository.ApplyMessageOwnershipCutover(db); err != nil {
++			log.Fatal(err)
++		}
++		log.Printf("message ownership: legacy global unique on message_id removed")
++	}
+ }
+ 
+ func initAuthDB(config *config.Config) (*sql.DB, string, error) {
+diff --git a/apps/evolution-go/docs/docs.go b/apps/evolution-go/docs/docs.go
+index 79793a9..e8ea14d 100644
+--- a/apps/evolution-go/docs/docs.go
++++ b/apps/evolution-go/docs/docs.go
+@@ -1562,13 +1562,19 @@ const docTemplate = `{
+                         }
+                     },
+                     "400": {
+-                        "description": "Invalid instance ID",
++                        "description": "Invalid instance ID for the authenticated instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
+-                    "404": {
+-                        "description": "Instance not found",
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
++                    "403": {
++                        "description": "instanceId belongs to another instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -1624,8 +1630,14 @@ const docTemplate = `{
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
+-                    "404": {
+-                        "description": "Instance not found",
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
++                    "403": {
++                        "description": "instanceId belongs to another instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -2084,7 +2096,7 @@ const docTemplate = `{
+         },
+         "/message/status": {
+             "post": {
+-                "description": "Get message status",
++                "description": "Returns delivery metadata for a message owned by the authenticated instance. The lookup is scoped to that instance by (instance_id, message_id): an id that belongs to another instance and an id that does not exist both return data.result = null, so the response never reveals the existence of another instance's message. Legacy rows stored before ownership existed have no owner and are never returned.",
+                 "consumes": [
+                     "application/json"
+                 ],
+@@ -2108,7 +2120,7 @@ const docTemplate = `{
+                 ],
+                 "responses": {
+                     "200": {
+-                        "description": "success",
++                        "description": "success; data.result is null when the authenticated instance owns no message with this id",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -2119,6 +2131,12 @@ const docTemplate = `{
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
+                     "500": {
+                         "description": "Internal server error",
+                         "schema": {
+diff --git a/apps/evolution-go/docs/swagger.json b/apps/evolution-go/docs/swagger.json
+index ed0fa92..df52788 100644
+--- a/apps/evolution-go/docs/swagger.json
++++ b/apps/evolution-go/docs/swagger.json
+@@ -1554,13 +1554,19 @@
+                         }
+                     },
+                     "400": {
+-                        "description": "Invalid instance ID",
++                        "description": "Invalid instance ID for the authenticated instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
+-                    "404": {
+-                        "description": "Instance not found",
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
++                    "403": {
++                        "description": "instanceId belongs to another instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -1616,8 +1622,14 @@
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
+-                    "404": {
+-                        "description": "Instance not found",
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
++                    "403": {
++                        "description": "instanceId belongs to another instance",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -2076,7 +2088,7 @@
+         },
+         "/message/status": {
+             "post": {
+-                "description": "Get message status",
++                "description": "Returns delivery metadata for a message owned by the authenticated instance. The lookup is scoped to that instance by (instance_id, message_id): an id that belongs to another instance and an id that does not exist both return data.result = null, so the response never reveals the existence of another instance's message. Legacy rows stored before ownership existed have no owner and are never returned.",
+                 "consumes": [
+                     "application/json"
+                 ],
+@@ -2100,7 +2112,7 @@
+                 ],
+                 "responses": {
+                     "200": {
+-                        "description": "success",
++                        "description": "success; data.result is null when the authenticated instance owns no message with this id",
+                         "schema": {
+                             "$ref": "#/definitions/gin.H"
+                         }
+@@ -2111,6 +2123,12 @@
+                             "$ref": "#/definitions/gin.H"
+                         }
+                     },
++                    "401": {
++                        "description": "Missing or invalid instance credentials",
++                        "schema": {
++                            "$ref": "#/definitions/gin.H"
++                        }
++                    },
+                     "500": {
+                         "description": "Internal server error",
+                         "schema": {
+@@ -3942,7 +3960,7 @@
+             "type": "object",
+             "properties": {
+                 "optionCounts": {
+-                    "description": "hash -\u003e count",
++                    "description": "hash -> count",
+                     "type": "object",
+                     "additionalProperties": {
+                         "type": "integer"
+diff --git a/apps/evolution-go/docs/swagger.yaml b/apps/evolution-go/docs/swagger.yaml
+index 9252a8f..131fe1b 100644
+--- a/apps/evolution-go/docs/swagger.yaml
++++ b/apps/evolution-go/docs/swagger.yaml
+@@ -7260,11 +7260,15 @@ paths:
+           schema:
+             $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_instance_model.AdvancedSettings'
+         "400":
+-          description: Invalid instance ID
++          description: Invalid instance ID for the authenticated instance
+           schema:
+             $ref: '#/definitions/gin.H'
+-        "404":
+-          description: Instance not found
++        "401":
++          description: Missing or invalid instance credentials
++          schema:
++            $ref: '#/definitions/gin.H'
++        "403":
++          description: instanceId belongs to another instance
+           schema:
+             $ref: '#/definitions/gin.H'
+         "500":
+@@ -7301,8 +7305,12 @@ paths:
+           description: Invalid request data
+           schema:
+             $ref: '#/definitions/gin.H'
+-        "404":
+-          description: Instance not found
++        "401":
++          description: Missing or invalid instance credentials
++          schema:
++            $ref: '#/definitions/gin.H'
++        "403":
++          description: instanceId belongs to another instance
+           schema:
+             $ref: '#/definitions/gin.H'
+         "500":
+@@ -7967,7 +7975,12 @@ paths:
+     post:
+       consumes:
+       - application/json
+-      description: Get message status
++      description: Returns delivery metadata for a message owned by the authenticated
++        instance. The lookup is scoped to that instance by (instance_id, message_id):
++        an id that belongs to another instance and an id that does not exist both return
++        data.result = null, so the response never reveals the existence of another
++        instance's message. Legacy rows stored before ownership existed have no owner
++        and are never returned.
+       parameters:
+       - description: Get message status
+         in: body
+@@ -7979,13 +7992,18 @@ paths:
+       - application/json
+       responses:
+         "200":
+-          description: success
++          description: success; data.result is null when the authenticated instance owns
++            no message with this id
+           schema:
+             $ref: '#/definitions/gin.H'
+         "400":
+           description: Error on validation
+           schema:
+             $ref: '#/definitions/gin.H'
++        "401":
++          description: Missing or invalid instance credentials
++          schema:
++            $ref: '#/definitions/gin.H'
+         "500":
+           description: Internal server error
+           schema:
+diff --git a/apps/evolution-go/docs/wiki/conceitos-core/instances.md b/apps/evolution-go/docs/wiki/conceitos-core/instances.md
+index 3951f2c..7996f22 100644
+--- a/apps/evolution-go/docs/wiki/conceitos-core/instances.md
++++ b/apps/evolution-go/docs/wiki/conceitos-core/instances.md
+@@ -389,7 +389,9 @@ false = Normal (recebe tudo)
+ 
+ ### Como Configurar
+ 
+-**Endpoint**: `POST /instance/:id/advanced-settings`
++**Endpoint**: `PUT /instance/:instanceId/advanced-settings`
++
++A credencial é o `apikey` da própria instância, e o `:instanceId` precisa ser o ID dela: token de outra instância recebe `403`.
+ 
+ **Exemplo**:
+ ```json
+diff --git a/apps/evolution-go/docs/wiki/guias-api/api-instances.md b/apps/evolution-go/docs/wiki/guias-api/api-instances.md
+index 040a6d0..83538f4 100644
+--- a/apps/evolution-go/docs/wiki/guias-api/api-instances.md
++++ b/apps/evolution-go/docs/wiki/guias-api/api-instances.md
+@@ -6,7 +6,7 @@ Documentação completa dos endpoints para gerenciar instâncias WhatsApp.
+ 
+ Uma **instância** representa uma conexão individual com o WhatsApp. Cada instância mantém sua própria sessão, autenticação e configurações independentes.
+ 
+-**Importante**: A maioria das rotas identifica a instância automaticamente através do header `apikey` (token da instância). Apenas rotas administrativas usam `:instanceId` na URL e exigem a `GLOBAL_API_KEY` configurada no ambiente.
++**Importante**: A maioria das rotas identifica a instância automaticamente através do header `apikey` (token da instância). Ter `:instanceId` na URL **não** significa que a rota seja administrativa: as rotas administrativas exigem a `GLOBAL_API_KEY`, enquanto `/instance/:instanceId/advanced-settings` usa o token da própria instância e só autoriza o próprio alvo. Consulte a lista abaixo para saber qual credencial cada rota espera.
+ 
+ ## Endpoints Disponíveis
+ 
+@@ -30,6 +30,8 @@ Uma **instância** representa uma conexão individual com o WhatsApp. Cada inst
+ - `DELETE /instance/proxy/:instanceId` - Remover proxy
+ - `POST /instance/forcereconnect/:instanceId` - Forçar reconexão
+ - `GET /instance/logs/:instanceId` - Obter logs
++
++### Configurações Avançadas (usa token da instância, só o próprio alvo)
+ - `GET /instance/:instanceId/advanced-settings` - Configurações avançadas
+ - `PUT /instance/:instanceId/advanced-settings` - Atualizar configurações
+ 
+@@ -696,13 +698,12 @@ apikey: TOKEN-DA-INSTANCIA
+ ### Resposta (200)
+ ```json
+ {
+-  "rejectCall": false,
+-  "msgCall": "Não estou disponível para chamadas",
+-  "groupsIgnore": true,
+   "alwaysOnline": false,
++  "rejectCall": false,
++  "msgRejectCall": "Não estou disponível para chamadas",
+   "readMessages": false,
+-  "readStatus": false,
+-  "syncFullHistory": false
++  "ignoreGroups": true,
++  "ignoreStatus": false
+ }
+ ```
+ 
+@@ -721,13 +722,12 @@ apikey: TOKEN-DA-INSTANCIA
+ ### Body
+ ```json
+ {
+-  "rejectCall": true,
+-  "msgCall": "Por favor, envie mensagem",
+-  "groupsIgnore": false,
+   "alwaysOnline": true,
++  "rejectCall": true,
++  "msgRejectCall": "Por favor, envie mensagem",
+   "readMessages": true,
+-  "readStatus": true,
+-  "syncFullHistory": false
++  "ignoreGroups": false,
++  "ignoreStatus": true
+ }
+ ```
+ 
+diff --git a/apps/evolution-go/docs/wiki/guias-api/api-messages.md b/apps/evolution-go/docs/wiki/guias-api/api-messages.md
+index df77840..4903ef8 100644
+--- a/apps/evolution-go/docs/wiki/guias-api/api-messages.md
++++ b/apps/evolution-go/docs/wiki/guias-api/api-messages.md
+@@ -1091,6 +1091,12 @@ Consulta o status de entrega/leitura de uma mensagem no banco de dados.
+ |-------|------|-------------|-----------|
+ | `id` | string | ✅ Sim | ID da mensagem |
+ 
++**Escopo**: a consulta é feita pelo par (instância autenticada, `id`). O `apikey` identifica a
++instância dona; o `id` é procurado **apenas** dentro dela. Um `id` que pertence a outra instância e
++um `id` inexistente devolvem exatamente a mesma resposta, com `data.result` nulo — a resposta nunca
++revela a existência de mensagem alheia. Mensagens gravadas antes da migração de propriedade não têm
++dona conhecida e nunca são devolvidas.
++
+ **Nota**: Requer `DATABASE_SAVE_MESSAGES=true` para funcionar. O sistema precisa estar salvando mensagens no banco.
+ 
+ **Resposta de Sucesso (200)**:
+@@ -1111,6 +1117,22 @@ Consulta o status de entrega/leitura de uma mensagem no banco de dados.
+ }
+ ```
+ 
++**Resposta quando não há mensagem dessa instância com esse id (200)**:
++```json
++{
++  "message": "success",
++  "data": {
++    "result": null,
++    "timestamp": "0001-01-01 00:00:00 +0000 UTC"
++  }
++}
++```
++
++**Sem credencial válida (401)**:
++```json
++{ "error": "not authorized" }
++```
++
+ **Status Possíveis**:
+ - `PENDING` - Enviando
+ - `SENT` - Enviada
+diff --git a/apps/evolution-go/pkg/instance/repository/instance_repository.go b/apps/evolution-go/pkg/instance/repository/instance_repository.go
+index b20b0a3..421a2f8 100644
+--- a/apps/evolution-go/pkg/instance/repository/instance_repository.go
++++ b/apps/evolution-go/pkg/instance/repository/instance_repository.go
+@@ -158,8 +158,10 @@ func (i *instanceRepository) Delete(instanceId string) error {
+ 			return fmt.Errorf("erro ao deletar labels: %v", err)
+ 		}
+ 
+-		// Deleta todas as mensagens associadas à instância
+-		if err := tx.Where("source = ?", instanceId).Delete(&message_model.Message{}).Error; err != nil {
++		// Deleta todas as mensagens associadas à instância. O filtro é o dono
++		// (instance_id); `source` guarda o telefone do chat e nunca identificou
++		// a instância, então a limpeza anterior não removia nada.
++		if err := tx.Where("instance_id = ?", instanceId).Delete(&message_model.Message{}).Error; err != nil {
+ 			return fmt.Errorf("erro ao deletar mensagens: %v", err)
+ 		}
+ 
+diff --git a/apps/evolution-go/pkg/message/handler/message_handler.go b/apps/evolution-go/pkg/message/handler/message_handler.go
+index c283ccf..e825b5e 100644
+--- a/apps/evolution-go/pkg/message/handler/message_handler.go
++++ b/apps/evolution-go/pkg/message/handler/message_handler.go
+@@ -211,21 +211,22 @@ func (m *messageHandler) DownloadMedia(ctx *gin.Context) {
+ 
+ // GetMessageStatus get message status
+ // @Summary Get message status
+-// @Description Get message status
++// @Description Returns delivery metadata for a message owned by the authenticated instance. The lookup is scoped to that instance: an id that belongs to another instance and an id that does not exist both return a null result, so the response never reveals the existence of another instance's message.
+ // @Tags Message
+ // @Accept json
+ // @Produce json
+ // @Param message body message_service.MessageStatusStruct true "Get message status"
+-// @Success 200 {object} gin.H "success"
++// @Success 200 {object} gin.H "success (result is null when the authenticated instance owns no message with this id)"
+ // @Failure 400 {object} gin.H "Error on validation"
++// @Failure 401 {object} gin.H "Missing or invalid instance credentials"
+ // @Failure 500 {object} gin.H "Internal server error"
+ // @Router /message/status [post]
+ func (m *messageHandler) GetMessageStatus(ctx *gin.Context) {
+-	getInstance := ctx.MustGet("instance")
+-
+-	instance, ok := getInstance.(*instance_model.Instance)
++	// Contexto autenticado ausente ou inválido é 401, antes de ler o body: a
++	// recusa não pode depender do alvo consultado.
++	instance, ok := authenticatedInstance(ctx)
+ 	if !ok {
+-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "instance not found"})
++		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
+ 		return
+ 	}
+ 
+diff --git a/apps/evolution-go/pkg/message/model/message_model.go b/apps/evolution-go/pkg/message/model/message_model.go
+index 3644ca5..de9e22d 100644
+--- a/apps/evolution-go/pkg/message/model/message_model.go
++++ b/apps/evolution-go/pkg/message/model/message_model.go
+@@ -5,12 +5,24 @@ import (
+ 	"gorm.io/gorm"
+ )
+ 
++// Message guarda metadados de entrega/leitura por instância.
++//
++// InstanceID é o dono do registro. O Evolution conhece instância, não o tenant
++// de produto: o dono vem sempre do contexto autenticado ou da instância que
++// produziu o evento, nunca de `Source` (que é o telefone do chat), de ID
++// enviado pelo cliente ou da conexão de quem pergunta.
++//
++// A identidade de negócio é (instance_id, message_id). InstanceID é nullable no
++// schema apenas para o estoque legado gravado antes da migração; essas linhas
++// não são alcançáveis por nenhuma consulta pública. Gravação nova sem dono é
++// recusada no repositório.
+ type Message struct {
+-	Id        string `json:"id" gorm:"type:uuid;primaryKey"`
+-	MessageID string `json:"message_id" gorm:"unique"`
+-	Timestamp string `json:"timestamp"`
+-	Status    string `json:"status"`
+-	Source    string `json:"source"`
++	Id         string `json:"id" gorm:"type:uuid;primaryKey"`
++	InstanceID string `json:"instance_id" gorm:"column:instance_id;index:idx_messages_instance_message,unique,priority:1"`
++	MessageID  string `json:"message_id" gorm:"index:idx_messages_instance_message,unique,priority:2"`
++	Timestamp  string `json:"timestamp"`
++	Status     string `json:"status"`
++	Source     string `json:"source"`
+ }
+ 
+ func (m *Message) BeforeCreate(tx *gorm.DB) (err error) {
+diff --git a/apps/evolution-go/pkg/message/repository/message_repository.go b/apps/evolution-go/pkg/message/repository/message_repository.go
+index 5a61ddb..aa896b3 100644
+--- a/apps/evolution-go/pkg/message/repository/message_repository.go
++++ b/apps/evolution-go/pkg/message/repository/message_repository.go
+@@ -1,16 +1,29 @@
+ package message_repository
+ 
+ import (
++	"errors"
++
+ 	message_model "github.com/EvolutionAPI/evolution-go/pkg/message/model"
+ 	"gorm.io/gorm"
+ 	"gorm.io/gorm/clause"
+ )
+ 
++// ErrMissingInstanceOwner recusa gravação sem dono. Depois da expansão do
++// schema, dono ausente é permitido apenas no estoque legado já persistido:
++// nenhuma escrita nova pode criar uma linha órfã.
++var ErrMissingInstanceOwner = errors.New("message requires an owning instance")
++
+ type MessageRepository interface {
+ 	InsertMessage(message message_model.Message) error
+-	GetMessageByID(messageID string) (*message_model.Message, error)
++	// GetMessageByID lê metadados dentro do escopo da instância dona.
++	// ID desconhecido e ID de outra instância retornam o mesmo resultado vazio:
++	// a resposta não distingue "não existe" de "existe e é de outro".
++	GetMessageByID(instanceID string, messageID string) (*message_model.Message, error)
++	// DeleteAllMessages é operação administrativa global e só deve ser exposta
++	// sob autorização administrativa comprovada, nunca sob token de instância.
+ 	DeleteAllMessages() (int64, error)
+-	GetLatestMessageID(source string) (string, string, error)
++	DeleteMessagesByInstance(instanceID string) (int64, error)
++	GetLatestMessageID(instanceID string, source string) (string, string, error)
+ }
+ 
+ type messageRepository struct {
+@@ -18,17 +31,28 @@ type messageRepository struct {
+ }
+ 
+ func (m *messageRepository) InsertMessage(message message_model.Message) error {
++	if message.InstanceID == "" {
++		return ErrMissingInstanceOwner
++	}
++
++	// Conflito resolvido pelo par (instance_id, message_id): o mesmo
++	// message_id em duas instâncias produz duas linhas independentes, e um
++	// upsert nunca sobrescreve o registro alheio.
+ 	return m.db.Clauses(clause.OnConflict{
+-		Columns:   []clause.Column{{Name: "message_id"}},
++		Columns:   []clause.Column{{Name: "instance_id"}, {Name: "message_id"}},
+ 		DoUpdates: clause.AssignmentColumns([]string{"timestamp", "status", "source"}),
+ 	}).Create(&message).Error
+ }
+ 
+-func (m *messageRepository) GetMessageByID(messageID string) (*message_model.Message, error) {
++func (m *messageRepository) GetMessageByID(instanceID string, messageID string) (*message_model.Message, error) {
++	if instanceID == "" {
++		return nil, ErrMissingInstanceOwner
++	}
++
+ 	var message message_model.Message
+-	err := m.db.Where("message_id = ?", messageID).First(&message).Error
++	err := m.db.Where("instance_id = ? AND message_id = ?", instanceID, messageID).First(&message).Error
+ 	if err != nil {
+-		if err == gorm.ErrRecordNotFound {
++		if errors.Is(err, gorm.ErrRecordNotFound) {
+ 			return nil, nil
+ 		}
+ 		return nil, err
+@@ -42,11 +66,24 @@ func (m *messageRepository) DeleteAllMessages() (int64, error) {
+ 	return result.RowsAffected, result.Error
+ }
+ 
+-func (m *messageRepository) GetLatestMessageID(source string) (string, string, error) {
++func (m *messageRepository) DeleteMessagesByInstance(instanceID string) (int64, error) {
++	if instanceID == "" {
++		return 0, ErrMissingInstanceOwner
++	}
++
++	result := m.db.Where("instance_id = ?", instanceID).Delete(&message_model.Message{})
++	return result.RowsAffected, result.Error
++}
++
++func (m *messageRepository) GetLatestMessageID(instanceID string, source string) (string, string, error) {
++	if instanceID == "" {
++		return "", "", ErrMissingInstanceOwner
++	}
++
+ 	var message message_model.Message
+-	err := m.db.Where("source = ?", source).Order("timestamp DESC").First(&message).Error
++	err := m.db.Where("instance_id = ? AND source = ?", instanceID, source).Order("timestamp DESC").First(&message).Error
+ 	if err != nil {
+-		if err == gorm.ErrRecordNotFound {
++		if errors.Is(err, gorm.ErrRecordNotFound) {
+ 			return "", "", nil
+ 		}
+ 		return "", "", err
+diff --git a/apps/evolution-go/pkg/message/service/message_service.go b/apps/evolution-go/pkg/message/service/message_service.go
+index b2b21c7..9f12e8c 100644
+--- a/apps/evolution-go/pkg/message/service/message_service.go
++++ b/apps/evolution-go/pkg/message/service/message_service.go
+@@ -346,7 +346,16 @@ func (m *messageService) DownloadMedia(data *DownloadMediaStruct, instance *inst
+ 	return dataURL, ts.String(), nil
+ }
+ 
++// GetMessageStatus lê metadados sempre no escopo da instância autenticada.
++//
++// A instância vem do contexto autenticado; `data.Id` é apenas o identificador
++// procurado dentro desse escopo. Um ID de outra instância e um ID inexistente
++// produzem exatamente a mesma resposta vazia, sem oracle de existência.
+ func (m *messageService) GetMessageStatus(data *MessageStatusStruct, instance *instance_model.Instance) (*message_model.Message, string, error) {
++	if instance == nil || instance.Id == "" {
++		return nil, "", errors.New("authenticated instance is required")
++	}
++
+ 	_, err := m.ensureClientConnected(instance.Id)
+ 	if err != nil {
+ 		return nil, "", err
+@@ -354,7 +363,7 @@ func (m *messageService) GetMessageStatus(data *MessageStatusStruct, instance *i
+ 
+ 	var ts time.Time
+ 
+-	result, err := m.messageRepository.GetMessageByID(data.Id)
++	result, err := m.messageRepository.GetMessageByID(instance.Id, data.Id)
+ 	if err != nil {
+ 		return nil, "", err
+ 	}
+diff --git a/apps/evolution-go/pkg/whatsmeow/service/whatsmeow.go b/apps/evolution-go/pkg/whatsmeow/service/whatsmeow.go
+index 3118002..4cf5ac5 100644
+--- a/apps/evolution-go/pkg/whatsmeow/service/whatsmeow.go
++++ b/apps/evolution-go/pkg/whatsmeow/service/whatsmeow.go
+@@ -1639,6 +1639,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
+ 
+ 					var message message_model.Message
+ 
++					// Dono vem da instancia que produziu o evento, nunca de Source
++					// (telefone do chat) nem de dado enviado pelo cliente.
++					message.InstanceID = mycli.Instance.Id
+ 					message.MessageID = v
+ 					message.Timestamp = evt.Timestamp.Format("2006-01-02 15:04:05")
+ 					message.Status = "Read"
+@@ -1656,6 +1659,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
+ 
+ 			var message message_model.Message
+ 
++			// Dono vem da instancia que produziu o evento, nunca de Source
++			// (telefone do chat) nem de dado enviado pelo cliente.
++			message.InstanceID = mycli.Instance.Id
+ 			message.MessageID = evt.MessageIDs[0]
+ 			message.Timestamp = evt.Timestamp.Format("2006-01-02 15:04:05")
+ 			message.Status = "Delivered"
+diff --git a/apps/frontend/src/data/http/BffHttpClient.ts b/apps/frontend/src/data/http/BffHttpClient.ts
+index a46b2d8..2634a80 100644
+--- a/apps/frontend/src/data/http/BffHttpClient.ts
++++ b/apps/frontend/src/data/http/BffHttpClient.ts
+@@ -20,6 +20,7 @@ type QueryValue = QueryScalar | readonly QueryScalar[] | null | undefined;
+ 
+ export interface BffHttpClientOptions {
+   baseUrl: string;
++  csrfCookieName?: string;
+   csrfHeaderName?: string;
+   getCsrfToken?: () => string | undefined;
+   fetchImplementation?: typeof fetch;
+@@ -69,7 +70,12 @@ export class BffHttpClient {
+     this.csrfHeaderName = options.csrfHeaderName ?? "x-csrf-token";
+     this.fetchImplementation =
+       options.fetchImplementation ?? globalThis.fetch.bind(globalThis);
+-    this.getCsrfToken = options.getCsrfToken;
++    // Por padrão o token vem do cookie legível que a Atendly emite junto com a
++    // sessão. Ele não autoriza nada sozinho: o par esperado fica no servidor,
++    // ligado à sessão, e é lá que a comparação acontece.
++    const cookieName = options.csrfCookieName ?? "atendly_csrf";
++    this.getCsrfToken =
++      options.getCsrfToken ?? (() => readCookie(cookieName));
+   }
+ 
+   async request<TSchema extends z.ZodType>(
+@@ -242,3 +248,16 @@ function isAbortError(error: unknown): boolean {
+ function isSafeMethod(method: HttpMethod): boolean {
+   return method === "GET";
+ }
++
++function readCookie(name: string): string | undefined {
++  if (typeof document === "undefined") return undefined;
++
++  const prefix = `${name}=`;
++  for (const part of document.cookie.split(";")) {
++    const entry = part.trim();
++    if (!entry.startsWith(prefix)) continue;
++    const value = decodeURIComponent(entry.slice(prefix.length));
++    return value || undefined;
++  }
++  return undefined;
++}
+diff --git a/apps/scheduling-service/.env.example b/apps/scheduling-service/.env.example
+index 804d037..1ee6eca 100644
+--- a/apps/scheduling-service/.env.example
++++ b/apps/scheduling-service/.env.example
+@@ -10,3 +10,8 @@ INTERNAL_SERVICE_TOKEN=change-me-with-at-least-32-characters
+ # Chave base64 de 32 bytes para AES-256-GCM. Protege credenciais salvas por tenant.
+ # Gere com: openssl rand -base64 32
+ INTEGRATION_CREDENTIALS_KEY=
++
++# Credenciais internas por chamador. Vazias, sao derivadas de
++# INTERNAL_SERVICE_TOKEN por HMAC; o valor bruto nao e aceito como credencial.
++BFF_COMMAND_TOKEN=
++AI_ORCHESTRATOR_COMMAND_TOKEN=
+diff --git a/apps/scheduling-service/src/config/env.ts b/apps/scheduling-service/src/config/env.ts
+index 31607f0..c2150df 100644
+--- a/apps/scheduling-service/src/config/env.ts
++++ b/apps/scheduling-service/src/config/env.ts
+@@ -27,7 +27,11 @@ const envSchema = z.object({
+   NODE_ENV: stringEnv("development"),
+   PORT: intEnv(3003),
+   DATABASE_URL: stringEnv(),
++  // Raiz da derivação das credenciais internas quando não há valor explícito
++  // por chamador. O valor bruto não é aceito como credencial.
+   INTERNAL_SERVICE_TOKEN: serviceTokenEnv(),
++  BFF_COMMAND_TOKEN: serviceTokenEnv(),
++  AI_ORCHESTRATOR_COMMAND_TOKEN: serviceTokenEnv(),
+   INTEGRATION_CREDENTIALS_KEY: stringEnv(),
+ });
+ 
+@@ -38,9 +42,11 @@ if (env.NODE_ENV === "production") {
+     throw new Error("DATABASE_URL must be configured in production.");
+   }
+ 
+-  if (env.INTERNAL_SERVICE_TOKEN.length < 32) {
++  const hasExplicitClientTokens =
++    Boolean(env.BFF_COMMAND_TOKEN) && Boolean(env.AI_ORCHESTRATOR_COMMAND_TOKEN);
++  if (!hasExplicitClientTokens && env.INTERNAL_SERVICE_TOKEN.length < 32) {
+     throw new Error(
+-      "INTERNAL_SERVICE_TOKEN must contain at least 32 characters in production.",
++      "INTERNAL_SERVICE_TOKEN must contain at least 32 characters in production when per-caller tokens are not configured.",
+     );
+   }
+ 
+diff --git a/apps/scheduling-service/src/shared/auth/internal-auth.ts b/apps/scheduling-service/src/shared/auth/internal-auth.ts
+index a7f5ef6..7b9b313 100644
+--- a/apps/scheduling-service/src/shared/auth/internal-auth.ts
++++ b/apps/scheduling-service/src/shared/auth/internal-auth.ts
+@@ -1,10 +1,13 @@
+-import { timingSafeEqual } from "node:crypto";
+-
+ import type { FastifyRequest } from "fastify";
+ import { z } from "zod";
+ 
+-import { env } from "../../config/env.js";
+ import { AppError } from "../errors/app-error.js";
++import {
++  identifyInternalClient,
++  internalAuthConfigured,
++  type InternalClient,
++  SERVICE_AUDIENCE,
++} from "./internal-credentials.js";
+ 
+ const internalHeadersSchema = z.object({
+   "x-tenant-id": z.string().trim().min(1).max(128),
+@@ -16,22 +19,13 @@ export interface InternalRequestContext {
+   tenantId: string;
+   userId: string;
+   requestId: string;
+-}
+-
+-function tokenMatches(provided: string, expected: string): boolean {
+-  const providedBuffer = Buffer.from(provided);
+-  const expectedBuffer = Buffer.from(expected);
+-
+-  return (
+-    providedBuffer.length === expectedBuffer.length &&
+-    timingSafeEqual(providedBuffer, expectedBuffer)
+-  );
++  caller: InternalClient["callerId"];
+ }
+ 
+ export async function requireInternalAuth(
+   request: FastifyRequest,
+ ): Promise<void> {
+-  if (!env.INTERNAL_SERVICE_TOKEN) {
++  if (!internalAuthConfigured()) {
+     throw new AppError(
+       "CONFIGURATION_ERROR",
+       "Internal authentication is not configured.",
+@@ -41,16 +35,22 @@ export async function requireInternalAuth(
+ 
+   const authorization = request.headers.authorization;
+   const providedToken = authorization?.startsWith("Bearer ")
+-    ? authorization.slice("Bearer ".length)
++    ? authorization.slice("Bearer ".length).trim()
+     : "";
+ 
+-  if (
+-    !providedToken ||
+-    !tokenMatches(providedToken, env.INTERNAL_SERVICE_TOKEN)
+-  ) {
++  // Identidade vem da credencial; a audiência declarada é apenas conferida
++  // contra este serviço e nunca substitui a verificação.
++  const client = identifyInternalClient(providedToken);
++  if (!client) {
+     throw new AppError("UNAUTHORIZED", "Invalid internal credentials.", 401);
+   }
+ 
++  const audience = request.headers["x-service-audience"];
++  const declaredAudience = Array.isArray(audience) ? audience[0] : audience;
++  if (declaredAudience && declaredAudience.trim() !== SERVICE_AUDIENCE) {
++    throw new AppError("FORBIDDEN", "Invalid internal audience.", 403);
++  }
++
+   const parsedHeaders = internalHeadersSchema.safeParse(request.headers);
+   if (!parsedHeaders.success) {
+     throw new AppError(
+@@ -65,6 +65,7 @@ export async function requireInternalAuth(
+     tenantId: parsedHeaders.data["x-tenant-id"],
+     userId: parsedHeaders.data["x-user-id"],
+     requestId: parsedHeaders.data["x-request-id"],
++    caller: client.callerId,
+   };
+ }
+ 
+diff --git a/docs/migration/VALIDATION_GATE.md b/docs/migration/VALIDATION_GATE.md
+index 889aa7c..c2e11e8 100644
+--- a/docs/migration/VALIDATION_GATE.md
++++ b/docs/migration/VALIDATION_GATE.md
+@@ -117,11 +117,28 @@ npm ci --prefix apps/bff
+ BFF_TEST_DATABASE_URL="postgresql://pgtest@127.0.0.1:55432/atendly_bff_test" npm run validate:integration
+ ```
+ 
+-São três passos, nesta ordem: `generate:bff-prisma-client` produz
+-`apps/bff/src/generated/prisma`; `migrate:bff-test-database` aplica as
+-migrations existentes (`prisma migrate deploy`) **somente** nesse banco; e
+-`test:bff-integration` roda a suíte. Nada de `migrate reset` sobre URL
+-herdada, e nenhuma migration é reescrita.
++São cinco passos, nesta ordem:
++
++1. `generate:bff-prisma-client` produz `apps/bff/src/generated/prisma`;
++2. `migrate:bff-test-database` aplica as migrations existentes
++   (`prisma migrate deploy`) **somente** nesse banco;
++3. `test:bff-integration` roda a suíte do BFF — cadastro/aceite legal, sessão
++   revogável com CSRF/origem e vínculo tenant/instância com credencial cifrada;
++4. `rehearse:goal003-link-migration` ensaia a migration de vínculo contra um
++   estoque legado sintético, em banco `<alvo>_rehearsal` recriado a cada
++   execução, e reconcilia as contagens;
++5. `provision:evolution-test-database` + `test:evolution-go-ownership` rodam o
++   ensaio de propriedade de metadados do Evolution Go em `<alvo>_evolution`.
++
++Nada de `migrate reset` sobre URL herdada, e nenhuma migration é reescrita.
++
++Os bancos dos passos 4 e 5 são derivados do alvo já validado — mesmo servidor
++descartável, nome próprio que preserva o marcador `test`. Não existe variável
++nova para configurar, e nenhum passo depende de banco pessoal.
++
++O runner também injeta chaves de cifra **sintéticas**
++(`WHATSAPP_CREDENTIAL_KEYS`, `CHANNEL_CREDENTIAL_KEYS`) para que selagem,
++abertura e rotação sejam exercitadas sem qualquer credencial real.
+ 
+ ### Limpeza
+ 
+diff --git a/render.yaml b/render.yaml
+index 5717a85..aa8ab33 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -68,6 +68,13 @@ services:
+           type: web
+           name: atendly-ia-ai-orchestrator
+           envVarKey: INTERNAL_SERVICE_TOKEN
++      # Cifra da credencial da instancia WhatsApp. Formato exigido:
++      # "<keyId>:<chave base64 de exatamente 32 bytes>", separadas por virgula.
++      # Nao usar generateValue: o valor precisa decodificar em 32 bytes.
++      - key: WHATSAPP_CREDENTIAL_KEYS
++        sync: false
++      - key: WHATSAPP_CREDENTIAL_ACTIVE_KEY_ID
++        sync: false
+ 
+   - type: web
+     name: atendly-ia-ai-orchestrator
+@@ -105,6 +112,12 @@ services:
+           type: web
+           name: atendly-ia-evolution-go
+           envVarKey: GLOBAL_API_KEY
++      # Cifra da projecao da credencial de instancia recebida do BFF. Material
++      # proprio da IA, mesmo formato de "<keyId>:<base64 de 32 bytes>".
++      - key: CHANNEL_CREDENTIAL_KEYS
++        sync: false
++      - key: CHANNEL_CREDENTIAL_ACTIVE_KEY_ID
++        sync: false
+       - key: SCHEDULING_SERVICE_BASE_URL
+         value: https://atendly-ia-scheduling-service.onrender.com
+ 
+diff --git a/scripts/tests/validate-integration.test.mjs b/scripts/tests/validate-integration.test.mjs
+index a645d1c..0ca20c9 100644
+--- a/scripts/tests/validate-integration.test.mjs
++++ b/scripts/tests/validate-integration.test.mjs
+@@ -7,6 +7,7 @@ import { repositoryRoot } from "../lib/gate.mjs";
+ import {
+   assertDriverResolvesSameDestination,
+   driverDestination,
++  evolutionTargetUrl,
+   IntegrationTargetError,
+   integrationSteps,
+   resolveIntegrationTarget,
+@@ -73,18 +74,50 @@ test("points the subprocess at the declared test database with synthetic secrets
+       "generate:bff-prisma-client",
+       "migrate:bff-test-database",
+       "test:bff-integration",
++      "rehearse:goal003-link-migration",
++      "provision:evolution-test-database",
++      "test:evolution-go-ownership",
+     ],
+   );
+   for (const step of steps) {
+-    assert.equal(step.cwd, "apps/bff");
+     // Nunca depender do fallback embutido em apps/bff/prisma.config.ts.
+     assert.equal(step.env.DATABASE_URL, validUrl);
+     assert.equal(step.env.DIRECT_DATABASE_URL, validUrl);
+     assert.equal(step.env.BFF_RUN_INTEGRATION_TESTS, "true");
+     assert.ok(step.env.JWT_SECRET.startsWith("integration-only-"));
++    // Chaves de cifra sintéticas: o gate exercita selagem e rotação sem
++    // qualquer credencial real.
++    assert.ok(step.env.WHATSAPP_CREDENTIAL_KEYS.includes("v1:"));
++    assert.ok(step.env.CHANNEL_CREDENTIAL_KEYS.includes("v1:"));
+   }
+ });
+ 
++// O ensaio de propriedade do Evolution Go roda no mesmo servidor descartável,
++// em banco próprio derivado do alvo já validado — sem variável nova e sem
++// depender de banco pessoal.
++test("derives the Evolution rehearsal database from the validated target", () => {
++  const target = resolveIntegrationTarget({ BFF_TEST_DATABASE_URL: validUrl });
++  const derived = new URL(evolutionTargetUrl(target));
++
++  assert.equal(derived.hostname, "127.0.0.1");
++  assert.equal(derived.port, "55432");
++  assert.equal(derived.pathname, "/atendly_bff_test_evolution");
++  assert.ok(/(?:^|[_-])test(?:[_-]|$)/iu.test("atendly_bff_test_evolution"));
++
++  const steps = integrationSteps(target);
++  const evolutionSteps = steps.filter((step) =>
++    step.name.includes("evolution"),
++  );
++  assert.equal(evolutionSteps.length, 2);
++  for (const step of evolutionSteps) {
++    assert.equal(step.env.EVOLUTION_TEST_DATABASE_URL, derived.toString());
++  }
++  assert.equal(
++    steps.find((step) => step.name === "test:evolution-go-ownership").cwd,
++    "apps/evolution-go",
++  );
++});
++
+ // R2-02: um checkout limpo não tem `apps/bff/src/generated/prisma`; sem gerar o
+ // client antes, a suíte falha na importação.
+ test("generates the Prisma client before migrating or testing", () => {
+diff --git a/scripts/validate-integration.mjs b/scripts/validate-integration.mjs
+index 6d0b4aa..18962ae 100644
+--- a/scripts/validate-integration.mjs
++++ b/scripts/validate-integration.mjs
+@@ -167,6 +167,23 @@ function loadDriverParser() {
+   }
+ }
+ 
++// Banco próprio do ensaio do Evolution Go, no mesmo servidor descartável já
++// validado. O sufixo mantém "test" no nome, então o alvo continua reconhecível
++// como descartável por quem o consome.
++export function evolutionTargetUrl(target) {
++  const url = new URL(target.url);
++  url.pathname = `/${encodeURIComponent(`${target.database}_evolution`)}`;
++  return url.toString();
++}
++
++// Chave de cifra sintética, fixa e pública por definição: existe apenas para
++// que a suíte exercite selagem, abertura e rotação. Nenhuma credencial real
++// entra aqui, e o valor jamais é usado fora do gate.
++const SYNTHETIC_CREDENTIAL_KEY =
++  "aW50ZWdyYXRpb24tb25seS1rZXktMDAwMS0zMmJ5dGU=";
++const SYNTHETIC_CREDENTIAL_KEY_NEXT =
++  "aW50ZWdyYXRpb24tb25seS1rZXktMDAwMi0zMmJ5dGU=";
++
+ // Segredos sintéticos: a suíte não deve herdar credenciais reais do shell nem
+ // alcançar serviços externos.
+ function childEnvironment(target) {
+@@ -175,11 +192,16 @@ function childEnvironment(target) {
+     DATABASE_URL: target.url,
+     DIRECT_DATABASE_URL: target.url,
+     BFF_TEST_DATABASE_URL: target.url,
++    EVOLUTION_TEST_DATABASE_URL: evolutionTargetUrl(target),
+     BFF_RUN_INTEGRATION_TESTS: "true",
+     JWT_SECRET: "integration-only-secret-with-at-least-32-characters",
+     INTERNAL_SERVICE_TOKEN: "integration-only-internal-token",
+     EVOLUTION_GO_API_KEY: "integration-only-evolution-key",
+     EVOLUTION_WEBHOOK_SECRET: "integration-only-webhook-secret",
++    WHATSAPP_CREDENTIAL_KEYS: `v1:${SYNTHETIC_CREDENTIAL_KEY},v2:${SYNTHETIC_CREDENTIAL_KEY_NEXT}`,
++    WHATSAPP_CREDENTIAL_ACTIVE_KEY_ID: "v1",
++    CHANNEL_CREDENTIAL_KEYS: `v1:${SYNTHETIC_CREDENTIAL_KEY},v2:${SYNTHETIC_CREDENTIAL_KEY_NEXT}`,
++    CHANNEL_CREDENTIAL_ACTIVE_KEY_ID: "v1",
+     PASSWORD_RESET_DELIVERY_URL: "",
+     PASSWORD_RESET_DELIVERY_TOKEN: "",
+   };
+@@ -211,6 +233,33 @@ export function integrationSteps(target) {
+       args: ["vitest", "run"],
+       env,
+     },
++    // Gate M0: ensaio da migration de vínculo contra estoque legado, em banco
++    // próprio e descartável. Contagens sanitizadas, sem credencial na saída.
++    {
++      name: "rehearse:goal003-link-migration",
++      cwd: ".",
++      command: "node",
++      args: ["scripts/goal003-migration-rehearsal.mjs"],
++      env,
++    },
++    // Ensaio de propriedade de metadados do Evolution Go. Usa o mesmo servidor
++    // descartável, em banco próprio derivado do alvo já validado: nenhuma
++    // variável nova precisa ser configurada, e o gate não fica dependente de
++    // banco pessoal.
++    {
++      name: "provision:evolution-test-database",
++      cwd: ".",
++      command: "node",
++      args: ["scripts/provision-evolution-test-database.mjs"],
++      env,
++    },
++    {
++      name: "test:evolution-go-ownership",
++      cwd: "apps/evolution-go",
++      command: "go",
++      args: ["test", "-count=1", "./pkg/message/..."],
++      env,
++    },
+   ];
+ }

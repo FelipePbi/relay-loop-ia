@@ -1,0 +1,36 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T22:52:23.195Z",
+  "attemptId": "026-r1-unit-wu-14-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "026-r1-unit-wu-14",
+      "goal": "026",
+      "round": 1,
+      "workUnitId": "WU-14",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "targeted-tests",
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "tests"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 16788,
+      "summary": "Targeted tests passou (exit 0, 16788ms).",
+      "report": "\n RUN  v4.1.11 E:/Projetos/atendly-ia/.ai-worktrees/goal-026/apps/frontend\n\n\n Test Files  71 passed (71)\n      Tests  662 passed (662)\n   Start at  19:52:07\n   Duration  16.06s (transform 3.74s, setup 9.79s, import 13.55s, tests 101.25s, environment 38.49s)\n\n",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "026-r1-unit-wu-14-a1"
+  }
+}

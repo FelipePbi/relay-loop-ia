@@ -1,0 +1,99 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-08T15:14:15.107Z",
+  "base": "8551717940a58128a2af4c40cffeb977334860a5",
+  "worktreeInitialHead": "8551717940a58128a2af4c40cffeb977334860a5",
+  "head": "8551717940a58128a2af4c40cffeb977334860a5",
+  "branch": "ai-loop/goal-005",
+  "trackedDiffHash": "e5cdd10da6789bbd4862f0a6e75c859aa52164d9fe82a52df2aea6dfb6ef35c2",
+  "trackedFileCount": 27,
+  "trackedFiles": [
+    "apps/ai-orchestrator/.env.example",
+    "apps/ai-orchestrator/prisma/schema.prisma",
+    "apps/ai-orchestrator/src/app.ts",
+    "apps/ai-orchestrator/src/config/env.ts",
+    "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+    "apps/ai-orchestrator/src/modules/channel/InboundMessageProcessor.ts",
+    "apps/ai-orchestrator/src/modules/channel/inbound-processor-factory.ts",
+    "apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts",
+    "apps/ai-orchestrator/src/modules/graph/graph-runtime.ts",
+    "apps/ai-orchestrator/src/modules/graph/graph-state.ts",
+    "apps/ai-orchestrator/src/modules/graph/message-graph.ts",
+    "apps/ai-orchestrator/src/modules/handoff/HandoffService.ts",
+    "apps/ai-orchestrator/src/modules/inbox/InboundEventDispatcher.ts",
+    "apps/ai-orchestrator/src/modules/inbox/InboxStore.ts",
+    "apps/ai-orchestrator/src/modules/inbox/InboxWorker.ts",
+    "apps/ai-orchestrator/src/modules/inbox/inbox-policy.ts",
+    "apps/ai-orchestrator/src/modules/internal/routes.ts",
+    "apps/ai-orchestrator/tests/inbox/inbox-policy.test.ts",
+    "apps/ai-orchestrator/tests/inbox/inbox-worker.test.ts",
+    "apps/ai-orchestrator/tests/outbox/owner-send.routes.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/ai-orchestrator/index.ts",
+    "apps/bff/src/modules/conversations/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffConversationService.ts",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "f8418312819880b56822a4003611f093ea4d1e2a7fa3b5ccc96c70479bea164f",
+  "untrackedFileCount": 11,
+  "untracked": [
+    {
+      "path": "apps/ai-orchestrator/prisma/migrations/20260908120000_goal005_contact_session_human_control/migration.sql",
+      "sha256": "daad24c0c20756b9948d3b0d0d767a64ff2c40463b7760fc9beb86f79fe336ff",
+      "bytes": 9194
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/session/SessionService.ts",
+      "sha256": "9dab270439388c5b2c1a3cb4b1a0596018a5979880214a2ff7248ccec0be637e",
+      "bytes": 18762
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/session/session-policy.ts",
+      "sha256": "187115fd34eb80fb23c5165bc030edb6a387502b9bda4b39ca977188b5084489",
+      "bytes": 5039
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/integration/session-durability.test.ts",
+      "sha256": "af5159465296971c0b2590267a1265fd7b65f6a4c74a32a9ff3c036f1ace84f2",
+      "bytes": 17292
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/internal/conversation-controls.routes.test.ts",
+      "sha256": "d75c0cf032f51a986f206363f785a15c8373c3371589cbb2b64f4243bfbc4be9",
+      "bytes": 12300
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/session/handoff-clock.test.ts",
+      "sha256": "1c681e7865d2058a769bae124c94d5cbf70566a1942d028e00b1a7048370a1e2",
+      "bytes": 2752
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/session/message-graph-session.test.ts",
+      "sha256": "21dc4aa27db5e4c13be58388401148a03fc630a82ae1ecc245fae95ebd3bf2d1",
+      "bytes": 14164
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/session/session-policy.test.ts",
+      "sha256": "54633a9bcca7e9cffb5460667ef9ae89dba0cdd2f66ad729c19e51d6a9f92f66",
+      "bytes": 5009
+    },
+    {
+      "path": "apps/bff/tests/conversation-controls.integration.test.ts",
+      "sha256": "384311ae04d18f2e3bde9d5e06e237a1a2763583624ac3f02cf9453a87ae1470",
+      "bytes": 7378
+    },
+    {
+      "path": "apps/frontend/tests/conversation-schema.test.ts",
+      "sha256": "892b9761e52bda8478139a6657e398aef8e062c61c38bbca9370af1ef5061ee8",
+      "bytes": 2102
+    },
+    {
+      "path": "scripts/goal005-migration-rehearsal.mjs",
+      "sha256": "282bb0c78eeb0d8ea1192faf1150f35b81bd91abce6287fc6a01e2b506f41bf3",
+      "bytes": 21882
+    }
+  ],
+  "contentHash": "6a17d1f0d10fcc832fa41cbd32d8488a918107e8b1d1854774ec642250e0ece0"
+}

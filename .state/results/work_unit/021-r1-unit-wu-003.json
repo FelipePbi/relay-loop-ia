@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T14:12:45.466Z",
+  "attemptId": "021-r1-unit-wu-003-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "021-r1-unit-wu-003",
+      "goal": "021",
+      "round": 1,
+      "workUnitId": "WU-003",
+      "status": "COMPLETED",
+      "summary": "A versão notificável do compromisso passou a subir dentro da mesma transação da mutação, por um único ponto na política de escrita, só em data, horário, serviços e status.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/calendar/write-policy.ts",
+        "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+        "apps/scheduling-service/src/modules/appointments/appointment-lifecycle-service.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts",
+        "apps/scheduling-service/tests/unit/appointment-notifiable-version.test.ts"
+      ],
+      "report": "## O que mudou e por quê\n\n**1. `modules/calendar/write-policy.ts` (+106 linhas) — o único lugar que incrementa.**\n- `NotifiableAppointmentFields`: o vocabulário fechado do que o cliente precisaria saber — `startAt`, `endAt`, `status`, `serviceIds`. Observação, valor final, presença e snapshot de buffer não são representáveis aqui, que é a tradução literal de \"alteração somente interna não gera notificação automática\".\n- `notifiableAppointmentFields(row)`: projeta a linha relida **dentro** da transação (com `items`) nesses campos.\n- `appointmentVersionWrite(before, after)`: devolve `{ notifiableVersion: { increment: 1 } }` ou `{}`. Não executa escrita: devolve o pedaço de `data` que a própria mutação anexa ao seu `update`/`updateMany`. Assim o incremento está na mesma linha, no mesmo comando e portanto na mesma transação do efeito — sem trigger paralelo e sem segundo `update` depois. `{ increment: 1 }` é operação do banco, não leitura-e-soma na aplicação.\n- Regras documentadas: `after` descreve só o que a mutação escreve (cancelar não mexe em horário, remarcar não mexe em estado); escrever o mesmo valor não é mudança; conjunto de serviços compara sem ordem e sem repetição; `before` parcial é aceito, e campo escrito com valor anterior desconhecido conta como mudança (\"não sei se mudou\" nunca vira \"não mudou\").\n\n**2. `integrations/atendly/provider.ts` (+18/-1).** `rescheduleAppointment` e `cancelAppointment` — as duas mutações que rodam sob `runCalendarWrite` e alteram `Appointment` — anexam `appointmentVersionWrite(...)` ao próprio `data`. Remarcar para o horário em que o atendimento já está não gera versão nova; a observação anexada no cancelamento não é um segundo motivo de incremento (o motivo é o status).\n\n**3. `appointments/appointment-lifecycle-service.ts` (+23/-1).** `completeAppointmentWithin` e `markNoShowWithin` incrementam junto com a transição de status, dentro do mesmo `updateMany` guardado (o `before` é exato: a condição do `updateMany` só casa com a linha que estava no status anterior). `setFinalValueWithin` e `confirmPresenceWithin` **não** incrementam, com o motivo escrito no ponto da escrita.\n\n`modules/calendar/calendar-service.ts` (citado em `expectedFiles`) não precisou mudar: é fachada que delega ao provider e ao lifecycle, onde as transações realmente existem. Mudar lá seria criar um segundo ponto de decisão.\n\n**4. `tests/unit/support/database-double.ts` (minhas: +~44/-4).** O dublê passou a resolver operação atômica de número do Prisma (`{ increment }`/`{ decrement }`) contra a linha corrente — sem isso `Object.assign` gravaria o objeto `{ increment: 1 }` na coluna — e ganhou o default `notifiableVersion: () => 1`, o mesmo `DEFAULT 1` do schema real. Nada de WU-002 foi revertido (as 4 remoções do diff são as 4 linhas de `update`/`updateMany` que eu substituí).\n\n**5. `tests/unit/appointment-notifiable-version.test.ts` (novo, 15 casos).**\n- Nasce em 1, sem `UPDATE`.\n- Incrementa: remarcação de data/horário (e um único `update` na linha, provando que o incremento não é comando separado); cancelamento; conclusão (com o evento na mesma transação do efeito, pelo journal); falta; mudança do conjunto de serviços (no nível da política).\n- Não incrementa: valor final; presença confirmada; escrita somente interna; escrita do mesmo valor (inclusive serviços reordenados); remarcação para o mesmo horário; repetição idempotente de cancelar/concluir.\n- Caminho único: varredura de `src/` (exceto `generated/` e a própria política) sem nenhuma escrita da coluna — o detector reconhece `{ increment | decrement | set }` e número literal, deixando **leitura** livre, porque WU-004/WU-005 vão precisar ler a versão; o teste ainda verifica que o detector não passa vazio, reconhecendo a própria política. E varredura das migrations sem `CREATE TRIGGER` e sem `SET \"notifiableVersion\" =`.\n\n## Comandos executados e resultado\n\n- `npx vitest run --dir tests/unit appointment-notifiable-version` → primeira execução: 14 passaram, 1 falhou (regex de migration gulosa demais, casava `UPDATE \"Appointment\"` de uma migration antiga com `notifiableVersion` de outra); corrigido para `\"notifiableVersion\"\\s*=` → **15/15 passaram**.\n- `npx vitest run --dir tests/unit` (suíte completa do Scheduling) → **21 arquivos, 306 testes, todos passaram**. Nenhuma regressão do dublê nem das suítes de Goal008/009/010.\n- `npx tsc -p tsconfig.json --noEmit` → **exit 0**.\n- `npx eslint src --max-warnings=0` → **exit 0**.\n- `npx prettier --check` nos arquivos tocados: `write-policy.ts` (após ajustar uma quebra de linha), `appointment-lifecycle-service.ts` e o teste novo estão limpos. `provider.ts` e `database-double.ts` continuam com um desvio de formatação **preexistente** cada um (linha 205 do provider, em `createAppointment`; linha 294 do dublê, de WU-002) — confirmei contra as cópias de `HEAD` que não são meus e não os toquei; `prettier` não é passo de `validate:core` (que roda `build` + `test`).\n\nNão rodei `validate:integration`: exige PostgreSQL real e é a prova de WU-006.\n\n## Observação honesta de cobertura\n\nNão existe hoje caminho de produção que altere os **serviços** de um atendimento já criado — `AppointmentItem` é escrito na criação e apagado em `calendar/removal.ts`. Por isso esse campo é provado no nível da política (`appointmentVersionWrite` com conjunto de serviços diferente → incrementa; mesmo conjunto em outra ordem → não incrementa), e não ponta a ponta por um serviço. A política já está pronta para o dia em que esse caminho existir.\n\n## Documentação\n\nNada a atualizar: a regra já está escrita em `schema.prisma` (`notifiableVersion`, por WU-001) e em `DATA_MIGRATION.md` §Goal021, e esta unidade implementa exatamente o que esses documentos afirmam — nenhum deles passou a mentir.",
+      "acceptance": [
+        {
+          "criterion": "A versão incrementa dentro da mesma transação da mutação, pela política única de escrita",
+          "met": true,
+          "detail": "appointmentVersionWrite() em write-policy.ts devolve o fragmento de `data` que a própria mutação anexa ao seu update/updateMany: mesmo comando, mesma linha, mesma transação. Provado no teste 'incrementa ao remarcar data e horário, no mesmo comando do efeito' (um único write de operação 'update' no journal) e em 'incrementa ao concluir', que casa a transação do efeito com a do evento."
+        },
+        {
+          "criterion": "Incrementa em data, horário, serviços do atendimento e status",
+          "met": true,
+          "detail": "Remarcação (startAt/endAt) → versão 2; cancelamento, conclusão e falta (status) → versão 2; conjunto de serviços diferente → { increment: 1 }. Cinco casos no describe 'o que incrementa'. Serviços é provado no nível da política porque não existe caminho de produção que altere itens de um atendimento existente (ver report)."
+        },
+        {
+          "criterion": "NÃO incrementa em observação, valor final, presença confirmada ou snapshot de buffer",
+          "met": true,
+          "detail": "setFinalValue e confirmPresence deixam a linha na versão 1 (testes com serviço real sobre o dublê); observação e snapshot de buffer sequer pertencem ao vocabulário notificável — teste 'não incrementa em observação, valor final, presença nem snapshot de buffer' verifica que uma mutação somente interna devolve {}. Também não incrementa escrita de mesmo valor nem remarcação para o mesmo horário."
+        },
+        {
+          "criterion": "Não existe segundo caminho de escrita que incremente a versão",
+          "met": true,
+          "detail": "Teste 'nenhum arquivo de produção escreve a versão fora da política de escrita' varre src/ (exceto generated/ e write-policy.ts) e não encontra nenhuma escrita da coluna, com asserção extra de que o detector reconhece a própria política (não passa vazio). Teste irmão prova que nenhuma migration tem CREATE TRIGGER nem SET \"notifiableVersion\" =. Os seis pontos de escrita de Appointment em modules/ foram enumerados: quatro no lifecycle, dois no provider; os demais são create (versão 1 por default)."
+        },
+        {
+          "criterion": "Suíte cobre cada campo que incrementa e cada campo que não incrementa",
+          "met": true,
+          "detail": "tests/unit/appointment-notifiable-version.test.ts, 15 casos, todos verdes; suíte completa do Scheduling: 21 arquivos, 306 testes passando (npx vitest run --dir tests/unit)."
+        }
+      ]
+    },
+    "attemptId": "021-r1-unit-wu-003-a1"
+  }
+}

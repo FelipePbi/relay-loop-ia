@@ -1,0 +1,23 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:53:13.584Z",
+  "attemptId": "020-r2-tech_lead-4b7b3857-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "020-r2-tech_lead-4b7b3857",
+      "goal": "020",
+      "summary": "Fechamento documental do Goal020 (ACCEPTED na rodada 2), todo dentro de docs/migration/. Criei reviews/020-review.md com a identidade do diff aceito (54 arquivos, hash b8b549a8…, base c977cbf, sem código de produto entre a baseline cf4cea9 e essa base), a rodada 1 com os cinco blockers, a rodada 2 com o delta de 15 arquivos verificado por sha256 (backend e BFF byte a byte iguais), os gates de cada rodada com quem os executou, o que o diff entrega e os limites do aceite. Acrescentei D-036 em DECISIONS.md — leitura própria do estado da importação, escolha de categoria persistida e honrada pelo motor de execução, e a conclusão única protegida de chegar por acidente — com alternativas rejeitadas e gatilhos de revisão. Em CURRENT_STATE.md converti a seção que o executor deixou como \"rodada 1, ainda sem review\" em delta aceito e acrescentei os quatro fatos da rodada 2 ausentes do texto dele (resumo lendo session.categories[].selected, Idempotency-Key por corpo, recusas nomeadas no contrato público, título de rota de /importacao) mais o limite da origem vazia registrado como observação não bloqueante. Em GAP_ANALYSIS.md e REUSE_ANALYSIS.md substituí os hedges de \"pendente de review\" pela referência ao review020, datando G-19, G-10 e G-31 pelo diff aceito, e acrescentei duas substâncias: por que features/imports/types.ts não transportou a porta sem implementador, e as duas provas sensíveis a reversão nascidas das recusas da rodada 1. git diff --check exit 0 nos documentos alterados.",
+      "documentsUpdated": [
+        "docs/migration/reviews/020-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "notes": "O contexto do fechamento sugeria docs/migration/reviews/003-review.md como \"o review desta execução\"; esse arquivo é o review do Goal003 e já existe. A convenção do diretório é um review por Goal (001..019), então o review desta execução foi escrito em reviews/020-review.md. Nenhum arquivo fora de docs/migration/ foi tocado. Não foram criados Goal novo, marcação READY, SHA de baseline novo nem atualização de MIGRATION_STATUS/MASTER_PLAN — a entrada de versão do roadmap pertence à etapa posterior de preparação do próximo Goal."
+    },
+    "attemptId": "020-r2-tech_lead-4b7b3857-a1"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:24:35.390Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "020-r1-unit-diag-002-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "020-r1-unit-diag-002",
+    "role": "work_unit",
+    "goal": "020",
+    "round": 1,
+    "workUnitId": "DIAG-002",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-020",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\020-importacao-na-ui-e-historico.md",
+    "parentJobId": "020-r1-developer-5fd08e17",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-15T06:30:59.787Z"
+}

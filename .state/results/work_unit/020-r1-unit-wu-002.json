@@ -1,0 +1,59 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T04:10:05.014Z",
+  "attemptId": "020-r1-unit-wu-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "020-r1-unit-wu-002",
+      "goal": "020",
+      "round": 1,
+      "workUnitId": "WU-002",
+      "status": "COMPLETED",
+      "summary": "Adicionada a escrita de ImportSessionCategory.selected (rota, serviço e proteção contra sessão terminal), provada por unidade e por PostgreSQL real.",
+      "report": "O que mudou: `ImportPreviewService.setCategorySelection(context, category, selected)` (import-preview-service.ts) — único novo escritor de `selected`, ao lado do upsert do preview que já era o único existente. Ele recusa sessão inexistente (`IMPORT_SESSION_NOT_FOUND`), recusa sessão `COMPLETED`/`FAILED`/`SUPERSEDED` com código próprio (`IMPORT_SESSION_NOT_SELECTABLE`, 409), recusa categoria nunca descoberta (`IMPORT_SESSION_CATEGORY_NOT_FOUND`, 404) e, no caminho feliz, só faz um `update` de `selected` — nunca toca `previewVersion`, itens ou a origem. As duas constantes de erro foram exportadas por `migrations/index.ts`.\n\nRota nova em routes.ts: `POST /internal/calendar/imports/:sessionId/categories/:category/selection`, no mesmo padrão das demais rotas de importação (Idempotency-Key obrigatória, `requireHumanCaller`, corpo `{ selected: boolean }`), delegando para o serviço acima.\n\nPor quê nesse lugar: o hint da unidade já apontava o único escritor atual (`import-preview-service.ts:410`); o novo escritor foi colocado na mesma classe por simetria (mesma tabela, mesmo dono de invariantes de `previewVersion`), em vez de inline em routes.ts como `applyImportDecision` — isso deu ao WU um método testável direto contra PostgreSQL real, no mesmo padrão que WU-001 usou para `ImportCompletionService`.\n\nConsumidor real (a execução) já lia `selected` desde o Goal010 mas isso nunca tinha sido exercitado por teste nenhum — não havia nenhuma ocorrência de `CATEGORY_NOT_SELECTED` em teste algum antes desta unidade. Adicionei essa prova em dois níveis: unidade (`tests/unit/import-execution-service.test.ts`, novo describe \"categoria desmarcada... (Goal020, WU-02)\") rodando `ImportPreviewService`/`ImportExecutionService` reais contra o dublê; e integração contra Postgres real.\n\nTestes escritos:\n- `tests/unit/import-routes.test.ts`: novo describe da rota de seleção — exige Idempotency-Key, 404 sessão desconhecida, 404 categoria nunca descoberta, desmarca sem tocar previewVersion/itens, remarca para true, recusa nos três estados terminais (IMPORT_SESSION_NOT_SELECTABLE), isolamento por tenant.\n- `tests/unit/import-execution-service.test.ts`: um teste novo provando que a execução real pula os itens da categoria desmarcada com `CATEGORY_NOT_SELECTED` e segue normalmente com as demais.\n- `tests/integration/goal020-import-category-selection.test.ts` (novo arquivo, seguindo o padrão skip-se-sem-banco de `goal020-import-state.test.ts`): escreve/lê `selected` contra Postgres real, prova que a execução real honra a escolha, prova que previewVersion e sourceFingerprint não mudam ao desmarcar, prova a recusa nos três estados terminais, e prova isolamento entre dois tenants (inclusive tentativa cross-tenant recusada com IMPORT_SESSION_NOT_FOUND).\n\nComandos executados e resultado:\n- `npm run typecheck` (scheduling-service) — passou, duas vezes (antes e depois de restaurar o stash usado para checar prettier na baseline).\n- `npm run lint` (scheduling-service) — passou.\n- `npm test` (vitest unit) — 278/278 passaram (incluindo os novos).\n- Para a prova contra PostgreSQL real: subi um container Postgres 16 descartável (`docker run --rm -d ... postgres:16-alpine`), apliquei as 13 migrations do schema com `prisma migrate deploy`, e rodei `vitest run --dir tests/integration` com `SCHEDULING_TEST_DATABASE_URL` apontando para ele. Isso revelou e corrigiu 3 bugs reais nos meus próprios testes de integração (constraint de unicidade de `CalendarSettings`, e o CHECK `ImportSession_completion_check` que exige `completedAt`/`completedBy` junto de `COMPLETED`) — depois da correção, os 70/70 testes de integração do app passaram, incluindo os 6 novos e os 5 de WU-001. Ao final, parei e removi o container (`docker stop`, que já é `--rm`); nenhuma infraestrutura persistente ficou para trás.\n- Usei `git stash push -u` para checar se a formatação prettier de `routes.ts` já falhava na baseline (cf4cea9) antes do meu trabalho — falhava (achado pré-existente, fora do escopo desta unidade) — e restaurei meu trabalho com `git stash apply <sha>` (não `pop`). O `git stash drop` do stash já aplicado foi bloqueado pelo classificador de permissões do ambiente; a entrada duplicada permanece na pilha de stash compartilhada, sem efeito sobre o working tree (já reaplicado e confirmado por `git status`).\n\nNenhum documento de controle da migração foi tocado; nenhuma outra Work Unit foi revertida ou reimplementada; nenhum commit, push ou mudança de branch foi feito.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+        "apps/scheduling-service/src/modules/migrations/index.ts",
+        "apps/scheduling-service/tests/unit/import-execution-service.test.ts",
+        "apps/scheduling-service/tests/unit/import-routes.test.ts",
+        "apps/scheduling-service/tests/integration/goal020-import-category-selection.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "selected pode ser escrito por sessão e categoria e a execução honra a escolha, provado pelo consumidor real",
+          "met": true,
+          "detail": "ImportPreviewService.setCategorySelection escreve; ImportExecutionService.execute real (não dublê de execução) pula a categoria com CATEGORY_NOT_SELECTED — provado em unidade (import-execution-service.test.ts) e em integração contra Postgres real (goal020-import-category-selection.test.ts, teste 'writes selected... real execution engine honors it')."
+        },
+        {
+          "criterion": "Desmarcar não altera previewVersion nem dispara releitura da origem",
+          "met": true,
+          "detail": "setCategorySelection só faz update de `selected`; nunca referencia o reader/origem. Testado em unidade e em integração real ('does not change previewVersion or the item rows when deselecting'), comparando previewVersion e sourceFingerprint antes/depois."
+        },
+        {
+          "criterion": "Sessão COMPLETED, FAILED ou SUPERSEDED recusa a decisão com código próprio",
+          "met": true,
+          "detail": "Código IMPORT_SESSION_NOT_SELECTABLE (409), testado nos três estados em unidade (it.each) e em integração real contra Postgres (it.each), incluindo o CHECK constraint real de ImportSession para COMPLETED."
+        },
+        {
+          "criterion": "Toda categoria continua nascendo selecionada e importar tudo não exige nenhuma chamada extra",
+          "met": true,
+          "detail": "Comportamento pré-existente do upsert de preview não foi alterado (nenhuma linha tocada nele); suíte completa de import-preview-service.test.ts e goal020-import-state.test.ts continuam passando sem alteração."
+        },
+        {
+          "criterion": "Isolamento por tenant preservado",
+          "met": true,
+          "detail": "Unidade: 'does not choose another tenant's category' (404 cross-tenant). Integração real: 'keeps two businesses writing selected... from leaking into each other', incluindo tentativa de escrita cross-tenant recusada com IMPORT_SESSION_NOT_FOUND."
+        },
+        {
+          "criterion": "Provado contra PostgreSQL real",
+          "met": true,
+          "detail": "Postgres 16 descartável provisionado localmente via Docker, 13 migrations aplicadas, suíte completa de integração rodada (70/70 passaram, incluindo os 6 testes novos desta unidade); container removido ao final."
+        }
+      ]
+    },
+    "attemptId": "020-r1-unit-wu-002-a1"
+  }
+}

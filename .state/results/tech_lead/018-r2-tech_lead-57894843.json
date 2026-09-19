@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T21:38:47.324Z",
+  "attemptId": "018-r2-tech_lead-57894843-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r2-tech_lead-57894843",
+      "goal": "018",
+      "round": 2,
+      "decision": "CHANGES_REQUIRED",
+      "blockers": [
+        "A correcao do Blocker 1 nao tem prova: nenhum teste falharia se ela fosse revertida. `nextRequiredStep` (apps/frontend/src/features/onboarding/OnboardingRuntime.tsx:139-146) passou a checar `modalities.length === 0` e `ON_SITE` sem `address`, mas os quatro unicos call sites em teste (apps/frontend/tests/goal018-onboarding-reachability.test.tsx:571, 576, 590, 598) usam `emptyState()` (business: null, ja retorna 'dados-do-negocio' pela checagem antiga de `name`) ou o fixture `businessDone` (modalities: ['ONLINE'], address: null, que satisfaz as duas condicoes novas). Apagar as linhas 142-144 mantem a suite inteira verde. O Goal e explicito em §10: 'Teste que nao falharia se o comportamento fosse removido nao conta como prova'. Acrescentar em `describe('a retomada abre a proxima pendencia real')` (i) o caso do tenant pre-Goal018 — `stateFixture({ business: { name: 'Studio Aurora', category: 'Beleza', modalities: [], address: null, timezone: 'America/Sao_Paulo' } , ...calendarDone, ...serviceDone, ...availabilityDone, ...toneDone })` deve retornar 'dados-do-negocio' — e (ii) o caso `modalities: ['ON_SITE']` com `address: null`, tambem retornando 'dados-do-negocio'.",
+        "A correcao do Blocker 2 tambem nao tem prova, e o blocker da rodada 1 pedia isso nominalmente ('com teste que falhe se o texto voltar a citar WhatsApp'). A copy em `onboardingError` (apps/frontend/src/features/onboarding/blocks/shared.tsx:78-83) esta correta, mas `grep -rn 'onboardingError|itens obrigatorios' apps/frontend/tests` nao retorna nada e nenhum teste goal018-* exercita o caminho 409 (nenhum arquivo goal018-* importa `BffHttpError`, ao contrario de goal016-*/goal017-*). Adicionar teste que faca `completeOnboarding`/`updateOnboarding` rejeitar com `BffHttpError` 409 e assertar o texto exibido na tela, de forma que a assercao quebre se a palavra 'WhatsApp' voltar a lista.",
+        "A correcao do Blocker 3 esta provada apenas no onboarding, nao em configuracoes/negocio — e o blocker da rodada 1 citava as duas telas. `apps/frontend/tests/goal018-business-block.test.tsx:189-215` prova, com `toHaveBeenCalledWith` de objeto exato, que `persistBusinessStep` omite a chave `address` ao desmarcar ON_SITE; no describe de `BusinessSettings` (linhas 234-310) nao ha equivalente: os testes de settings so cobrem ON_SITE *selecionado* (linha 273) e validacoes de bloqueio. Voltar `address: null` em ProductSettingsScreen.tsx:253 nao quebra nenhum teste, e esse e o caminho pelo qual o usuario com onboarding concluido edita modalidade. Espelhar o teste do onboarding em `BusinessSettings`: fixture com `modalities: ['ON_SITE']` e `address` gravado, desmarcar ON_SITE, marcar outra modalidade, salvar e assertar payload exato de `updateBusiness` sem a chave `address`."
+      ],
+      "nextAction": "RETURN_TO_DEVELOPER",
+      "nextDeveloperProfile": "SONNET_MEDIUM",
+      "nextDeveloperProfileReason": "Restam apenas tres testes localizados em arquivos ja existentes; o codigo de producao esta correto.",
+      "summary": "Os 4 blockers da rodada 1 foram corrigidos no codigo de producao e verifiquei cada um na worktree: nextRequiredStep (OnboardingRuntime.tsx:139-146) agora volta a 'dados-do-negocio' com modalities vazio ou ON_SITE sem address; onboardingError (blocks/shared.tsx:80) nao cita mais WhatsApp e cobre negocio; business.tsx:192 e ProductSettingsScreen.tsx:253 omitem a chave `address` quando ON_SITE nao esta marcado, coerente com `resolveBusinessProfileFields` (apps/bff/src/lib/business-profile.ts:82-85); e PUBLIC_API_V1.md:102 mais a tabela de codigos (134-135) agora batem com onboarding/routes.ts:190-195. O Blocker 4 esta integralmente resolvido. O que impede o aceite e proof, nao comportamento: tres das correcoes ficaram sem teste que falhe se forem revertidas, contrariando §10 do Goal ('teste que nao falharia se o comportamento fosse removido nao conta como prova') e o texto dos proprios blockers 1 e 2, que pediam o teste nominalmente. Rodei `npx vitest run tests/goal018-business-block.test.tsx tests/goal018-onboarding-reachability.test.tsx` (52 testes, verdes) — o que confirma que a suite passa, nao que ela cobre as correcoes: os quatro call sites de nextRequiredStep em teste usam business null ou modalities ['ONLINE'], nenhum teste goal018-* exercita o caminho 409, e o describe de BusinessSettings nao tem o caso de desmarcar ON_SITE. Backend, migration, projecao versionada, poller unico e apresentacao de PENDING seguem como aceitos na rodada 1, sem regressao neste diff."
+    },
+    "attemptId": "018-r2-tech_lead-57894843-a1"
+  }
+}

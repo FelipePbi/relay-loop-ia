@@ -1,0 +1,68 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T13:53:24.450Z",
+  "attemptId": "016-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r1-unit-wu-05",
+      "goal": "016",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Criação, remarcação e cancelamento reescritos com identidade por customerId, múltiplos serviços com duração somada e total conforme totalPriceType, ciclo completo do hold e sobreposição só por decisão humana com motivo.",
+      "report": "## O que mudou e por quê\n\n**Novos arquivos (todos em `apps/frontend/src/features/agenda/`)**\n\n- `holdSession.ts` — ciclo de vida do hold na UI como máquina pequena (`none | reserving | held | expired | unsupported`). Só `held` devolve `holdId`; trocar de horário libera o anterior antes de pedir o novo; sair da tela libera no cleanup do efeito; o vencimento é agendado por `setTimeout` a partir de `expiresAt` (relógio do servidor, não da tela). Também mora aqui `isHoldLostError`/`isSlotConflictError` (códigos `APPOINTMENT_HOLD_EXPIRED` e `SLOT_UNAVAILABLE`), `holdLostMessage` (que usa `details.slotStillAvailable` do contrato quando ele vem e não inventa garantia quando não vem) e `newIdempotencyKey` (com fallback de `getRandomValues`, porque `crypto.randomUUID` não existe em todo runtime que renderiza estas telas). `EXTERNAL_CALENDAR_HOLD_UNSUPPORTED` não vira erro: vira aviso de que o horário não fica reservado.\n- `SlotPicker.tsx` — data, horários oferecidos e um horário digitado fora da grade. O segundo caminho existe porque, sem ele, a decisão humana de sobrepor seria inalcançável na tela. Mostra sempre o estado da reserva (`role=\"status\"`), inclusive \"reservado até HH:MM\" e a mensagem própria de reserva vencida.\n- `ConflictPanel.tsx` — o que ocupa o intervalo, lido do read model do dia (`listAppointments` + `listTimeBlocks` → `buildAgendaEntries`/`describeEntry` do WU-04), porque `409 SLOT_UNAVAILABLE` não diz quem ocupa. Distingue três casos honestamente: não consegui listar, nada cobre o intervalo (fora da grade) e a lista real. Duas saídas: outro horário ou sobrepor com motivo.\n- `AppointmentForm.tsx` — criação. Serviços por checkbox com duração somada e disponibilidade consultada para o conjunto; cliente da lista vai por `customerId` e cliente novo por nome (telefone opcional), criado na confirmação; total pela mesma regra única do acordo (`computeAgreementTotal`, reimplementada por D-011) — qualquer item `ON_REQUEST`/`NOT_INFORMED` derruba o valor fechado.\n- `RescheduleFlow.tsx` — mesmas regras; o hold é do horário novo, e o próprio atendimento remarcado é excluído da lista de conflito (ele ocupa o horário antigo até a remarcação commitar).\n- `CancelFlow.tsx` — confirmação que diz o efeito real (passa a Cancelado, horário volta a ficar livre, histórico preservado, acordo comercial do Goal007 intocado).\n- `apps/frontend/tests/goal016-appointment-create.test.tsx` — 17 testes.\n\n**Modificados**\n\n- `AppointmentFlowShell.tsx` — `NewAppointment`, `RescheduleAppointment` e `CancelAppointment` saíram para os arquivos acima; `AppointmentFlowShell`, `ReadOnlyState`, `Summary`, `SummaryRow` e `formatMoney` passaram a ser exportados para as três telas reusarem. `AppointmentDetail` e `BlockTime` ficaram onde estavam (são de outras unidades). A invariante do WU-03 continua: `useShellConfig` só em `AgendaBoard` e `AppointmentFlowShell`.\n- `ProductAgendaScreen.tsx` — cenários `new`/`reschedule`/`cancel` repontados.\n- `shared/styles/atendly-agenda.css` — classes das superfícies novas (serviços, horário manual, status da reserva, painel de conflito), com adaptação mobile.\n\n## Comandos executados\n\n- `npx vitest run tests/goal016-appointment-create.test.tsx` → **17 passed** (3 falhas intermediárias corrigidas: dois testes não escolhiam cliente e por isso o envio estava corretamente travado; um assert ambíguo de texto).\n- `npm test` (frontend) → **20 arquivos, 156 testes, todos passando**.\n- `npm run lint` → limpo (3 erros de `react-hooks/set-state-in-effect` corrigidos: `setSlotsLoading` voltou para os handlers e o vencimento do hold passou a ser agendado por timer).\n- `npm run typecheck` → limpo.\n- `npm run build` → build completo com sucesso.\n- `npx prettier --check src` → 136 arquivos fora do padrão em toda a base, anterior a esta unidade; `eslint` é o gate real e passa. Não reformatei a base.\n\n## Limites do que não foi verificado\n\nNão rodei `npm run validate:ui` (Playwright): ele cobre só rotas públicas, e estas telas são autenticadas. Layout real e largura de viewport continuam fora do alcance do jsdom. Contraste não é decidido nesta camada.",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/AppointmentForm.tsx",
+        "apps/frontend/src/features/agenda/SlotPicker.tsx",
+        "apps/frontend/src/features/agenda/holdSession.ts",
+        "apps/frontend/src/features/agenda/ConflictPanel.tsx",
+        "apps/frontend/src/features/agenda/RescheduleFlow.tsx",
+        "apps/frontend/src/features/agenda/CancelFlow.tsx",
+        "apps/frontend/src/features/agenda/AppointmentFlowShell.tsx",
+        "apps/frontend/src/features/agenda/ProductAgendaScreen.tsx",
+        "apps/frontend/src/shared/styles/atendly-agenda.css",
+        "apps/frontend/tests/goal016-appointment-create.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Criação emite customerId para cliente já cadastrado e nunca identifica pessoa por telefone, provado por teste sobre a requisição emitida",
+          "met": true,
+          "detail": "Teste \"cliente já cadastrado vai por ID\": createHold recebe {customerId:'cus-ana'} e createAppointment recebe customerId com customerName/customerPhone undefined. O corpo nunca leva telefone quando há ID."
+        },
+        {
+          "criterion": "Cliente sem telefone pode ser agendado; cliente novo é criado na confirmação por nome e telefone",
+          "met": true,
+          "detail": "Testes \"cliente cadastrado sem telefone nenhum continua agendável\" (phone: null, envio habilitado, customerId no corpo) e \"cliente novo é criado na confirmação\" (customerName/customerPhone no corpo, customerId ausente; telefone é opcional no formulário)."
+        },
+        {
+          "criterion": "Múltiplos serviços podem ser escolhidos, a duração somada é apresentada e a disponibilidade é consultada para o conjunto",
+          "met": true,
+          "detail": "Teste \"dois serviços somam a duração\": checkboxes, texto \"Duração total: 90 min\" e getAvailability chamado com serviceIds ['svc-corte','svc-escova']."
+        },
+        {
+          "criterion": "Com serviço ON_REQUEST ou NOT_INFORMED nenhum valor fechado é exibido, conforme totalPriceType",
+          "met": true,
+          "detail": "Teste \"com serviço sem preço informado\": com só o FIXED o resumo mostra R$ 90,00; ao somar o NOT_INFORMED passa a \"Sob consulta\" e nenhum texto com R$ sobra no resumo. Regra é a mesma de computeAgreementTotal (D-011)."
+        },
+        {
+          "criterion": "Escolher horário cria hold, a confirmação envia holdId, abandonar ou trocar de horário libera o hold e hold expirado leva a reescolher com mensagem própria",
+          "met": true,
+          "detail": "Quatro testes: createHold ao escolher; holdId no corpo da criação; releaseHold('hold-1') ao trocar de horário e no unmount; hold com expiresAt vencido mostra a mensagem própria e desabilita o envio; 409 APPOINTMENT_HOLD_EXPIRED na confirmação mostra mensagem própria (com slotStillAvailable), limpa o horário e não navega."
+        },
+        {
+          "criterion": "Conflito apresenta o que ocupa o intervalo; sobrepor sem overlapOverrideReason não envia; com motivo, overlapOverride vai no corpo",
+          "met": true,
+          "detail": "Testes do bloco de conflito: painel lista atendimento e bloqueio que cobrem 12:00–13:00; clicar em \"Sobrepor mesmo assim\" sem motivo mostra alerta e createAppointment não é chamado; com motivo o corpo leva overlapOverride:true, overlapOverrideReason e startTime 12:00."
+        },
+        {
+          "criterion": "Remarcar usa hold e pode exigir sobreposição com motivo; cancelar pede confirmação e explica o efeito",
+          "met": true,
+          "detail": "Testes de remarcar (createHold para o horário novo com customerId do atendimento; corpo da remarcação com holdId; sobreposição bloqueada sem motivo e enviada com overlapOverride/motivo) e de cancelar (diálogo explica que passa a Cancelado, o horário volta a ficar livre e o histórico é preservado; só então cancelAppointment é chamado)."
+        }
+      ]
+    },
+    "attemptId": "016-r1-unit-wu-05-a1"
+  }
+}

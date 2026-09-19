@@ -1,0 +1,17 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-15T13:49:46.986Z",
+  "base": "9df7bf7fc5bae23a39da20385fbac474798ad474",
+  "worktreeInitialHead": "9df7bf7fc5bae23a39da20385fbac474798ad474",
+  "head": "9df7bf7fc5bae23a39da20385fbac474798ad474",
+  "branch": "ai-loop/goal-021",
+  "trackedDiffHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "trackedFileCount": 0,
+  "trackedFiles": [],
+  "untrackedHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "untrackedFileCount": 0,
+  "untracked": [],
+  "contentHash": "51ffd12e12696d14d066ccedd66956a819ae7a037e2b8de5e84d9ff62b624e5d",
+  "attempt": 1,
+  "jobId": "021-r1-developer-1ed08aa2"
+}

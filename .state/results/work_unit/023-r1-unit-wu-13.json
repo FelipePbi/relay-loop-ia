@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T21:33:36.056Z",
+  "attemptId": "023-r1-unit-wu-13-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-13",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-13",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "lint",
+      "argv": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 12079,
+      "summary": "Lint passou (exit 0, 12079ms).",
+      "report": "\n> whatsapp-ai-inbox-frontend@0.1.0 lint\n> eslint src tests --max-warnings=0\n\n",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "023-r1-unit-wu-13-a1"
+  }
+}

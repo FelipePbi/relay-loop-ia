@@ -1,0 +1,3216 @@
+diff --git a/apps/bff/PUBLIC_API_V1.md b/apps/bff/PUBLIC_API_V1.md
+index 699243f..2f7ce8b 100644
+--- a/apps/bff/PUBLIC_API_V1.md
++++ b/apps/bff/PUBLIC_API_V1.md
+@@ -20,7 +20,7 @@ Para comportamento vigente, prevalece [`../../docs/product-vault/00-HOME.md`](..
+ | Disponibilidade e bloqueios | `GET /v1/availability`; `GET /v1/time-blocks`; `POST /v1/time-blocks`; `DELETE /v1/time-blocks/:id`; `DELETE /v1/time-blocks/:id/occurrence`; `PATCH /v1/time-blocks/:id/occurrence` |
+ | Exceções de disponibilidade (Goal009) | `GET /v1/availability-exceptions`; `POST /v1/availability-exceptions/extra`; `POST /v1/availability-exceptions/unavailable`; `DELETE /v1/availability-exceptions/:id` |
+ | Séries de bloqueio/compromisso (Goal009) | `POST /v1/block-series`; `PATCH /v1/block-series/:id/from-date`; `DELETE /v1/block-series/:id` |
+-| Importação única (Goal010) | `POST /v1/calendar/imports`; `POST /v1/calendar/imports/:sessionId/analyze`; `GET /v1/calendar/imports/:sessionId/categories/:category/items`; `POST /v1/calendar/imports/:sessionId/items/:itemId/decision`; `POST /v1/calendar/imports/:sessionId/execute`; `GET /v1/calendar/imports/:sessionId/progress`; `POST /v1/calendar/imports/:sessionId/complete` |
++| Importação única (Goal010, Goal020) | `GET /v1/calendar/imports`; `POST /v1/calendar/imports`; `POST /v1/calendar/imports/:sessionId/analyze`; `GET /v1/calendar/imports/:sessionId/categories/:category/items`; `POST /v1/calendar/imports/:sessionId/categories/:category/selection`; `POST /v1/calendar/imports/:sessionId/items/:itemId/decision`; `POST /v1/calendar/imports/:sessionId/execute`; `GET /v1/calendar/imports/:sessionId/progress`; `POST /v1/calendar/imports/:sessionId/complete` |
+ | Clientes | `GET /v1/customers`; `GET /v1/customers/:id`; `POST /v1/customers`; `PATCH /v1/customers/:id`; `PUT /v1/customers/:id/primary-guardian`; `POST /v1/customers/:id/primary-guardian/confirm`; `DELETE /v1/customers/:id/primary-guardian`; `POST /v1/customers/:id/notes`; `PATCH /v1/customers/:id/notes/:noteId`; `DELETE /v1/customers/:id/notes/:noteId`; `POST /v1/customers/:id/tags`; `PATCH /v1/customers/:id/tags/:tagId`; `DELETE /v1/customers/:id/tags/:tagId`; `GET/POST /v1/customers/:id/memory`; `PATCH/DELETE /v1/customers/:id/memory/:memoryId`; `POST /v1/customers/:id/summary` (Goal012) |
+ | Conhecimento do negócio (Goal012) | `GET/POST /v1/knowledge/documents`; `GET/PUT/DELETE /v1/knowledge/documents/:id`; `PUT /v1/knowledge/other-info` |
+ | Serviços | `GET /v1/services`; `POST /v1/services`; `PATCH /v1/services/:id` |
+@@ -70,7 +70,7 @@ As rotas abaixo também estão registradas e possuem consumidores no frontend at
+ | --- | --- |
+ | Estado/fonte de calendário | `GET /v1/calendar` |
+ | Conexão da origem de importação (antes: conexão operacional de agenda externa) | `POST /v1/calendar/integration/connect`; `POST /v1/calendar/integration/reconnect`; `DELETE /v1/calendar/integration` |
+-| Protocolo de migração pré-Goal010, sem consumidor no frontend vigente | `POST /v1/calendar/migrations/diagnose`; `POST /v1/calendar/migrations`; `GET /v1/calendar/migrations/:id` |
++| Protocolo de migração pré-Goal010, sem consumidor no frontend vigente desde o fechamento do Goal010 (2026-09-12) | `POST /v1/calendar/migrations/diagnose`; `POST /v1/calendar/migrations`; `GET /v1/calendar/migrations/:id` |
+ 
+ Essas três rotas foram reescopadas pelo Goal010 e continuam com o mesmo contrato: elas guardam, testam e removem a **credencial da origem de importação** e nada mais. Conectar não muda a fonte da agenda operacional e não exige que ela seja externa — exigir isso deixaria a importação inalcançável depois do corte do writer remoto. Credencial que se declara de escrita é recusada com `409 INTEGRATION_WRITES_NOT_SUPPORTED`: a origem é somente leitura. Desconectar remove a credencial e **nunca** desativa a Agenda Atendly.
+ 
+@@ -303,9 +303,11 @@ Substitui a migração bidirecional: um negócio importa do Minha Agenda **uma v
+ 
+ | Rota | O que faz |
+ | --- | --- |
++| `GET /v1/calendar/imports` (Goal020) | lê o estado da importação do negócio: direito (`right`), sessão viva (`session`, `null` se não houver) e histórico (`history`, `null` até a conclusão); sem efeito, não exige `Idempotency-Key` |
+ | `POST /v1/calendar/imports` | abre a sessão de importação (`sourceAccountId`, `sourceAccountLabel?`, `replace?`); exige `Idempotency-Key` |
+ | `POST /v1/calendar/imports/:sessionId/analyze` | lê a origem e grava/atualiza os itens da sessão; devolve o resumo por categoria, não os itens; exige `Idempotency-Key` |
+ | `GET /v1/calendar/imports/:sessionId/categories/:category/items` | lista os itens de uma categoria, paginado (`status?`, `limit`, `offset`) |
++| `POST /v1/calendar/imports/:sessionId/categories/:category/selection` (Goal020) | marca/desmarca uma categoria inteira para importar (`selected`); não altera `previewVersion` nem os itens; exige `Idempotency-Key` |
+ | `POST /v1/calendar/imports/:sessionId/items/:itemId/decision` | decide um item em conflito (`decision`: `INCLUDE`, `EXCLUDE`, `MERGE_WITH_EXISTING`, `CREATE_NEW`, `KEEP_EXISTING`; `targetInternalId` obrigatório nos dois últimos); exige `Idempotency-Key` |
+ | `POST /v1/calendar/imports/:sessionId/execute` | processa os itens pendentes, criando os registros na Agenda Atendly (`previewVersion` obrigatória, `maxItems?`); exige `Idempotency-Key` |
+ | `GET /v1/calendar/imports/:sessionId/progress` | progresso lido do banco a cada chamada, por categoria e total |
+diff --git a/apps/bff/src/clients/scheduling/index.ts b/apps/bff/src/clients/scheduling/index.ts
+index 6e45638..10bdeea 100644
+--- a/apps/bff/src/clients/scheduling/index.ts
++++ b/apps/bff/src/clients/scheduling/index.ts
+@@ -431,6 +431,34 @@ const importDecisionResponseSchema = z.object({
+ const importCategoryCountsSchema = importCountsSchema.extend({
+   category: importCategorySchema,
+ });
++// --- Estado da importacao e selecao de categoria (Goal020, WU-003) ---------
++const importRightSchema = z.object({
++  available: z.boolean(),
++  sessionId: z.string().nullable(),
++  completedAt: z.string().nullable(),
++});
++const importLiveSessionCategorySchema = importCategoryCountsSchema.extend({
++  selected: z.boolean(),
++});
++const importLiveSessionSchema = z.object({
++  sessionId: z.string(),
++  status: importSessionStatusSchema,
++  previewVersion: z.number().int().nonnegative(),
++  provider: z.enum(["MINHA_AGENDA"]),
++  sourceAccountId: z.string(),
++  sourceAccountLabel: z.string().nullable(),
++  createdAt: z.string(),
++  startedAt: z.string().nullable(),
++  finishedAt: z.string().nullable(),
++  previewGeneratedAt: z.string().nullable(),
++  counts: importCountsSchema,
++  categories: z.array(importLiveSessionCategorySchema),
++});
++const importCategorySelectionResultSchema = z.object({
++  sessionId: z.string(),
++  category: importCategorySchema,
++  selected: z.boolean(),
++});
+ const importExecutionResultSchema = z.object({
+   sessionId: z.string(),
+   previewVersion: z.number().int().nonnegative(),
+@@ -475,6 +503,16 @@ const importCompletionResultSchema = z.object({
+     .nullable(),
+ });
+ 
++const importHistoryResultSchema = importCompletionResultSchema.extend({
++  startedAt: z.string().nullable(),
++  finishedAt: z.string().nullable(),
++});
++const importStateSchema = z.object({
++  right: importRightSchema,
++  session: importLiveSessionSchema.nullable(),
++  history: importHistoryResultSchema.nullable(),
++});
++
+ const envelope = <T extends z.ZodType>(schema: T) =>
+   z.object({ data: schema, requestId: z.string() });
+ 
+@@ -1145,6 +1183,30 @@ export class SchedulingClient {
+ 
+   // --- Importacao unica (Goal010, WU-09) -----------------------------------
+ 
++  // Leitura pura do estado da importacao (direito, sessao viva e historico),
++  // sem nenhum efeito: negocio sem conexao, sem sessao e sem historico e
++  // estado valido e vazio, nunca erro.
++  async importState(context: InternalRequestContext) {
++    return this.get(context, "/internal/calendar/imports", importStateSchema);
++  }
++
++  async setImportCategorySelection(
++    context: InternalRequestContext,
++    sessionId: string,
++    category: string,
++    input: { selected: boolean },
++    idempotencyKey: string,
++  ) {
++    return this.mutate(
++      context,
++      "POST",
++      `/internal/calendar/imports/${encodeURIComponent(sessionId)}/categories/${encodeURIComponent(category)}/selection`,
++      input,
++      importCategorySelectionResultSchema,
++      idempotencyKey,
++    );
++  }
++
+   async startImport(
+     context: InternalRequestContext,
+     input: {
+diff --git a/apps/bff/src/modules/migrations/routes.ts b/apps/bff/src/modules/migrations/routes.ts
+index 3fdba08..f5208da 100644
+--- a/apps/bff/src/modules/migrations/routes.ts
++++ b/apps/bff/src/modules/migrations/routes.ts
+@@ -74,6 +74,9 @@ const executeImportBodySchema = z.object({
+ const completeImportBodySchema = z.object({
+   acceptPending: z.boolean().optional(),
+ });
++const setImportCategorySelectionBodySchema = z.object({
++  selected: z.boolean(),
++});
+ const importDecisionBodySchema = z
+   .object({
+     decision: importDecisionKindSchema,
+@@ -144,6 +147,18 @@ export async function registerV1MigrationRoutes(
+ 
+   // --- Importacao unica (Goal010, WU-09) -----------------------------------
+ 
++  // Leitura pura do estado da importacao (direito, sessao viva e historico):
++  // nunca abre sessao, muda status nem consome o direito.
++  app.get(
++    "/v1/calendar/imports",
++    { preHandler: requireTenantContext },
++    async (request) =>
++      dataResponse(
++        request,
++        await scheduling.importState(internalContext(request)),
++      ),
++  );
++
+   app.post(
+     "/v1/calendar/imports",
+     { preHandler: requireTenantContext },
+@@ -198,6 +213,34 @@ export async function registerV1MigrationRoutes(
+     },
+   );
+ 
++  // Escolher o que importar (Goal020, WU-02): marca/desmarca uma categoria
++  // inteira da sessao. So muda `selected` — nunca invalida o preview nem
++  // mexe em `previewVersion`.
++  app.post(
++    "/v1/calendar/imports/:sessionId/categories/:category/selection",
++    { preHandler: requireTenantContext },
++    async (request) => {
++      const { sessionId, category } = parseParams(
++        importCategoryParamsSchema,
++        request.params,
++      );
++      const body = parseBody(
++        setImportCategorySelectionBodySchema,
++        request.body,
++      );
++      return dataResponse(
++        request,
++        await scheduling.setImportCategorySelection(
++          internalContext(request),
++          sessionId,
++          category,
++          body,
++          idempotencyKey(request),
++        ),
++      );
++    },
++  );
++
+   app.post(
+     "/v1/calendar/imports/:sessionId/items/:itemId/decision",
+     { preHandler: requireTenantContext },
+diff --git a/apps/frontend/src/app/(platform)/migracao/[step]/page.tsx b/apps/frontend/src/app/(platform)/migracao/[step]/page.tsx
+deleted file mode 100644
+index 7cb1aff..0000000
+--- a/apps/frontend/src/app/(platform)/migracao/[step]/page.tsx
++++ /dev/null
+@@ -1,42 +0,0 @@
+-import { notFound } from "next/navigation";
+-
+-import type { ProductMigrationStep } from "@/features/migration/ProductMigrationScreen";
+-import { ProductMigrationScreen } from "@/features/migration/ProductMigrationScreen";
+-
+-const steps: Record<string, ProductMigrationStep> = {
+-  "para-atendly": "intro",
+-  "para-minha-agenda": "intro",
+-  diagnostico: "diagnosis",
+-  conflitos: "conflicts",
+-  revisao: "review",
+-  progresso: "progress",
+-  sucesso: "result",
+-  parcial: "result",
+-  erro: "result",
+-};
+-export function generateStaticParams() {
+-  return Object.keys(steps).map((step) => ({ step }));
+-}
+-export default async function MigrationPage({
+-  params,
+-  searchParams,
+-}: {
+-  params: Promise<{ step: string }>;
+-  searchParams: Promise<{ migrationId?: string; target?: string }>;
+-}) {
+-  const { step } = await params;
+-  const query = await searchParams;
+-  const productStep = steps[step];
+-  if (!productStep) notFound();
+-  const target =
+-    query.target === "external" || step === "para-minha-agenda"
+-      ? ("EXTERNAL" as const)
+-      : ("ATENDLY" as const);
+-  return (
+-    <ProductMigrationScreen
+-      migrationId={query.migrationId}
+-      step={productStep}
+-      target={target}
+-    />
+-  );
+-}
+diff --git a/apps/frontend/src/app/(platform)/migracao/layout.tsx b/apps/frontend/src/app/(platform)/migracao/layout.tsx
+deleted file mode 100644
+index cd35904..0000000
+--- a/apps/frontend/src/app/(platform)/migracao/layout.tsx
++++ /dev/null
+@@ -1,11 +0,0 @@
+-import type { Metadata } from "next";
+-
+-export const metadata: Metadata = { title: "Migração de agenda" };
+-
+-export default function MigracaoLayout({
+-  children,
+-}: {
+-  children: React.ReactNode;
+-}) {
+-  return children;
+-}
+diff --git a/apps/frontend/src/app/globals.css b/apps/frontend/src/app/globals.css
+index 7f9a151..de217d0 100644
+--- a/apps/frontend/src/app/globals.css
++++ b/apps/frontend/src/app/globals.css
+@@ -5,7 +5,7 @@
+ @import "../shared/styles/atendly-customers.css";
+ @import "../shared/styles/atendly-services.css";
+ @import "../shared/styles/atendly-settings.css";
+-@import "../shared/styles/atendly-migration.css";
++@import "../shared/styles/atendly-imports.css";
+ @import "../shared/styles/atendly-system.css";
+ 
+ .onboarding-shell {
+diff --git a/apps/frontend/src/data/mappers/publicApiSchemas.ts b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+index bd0ef09..f1c283f 100644
+--- a/apps/frontend/src/data/mappers/publicApiSchemas.ts
++++ b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+@@ -1139,6 +1139,52 @@ export const importCompletionSchema = z.object({
+     .nullable(),
+ });
+ 
++// --- Estado da importação e seleção de categoria (Goal020, WU-003/WU-004) --
++// Espelham `GET /v1/calendar/imports` e `POST .../categories/:category/
++// selection` em PUBLIC_API_V1.md: leitura pura do direito/sessão/histórico e
++// a marcação de categoria, que não muda `previewVersion` nem os itens.
++export const importRightSchema = z.object({
++  available: z.boolean(),
++  sessionId: z.string().nullable(),
++  completedAt: isoDateTimeSchema.nullable(),
++});
++
++const importLiveSessionCategorySchema = importCategoryCountsSchema.extend({
++  selected: z.boolean(),
++});
++
++export const importLiveSessionSchema = z.object({
++  sessionId: z.string().min(1),
++  status: importSessionStatusSchema,
++  previewVersion: z.number().int().nonnegative(),
++  provider: z.enum(["MINHA_AGENDA"]),
++  sourceAccountId: z.string().min(1),
++  sourceAccountLabel: z.string().nullable(),
++  createdAt: isoDateTimeSchema,
++  startedAt: isoDateTimeSchema.nullable(),
++  finishedAt: isoDateTimeSchema.nullable(),
++  previewGeneratedAt: isoDateTimeSchema.nullable(),
++  counts: importCountsSchema,
++  categories: z.array(importLiveSessionCategorySchema),
++});
++
++export const importHistorySchema = importCompletionSchema.extend({
++  startedAt: isoDateTimeSchema.nullable(),
++  finishedAt: isoDateTimeSchema.nullable(),
++});
++
++export const importStateSchema = z.object({
++  right: importRightSchema,
++  session: importLiveSessionSchema.nullable(),
++  history: importHistorySchema.nullable(),
++});
++
++export const importCategorySelectionResultSchema = z.object({
++  sessionId: z.string().min(1),
++  category: importCategorySchema,
++  selected: z.boolean(),
++});
++
+ export type Migration = z.infer<typeof migrationSchema>;
+ export type MigrationDiagnosis = z.infer<typeof migrationDiagnosisSchema>;
+ export type MigrationStart = z.infer<typeof migrationStartSchema>;
+@@ -1156,6 +1202,13 @@ export type ImportDecision = z.infer<typeof importDecisionSchema>;
+ export type ImportExecution = z.infer<typeof importExecutionSchema>;
+ export type ImportProgress = z.infer<typeof importProgressSchema>;
+ export type ImportCompletion = z.infer<typeof importCompletionSchema>;
++export type ImportRight = z.infer<typeof importRightSchema>;
++export type ImportLiveSession = z.infer<typeof importLiveSessionSchema>;
++export type ImportHistory = z.infer<typeof importHistorySchema>;
++export type ImportState = z.infer<typeof importStateSchema>;
++export type ImportCategorySelectionResult = z.infer<
++  typeof importCategorySelectionResultSchema
++>;
+ export type IgnoredContact = z.infer<typeof ignoredContactSchema>;
+ export type OnboardingState = z.infer<typeof onboardingStateSchema>;
+ export type Service = z.infer<typeof serviceSchema>;
+diff --git a/apps/frontend/src/data/services/BffMigrationService.ts b/apps/frontend/src/data/services/BffMigrationService.ts
+index 213dc5b..7131b23 100644
+--- a/apps/frontend/src/data/services/BffMigrationService.ts
++++ b/apps/frontend/src/data/services/BffMigrationService.ts
+@@ -2,6 +2,7 @@ import { type BffHttpClient } from "../http/BffHttpClient";
+ import {
+   type CalendarSource,
+   type ImportCategory,
++  importCategorySelectionResultSchema,
+   importCompletionSchema,
+   type ImportDecisionKind,
+   importDecisionSchema,
+@@ -11,6 +12,7 @@ import {
+   importPreviewSchema,
+   importProgressSchema,
+   importSessionStartSchema,
++  importStateSchema,
+   migrationDiagnosisSchema,
+   migrationSchema,
+   migrationStartSchema,
+@@ -32,6 +34,10 @@ export interface ImportDecisionInput {
+   noteCode?: string;
+ }
+ 
++export interface SetImportCategorySelectionInput {
++  selected: boolean;
++}
++
+ export interface ExecuteImportInput {
+   /**
+    * Versão de preview aprovada. Obrigatória: executar é executar um preview
+@@ -82,6 +88,15 @@ export class BffMigrationService {
+     });
+   }
+ 
++  /** Direito, sessão viva e histórico da importação do negócio; sem efeito. */
++  getImportState(signal?: AbortSignal) {
++    return this.http.request({
++      path: "/v1/calendar/imports",
++      schema: importStateSchema,
++      signal,
++    });
++  }
++
+   /** Abre a sessão de importação do negócio. */
+   startImport(
+     input: StartImportInput,
+@@ -129,6 +144,24 @@ export class BffMigrationService {
+     });
+   }
+ 
++  /** Marca/desmarca uma categoria inteira; não muda `previewVersion` nem os itens. */
++  setImportCategorySelection(
++    sessionId: string,
++    category: ImportCategory,
++    input: SetImportCategorySelectionInput,
++    idempotencyKey: string,
++    signal?: AbortSignal,
++  ) {
++    return this.http.request({
++      body: input,
++      headers: { "idempotency-key": idempotencyKey },
++      method: "POST",
++      path: `/v1/calendar/imports/${encodeURIComponent(sessionId)}/categories/${encodeURIComponent(category)}/selection`,
++      schema: importCategorySelectionResultSchema,
++      signal,
++    });
++  }
++
+   /** Decisão explícita sobre um item; o ator vem da sessão, nunca do corpo. */
+   decideImportItem(
+     sessionId: string,
+diff --git a/apps/frontend/src/features/migration/MigrationScreen.tsx b/apps/frontend/src/features/migration/MigrationScreen.tsx
+deleted file mode 100644
+index df7c529..0000000
+--- a/apps/frontend/src/features/migration/MigrationScreen.tsx
++++ /dev/null
+@@ -1,141 +0,0 @@
+-"use client";
+-
+-import clsx from "clsx";
+-import Link from "next/link";
+-import type { ReactNode } from "react";
+-
+-import { Icon, type IconName } from "@/shared/icons/Icon";
+-
+-export function Stepper({ step }: { step: number }) {
+-  return (
+-    <ol className="migration-stepper" aria-label="Progresso da migração">
+-      {[
+-        ["Preparar", 1],
+-        ["Revisar", 2],
+-        ["Realizar corte", 3],
+-      ].map(([label, number]) => (
+-        <li
+-          className={clsx(
+-            Number(number) < step && "is-complete",
+-            number === step && "is-current",
+-          )}
+-          aria-current={number === step ? "step" : undefined}
+-          key={label}
+-        >
+-          <span className="migration-step-index">
+-            {Number(number) < step ? (
+-              <Icon name="check" />
+-            ) : (
+-              String(number).padStart(2, "0")
+-            )}
+-          </span>
+-          <span>{label}</span>
+-        </li>
+-      ))}
+-    </ol>
+-  );
+-}
+-
+-export function Route({
+-  source,
+-  target,
+-  complete,
+-}: {
+-  source: string;
+-  target: string;
+-  complete: boolean;
+-}) {
+-  return (
+-    <section className="migration-route" aria-label="Mudança da fonte oficial">
+-      <div className="migration-route-node">
+-        <span>{complete ? "Fonte anterior" : "Fonte atual"}</span>
+-        <strong>{source}</strong>
+-      </div>
+-      <Icon name="chevron-right" />
+-      <div className="migration-route-node">
+-        <span>{complete ? "Fonte oficial" : "Destino proposto"}</span>
+-        <strong>{target}</strong>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-export function SideNotes({ children }: { children?: ReactNode }) {
+-  return (
+-    <aside className="migration-side" aria-label="Proteções da migração">
+-      <section className="migration-side-card">
+-        <h2>Proteções mantidas</h2>
+-        <ul className="migration-side-list">
+-          <li>
+-            <Icon name="shield" />
+-            <span>A fonte atual continua oficial durante a preparação.</span>
+-          </li>
+-          <li>
+-            <Icon name="check" />
+-            <span>A troca só ocorre após validar o destino.</span>
+-          </li>
+-          <li>
+-            <Icon name="chat" />
+-            <span>Conversas e histórico local permanecem na Atendly.</span>
+-          </li>
+-        </ul>
+-      </section>
+-      {children}
+-    </aside>
+-  );
+-}
+-
+-export function Status({
+-  icon,
+-  tone,
+-  children,
+-}: {
+-  icon?: IconName;
+-  tone?: "is-ready" | "is-warning" | "is-danger";
+-  children: ReactNode;
+-}) {
+-  return (
+-    <span className={clsx("migration-status", tone)}>
+-      {icon && <Icon name={icon} />}
+-      {children}
+-    </span>
+-  );
+-}
+-
+-export function Frame({
+-  title,
+-  description,
+-  step,
+-  back,
+-  badge,
+-  children,
+-}: {
+-  title: string;
+-  description: string;
+-  step: number;
+-  back: string;
+-  badge?: ReactNode;
+-  children: ReactNode;
+-}) {
+-  return (
+-    <div className="migration-page">
+-      <div className="migration-toolbar">
+-        <Link className="migration-back" href={back}>
+-          <Icon name="chevron-right" />
+-          Configurações
+-        </Link>
+-        <span className="migration-progress-label">MIGRAÇÃO ASSISTIDA</span>
+-      </div>
+-      <header className="migration-header">
+-        <div className="migration-header-copy">
+-          <p className="eyebrow">Fonte oficial da agenda</p>
+-          <h1>{title}</h1>
+-          <p>{description}</p>
+-        </div>
+-        {badge}
+-      </header>
+-      <Stepper step={step} />
+-      {children}
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/src/features/migration/ProductMigrationScreen.tsx b/apps/frontend/src/features/migration/ProductMigrationScreen.tsx
+deleted file mode 100644
+index ec53a32..0000000
+--- a/apps/frontend/src/features/migration/ProductMigrationScreen.tsx
++++ /dev/null
+@@ -1,878 +0,0 @@
+-"use client";
+-
+-import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import { type ReactNode, useEffect, useState } from "react";
+-
+-import {
+-  BffHttpError,
+-  type CalendarSource,
+-  type Migration,
+-  type MigrationDiagnosis,
+-} from "@/data";
+-import { Icon } from "@/shared/icons/Icon";
+-import { useShellConfig } from "@/shared/layout/ShellConfig";
+-import { getProductServices } from "@/shared/runtime/ProductRuntime";
+-import { StatePanel } from "@/shared/ui/States";
+-
+-import { Frame, Route, SideNotes, Status } from "./MigrationScreen";
+-
+-export type ProductMigrationStep =
+-  "intro" | "diagnosis" | "conflicts" | "review" | "progress" | "result";
+-
+-export function ProductMigrationScreen({
+-  step,
+-  target,
+-  migrationId,
+-}: {
+-  step: ProductMigrationStep;
+-  target: CalendarSource;
+-  migrationId?: string;
+-}) {
+-  if (step === "intro") return <MigrationIntro target={target} />;
+-  if (step === "progress" || step === "result") {
+-    return (
+-      <MigrationProgress
+-        migrationId={migrationId}
+-        resultOnly={step === "result"}
+-        target={target}
+-      />
+-    );
+-  }
+-  return <MigrationPreparation step={step} target={target} />;
+-}
+-
+-function MigrationIntro({ target }: { target: CalendarSource }) {
+-  const names = sourceNames(target);
+-  const toExternal = target === "EXTERNAL";
+-  return (
+-    <MigrationShell target={target}>
+-      <Frame
+-        title={`Migrar para ${names.target}`}
+-        description={
+-          toExternal
+-            ? "A Atendly verifica o que a integração realmente permite antes de qualquer mudança."
+-            : "Prepare uma importação única e revise os dados antes de transferir o controle para a Agenda Atendly."
+-        }
+-        step={1}
+-        back="/configuracoes/agenda"
+-      >
+-        <Route source={names.source} target={names.target} complete={false} />
+-        <div className="migration-layout migration-content">
+-          <div className="migration-stack">
+-            <section className="migration-panel">
+-              <div className="migration-panel-header">
+-                <div>
+-                  <h2>O que acontece agora</h2>
+-                  <p>Primeiro analisamos. Nada é trocado nesta etapa.</p>
+-                </div>
+-                <span className="badge">Sem corte agora</span>
+-              </div>
+-              <ul className="migration-facts">
+-                <MigrationFact text="A fonte atual continua oficial durante toda a preparação." />
+-                <MigrationFact text="Serviços, clientes, agendamentos e disponibilidade são validados." />
+-                <MigrationFact text="Conflitos e limitações aparecem antes da confirmação." />
+-                <MigrationFact text="A fonte anterior não é excluída automaticamente." />
+-              </ul>
+-              <div className="migration-actions">
+-                <Link
+-                  className="btn btn-secondary"
+-                  href="/configuracoes/agenda"
+-                >
+-                  Manter fonte atual
+-                </Link>
+-                <Link
+-                  className="btn btn-primary"
+-                  href={`/migracao/diagnostico?target=${publicTarget(target)}`}
+-                >
+-                  {toExternal ? "Verificar capacidade" : "Preparar migração"}
+-                </Link>
+-              </div>
+-            </section>
+-          </div>
+-          <SideNotes />
+-        </div>
+-      </Frame>
+-    </MigrationShell>
+-  );
+-}
+-
+-function MigrationPreparation({
+-  step,
+-  target,
+-}: {
+-  step: "diagnosis" | "conflicts" | "review";
+-  target: CalendarSource;
+-}) {
+-  const router = useRouter();
+-  const names = sourceNames(target);
+-  const [diagnosis, setDiagnosis] = useState<MigrationDiagnosis | null>(null);
+-  const [error, setError] = useState<string | null>(null);
+-  const [reload, setReload] = useState(0);
+-  const [confirmed, setConfirmed] = useState(false);
+-  const [starting, setStarting] = useState(false);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .migration.diagnose(target, controller.signal)
+-      .then(setDiagnosis)
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted) setError(requestError(caught));
+-      });
+-    return () => controller.abort();
+-  }, [reload, target]);
+-
+-  const retryDiagnosis = () => {
+-    setDiagnosis(null);
+-    setError(null);
+-    setReload((value) => value + 1);
+-  };
+-
+-  const query = `?target=${publicTarget(target)}`;
+-  const back =
+-    step === "diagnosis"
+-      ? target === "EXTERNAL"
+-        ? `/migracao/para-minha-agenda${query}`
+-        : `/migracao/para-atendly${query}`
+-      : step === "conflicts"
+-        ? `/migracao/diagnostico${query}`
+-        : diagnosis?.conflicts.length
+-          ? `/migracao/conflitos${query}`
+-          : `/migracao/diagnostico${query}`;
+-
+-  const start = async () => {
+-    if (!diagnosis?.supported || diagnosis.conflicts.length > 0 || !confirmed)
+-      return;
+-    setStarting(true);
+-    setError(null);
+-    try {
+-      const result = await getProductServices().migration.create(target);
+-      router.push(
+-        `/migracao/progresso?target=${publicTarget(target)}&migrationId=${encodeURIComponent(result.migrationId)}`,
+-      );
+-    } catch (caught: unknown) {
+-      setError(requestError(caught));
+-      setStarting(false);
+-    }
+-  };
+-
+-  return (
+-    <MigrationShell target={target}>
+-      <Frame
+-        title={
+-          step === "diagnosis"
+-            ? "Verificar se a troca é segura"
+-            : step === "conflicts"
+-              ? "Resolver diferenças antes do corte"
+-              : "Revisar a mudança da fonte oficial"
+-        }
+-        description="A fonte atual continua ativa enquanto os dados e as condições do corte são validados."
+-        step={step === "diagnosis" ? 1 : 2}
+-        back={back}
+-        badge={<span className="badge">Diagnóstico real</span>}
+-      >
+-        <Route source={names.source} target={names.target} complete={false} />
+-        <div className="migration-layout migration-content">
+-          <div className="migration-stack">
+-            {!diagnosis && !error && <MigrationLoading />}
+-            {error && (
+-              <section className="migration-panel">
+-                <StatePanel
+-                  actionLabel="Tentar novamente"
+-                  description={error}
+-                  icon="alert"
+-                  onAction={retryDiagnosis}
+-                  title="Não foi possível analisar a migração"
+-                  tone="error"
+-                />
+-              </section>
+-            )}
+-            {diagnosis && step === "diagnosis" && (
+-              <DiagnosisPanel diagnosis={diagnosis} query={query} />
+-            )}
+-            {diagnosis && step === "conflicts" && (
+-              <ConflictPanel diagnosis={diagnosis} query={query} />
+-            )}
+-            {diagnosis && step === "review" && (
+-              <ReviewPanel
+-                confirmed={confirmed}
+-                diagnosis={diagnosis}
+-                names={names}
+-                onConfirmed={setConfirmed}
+-                onStart={() => void start()}
+-                starting={starting}
+-              />
+-            )}
+-          </div>
+-          <SideNotes>
+-            {diagnosis && (
+-              <section className="migration-side-card">
+-                <h2>Limitações informadas</h2>
+-                {diagnosis.limitations.length > 0 ? (
+-                  <ul className="migration-side-list">
+-                    {diagnosis.limitations.map((limitation) => (
+-                      <li key={limitation}>
+-                        <Icon name="info" />
+-                        <span>{limitation}</span>
+-                      </li>
+-                    ))}
+-                  </ul>
+-                ) : (
+-                  <p>Nenhuma limitação adicional foi informada.</p>
+-                )}
+-              </section>
+-            )}
+-          </SideNotes>
+-        </div>
+-      </Frame>
+-    </MigrationShell>
+-  );
+-}
+-
+-function DiagnosisPanel({
+-  diagnosis,
+-  query,
+-}: {
+-  diagnosis: MigrationDiagnosis;
+-  query: string;
+-}) {
+-  const hasConflicts = diagnosis.conflicts.length > 0;
+-  const rows = [
+-    ["Serviços", diagnosis.entities.services],
+-    ["Clientes", diagnosis.entities.customers],
+-    ["Agendamentos futuros", diagnosis.entities.appointments],
+-    ["Disponibilidade", diagnosis.entities.availability],
+-  ] as const;
+-  return (
+-    <section className="migration-panel">
+-      <div className="migration-panel-header">
+-        <div>
+-          <h2>
+-            {diagnosis.supported
+-              ? "Diagnóstico da origem e do destino"
+-              : "Migração automática indisponível"}
+-          </h2>
+-          <p>Contagens obtidas da fonte oficial e do destino.</p>
+-        </div>
+-        <Status
+-          icon={!diagnosis.supported ? "x" : hasConflicts ? "alert" : "check"}
+-          tone={
+-            !diagnosis.supported
+-              ? "is-danger"
+-              : hasConflicts
+-                ? "is-warning"
+-                : "is-ready"
+-          }
+-        >
+-          {!diagnosis.supported
+-            ? "Não suportada"
+-            : hasConflicts
+-              ? `${diagnosis.conflicts.length} pendências`
+-              : "Pronta para revisão"}
+-        </Status>
+-      </div>
+-      <ul className="migration-diagnostics">
+-        {rows.map(([label, entity]) => (
+-          <li key={label}>
+-            <div>
+-              <strong>{label}</strong>
+-              <small>{entity.total} encontrados na análise</small>
+-            </div>
+-            <Status
+-              icon={entity.importable === entity.total ? "check" : "alert"}
+-              tone={
+-                entity.importable === entity.total ? "is-ready" : "is-warning"
+-              }
+-            >
+-              {entity.importable} importáveis
+-            </Status>
+-          </li>
+-        ))}
+-      </ul>
+-      {diagnosis.warnings.map((warning) => (
+-        <div
+-          className="alert banner-warning migration-inline-state"
+-          key={warning}
+-        >
+-          <Icon name="alert" />
+-          <div>
+-            <p className="alert-title">Atenção antes do corte</p>
+-            <p className="alert-text">{warning}</p>
+-          </div>
+-        </div>
+-      ))}
+-      <div className="migration-actions">
+-        <Link className="btn btn-secondary" href="/configuracoes/agenda">
+-          Manter fonte atual
+-        </Link>
+-        {diagnosis.supported && (
+-          <Link
+-            className="btn btn-primary"
+-            href={
+-              hasConflicts
+-                ? `/migracao/conflitos${query}`
+-                : `/migracao/revisao${query}`
+-            }
+-          >
+-            {hasConflicts ? "Revisar conflitos" : "Revisar mudança"}
+-          </Link>
+-        )}
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function ConflictPanel({
+-  diagnosis,
+-  query,
+-}: {
+-  diagnosis: MigrationDiagnosis;
+-  query: string;
+-}) {
+-  if (diagnosis.conflicts.length === 0) {
+-    return (
+-      <section className="migration-panel">
+-        <StatePanel
+-          actionHref={`/migracao/revisao${query}`}
+-          actionLabel="Revisar mudança"
+-          description="O diagnóstico atual não encontrou conflitos bloqueantes."
+-          icon="check"
+-          title="Nenhuma pendência"
+-        />
+-      </section>
+-    );
+-  }
+-  return (
+-    <section className="migration-panel">
+-      <div className="migration-panel-header">
+-        <div>
+-          <h2>Pendências encontradas</h2>
+-          <p>Corrija os dados indicados e execute o diagnóstico novamente.</p>
+-        </div>
+-        <Status icon="alert" tone="is-warning">
+-          {diagnosis.conflicts.length} pendências
+-        </Status>
+-      </div>
+-      {diagnosis.conflicts.map((conflict, index) => (
+-        <section
+-          className="migration-conflict-group"
+-          key={`${conflict.entityType}-${conflict.externalId}-${conflict.code}-${index}`}
+-        >
+-          <div className="migration-conflict-head">
+-            <div>
+-              <h3>{entityLabel(conflict.entityType)}</h3>
+-              <p>{conflict.message}</p>
+-            </div>
+-            <span className="badge">{conflict.code}</span>
+-          </div>
+-        </section>
+-      ))}
+-      <div className="migration-actions">
+-        <Link className="btn btn-secondary" href="/configuracoes/agenda">
+-          Voltar para configurações
+-        </Link>
+-        <Link
+-          className="btn btn-primary"
+-          href={`/migracao/diagnostico${query}`}
+-        >
+-          Executar diagnóstico novamente
+-        </Link>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function ReviewPanel({
+-  confirmed,
+-  diagnosis,
+-  names,
+-  onConfirmed,
+-  onStart,
+-  starting,
+-}: {
+-  confirmed: boolean;
+-  diagnosis: MigrationDiagnosis;
+-  names: ReturnType<typeof sourceNames>;
+-  onConfirmed: (value: boolean) => void;
+-  onStart: () => void;
+-  starting: boolean;
+-}) {
+-  if (!diagnosis.supported || diagnosis.conflicts.length > 0) {
+-    return (
+-      <section className="migration-panel">
+-        <StatePanel
+-          actionHref="/configuracoes/agenda"
+-          actionLabel="Voltar para configurações"
+-          description="O corte não pode iniciar enquanto existirem limitações bloqueantes ou conflitos."
+-          icon="alert"
+-          title="Migração ainda não está pronta"
+-          tone="error"
+-        />
+-      </section>
+-    );
+-  }
+-  const total = Object.values(diagnosis.entities).reduce(
+-    (sum, entity) => sum + entity.importable,
+-    0,
+-  );
+-  return (
+-    <section className="migration-panel">
+-      <div className="migration-panel-header">
+-        <div>
+-          <h2>Revisão consciente</h2>
+-          <p>Confira o destino e o impacto operacional antes de iniciar.</p>
+-        </div>
+-        <Status icon="shield" tone="is-warning">
+-          Sem exclusão automática
+-        </Status>
+-      </div>
+-      <div className="migration-review">
+-        <ReviewRow label="Fonte atual" value={names.source} />
+-        <ReviewRow label="Nova fonte oficial" value={names.target} />
+-        <ReviewRow label="Itens importáveis" value={String(total)} />
+-        <ReviewRow
+-          label="Condições do corte"
+-          value="Serviço e disponibilidade válidos"
+-        />
+-      </div>
+-      <label className="check migration-confirm">
+-        <input
+-          type="checkbox"
+-          checked={confirmed}
+-          onChange={(event) => onConfirmed(event.target.checked)}
+-        />
+-        <span className="check-box" aria-hidden="true" />
+-        <span className="check-copy">
+-          <strong>Revisei a nova fonte e o impacto do corte</strong>
+-          <span>
+-            Se a validação final falhar, {names.source} continua oficial.
+-          </span>
+-        </span>
+-      </label>
+-      <div className="migration-actions">
+-        <Link className="btn btn-secondary" href="/configuracoes/agenda">
+-          Manter fonte atual
+-        </Link>
+-        <button
+-          className="btn btn-primary"
+-          type="button"
+-          disabled={!confirmed || starting}
+-          onClick={onStart}
+-        >
+-          {starting ? "Iniciando migração..." : "Iniciar migração"}
+-        </button>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function MigrationProgress({
+-  migrationId,
+-  resultOnly,
+-  target,
+-}: {
+-  migrationId?: string;
+-  resultOnly: boolean;
+-  target: CalendarSource;
+-}) {
+-  const router = useRouter();
+-  const names = sourceNames(target);
+-  const [migration, setMigration] = useState<Migration | null>(null);
+-  const [error, setError] = useState<string | null>(null);
+-  const displayError = migrationId
+-    ? error
+-    : "O identificador da migração não foi informado.";
+-  const terminal = migration
+-    ? ["PARTIAL", "COMPLETED", "FAILED"].includes(migration.status)
+-    : false;
+-
+-  useEffect(() => {
+-    if (!migrationId) return;
+-    const controller = new AbortController();
+-    let timer: number | undefined;
+-    const load = async () => {
+-      try {
+-        const result = await getProductServices().migration.get(
+-          migrationId,
+-          controller.signal,
+-        );
+-        setMigration(result);
+-        setError(null);
+-        if (!["PARTIAL", "COMPLETED", "FAILED"].includes(result.status)) {
+-          timer = window.setTimeout(() => void load(), 1_500);
+-        }
+-      } catch (caught: unknown) {
+-        if (!controller.signal.aborted) setError(requestError(caught));
+-      }
+-    };
+-    void load();
+-    return () => {
+-      controller.abort();
+-      if (timer) window.clearTimeout(timer);
+-    };
+-  }, [migrationId]);
+-
+-  useEffect(() => {
+-    if (!migration || resultOnly || !terminal) return;
+-    const route =
+-      migration.status === "COMPLETED"
+-        ? "sucesso"
+-        : migration.status === "PARTIAL"
+-          ? "parcial"
+-          : "erro";
+-    router.replace(
+-      `/migracao/${route}?target=${publicTarget(target)}&migrationId=${encodeURIComponent(migration.migrationId)}`,
+-    );
+-  }, [migration, resultOnly, router, target, terminal]);
+-
+-  const complete = migration?.status === "COMPLETED";
+-  return (
+-    <MigrationShell target={target} complete={complete}>
+-      <Frame
+-        title={
+-          terminal
+-            ? complete
+-              ? "Migração concluída"
+-              : migration?.status === "PARTIAL"
+-                ? "Resultado parcial"
+-                : "Falha na migração"
+-            : "Validando a nova fonte"
+-        }
+-        description={
+-          complete
+-            ? "A nova fonte foi ativada somente depois da validação bem-sucedida."
+-            : "A fonte anterior continua oficial enquanto o processo não termina com sucesso."
+-        }
+-        step={3}
+-        back="/configuracoes/agenda"
+-        badge={
+-          migration && (
+-            <span className="badge badge-attention">
+-              {statusLabel(migration.status)}
+-            </span>
+-          )
+-        }
+-      >
+-        <Route
+-          source={names.source}
+-          target={names.target}
+-          complete={complete}
+-        />
+-        <div className="migration-layout migration-content">
+-          <div className="migration-stack">
+-            {!migration && !displayError && <MigrationLoading />}
+-            {displayError && (
+-              <section className="migration-panel">
+-                <StatePanel
+-                  actionHref="/configuracoes/agenda"
+-                  actionLabel="Voltar para configurações"
+-                  description={displayError}
+-                  icon="alert"
+-                  title="Não foi possível acompanhar a migração"
+-                  tone="error"
+-                />
+-              </section>
+-            )}
+-            {migration && !terminal && <RunningPanel migration={migration} />}
+-            {migration && terminal && (
+-              <ResultPanel migration={migration} names={names} />
+-            )}
+-          </div>
+-          <SideNotes />
+-        </div>
+-      </Frame>
+-    </MigrationShell>
+-  );
+-}
+-
+-function RunningPanel({ migration }: { migration: Migration }) {
+-  const completedSegments = Math.floor(migration.progress / 25);
+-  return (
+-    <section className="migration-process" aria-busy="true" aria-live="polite">
+-      <span className="migration-process-icon">
+-        <Icon name="refresh" />
+-      </span>
+-      <h2>Migração em andamento</h2>
+-      <p>
+-        A troca ainda não foi concluída. A fonte anterior permanece oficial até
+-        o corte seguro.
+-      </p>
+-      <div
+-        className="migration-process-track"
+-        role="progressbar"
+-        aria-valuemin={0}
+-        aria-valuemax={100}
+-        aria-valuenow={migration.progress}
+-      >
+-        {[0, 1, 2, 3].map((segment) => (
+-          <span
+-            className={
+-              segment < completedSegments
+-                ? "is-complete"
+-                : segment === completedSegments
+-                  ? "is-active"
+-                  : undefined
+-            }
+-            key={segment}
+-          />
+-        ))}
+-      </div>
+-      <p className="migration-current-step">
+-        {stepLabel(migration.currentStep)} · {migration.progress}%
+-      </p>
+-      <div className="alert banner-warning migration-inline-state">
+-        <Icon name="alert" />
+-        <div>
+-          <p className="alert-title">Operações temporariamente limitadas</p>
+-          <p className="alert-text">
+-            Evite alterar a fonte externa enquanto os dados são validados.
+-          </p>
+-        </div>
+-      </div>
+-      <div className="migration-actions">
+-        <Link className="btn btn-secondary" href="/inicio">
+-          Acompanhar em segundo plano
+-        </Link>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function ResultPanel({
+-  migration,
+-  names,
+-}: {
+-  migration: Migration;
+-  names: ReturnType<typeof sourceNames>;
+-}) {
+-  const success = migration.status === "COMPLETED";
+-  const partial = migration.status === "PARTIAL";
+-  const summary = migrationSummary(migration.summary);
+-  return (
+-    <section className="migration-result">
+-      <span
+-        className={`migration-result-mark${partial ? " is-warning" : success ? "" : " is-danger"}`}
+-      >
+-        <Icon name={success ? "check" : partial ? "alert" : "x"} />
+-      </span>
+-      <span
+-        className={`badge ${success ? "badge-success" : partial ? "badge-attention" : "badge-danger"}`}
+-      >
+-        {statusLabel(migration.status)}
+-      </span>
+-      <h2>
+-        {success
+-          ? `${names.target} agora é a fonte oficial`
+-          : partial
+-            ? "A migração precisa de correções"
+-            : "Não foi possível concluir a migração"}
+-      </h2>
+-      <p>
+-        {success
+-          ? "Os dados foram validados e o corte foi concluído."
+-          : `${names.source} continua como fonte oficial. Nenhum sucesso foi simulado.`}
+-      </p>
+-      <div className="migration-review">
+-        <ReviewRow
+-          label="Fonte oficial"
+-          value={success ? names.target : names.source}
+-        />
+-        <ReviewRow
+-          label="Serviços importados"
+-          value={
+-            summary?.services === undefined ? "—" : String(summary.services)
+-          }
+-        />
+-        <ReviewRow
+-          label="Clientes importados"
+-          value={
+-            summary?.customers === undefined ? "—" : String(summary.customers)
+-          }
+-        />
+-        <ReviewRow
+-          label="Agendamentos importados"
+-          value={
+-            summary?.appointments === undefined
+-              ? "—"
+-              : String(summary.appointments)
+-          }
+-        />
+-        {migration.error && (
+-          <ReviewRow label="Falha" value={migration.error.message} />
+-        )}
+-      </div>
+-      {migration.conflicts.length > 0 && (
+-        <div className="alert banner-warning migration-inline-state">
+-          <Icon name="alert" />
+-          <div>
+-            <p className="alert-title">
+-              {migration.conflicts.length} pendências exigem correção
+-            </p>
+-            <p className="alert-text">
+-              Execute um novo diagnóstico depois de corrigir os dados na fonte
+-              atual.
+-            </p>
+-          </div>
+-        </div>
+-      )}
+-      <div className="migration-actions">
+-        {success ? (
+-          <>
+-            <Link className="btn btn-secondary" href="/agenda/novo">
+-              Testar agendamento
+-            </Link>
+-            <Link className="btn btn-primary" href="/inicio">
+-              Ir para o Início
+-            </Link>
+-          </>
+-        ) : (
+-          <>
+-            <Link className="btn btn-secondary" href="/configuracoes/agenda">
+-              Voltar para configurações
+-            </Link>
+-            <Link
+-              className="btn btn-primary"
+-              href={`/migracao/diagnostico?target=${publicTarget(migration.target)}`}
+-            >
+-              Executar novo diagnóstico
+-            </Link>
+-          </>
+-        )}
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function MigrationShell({
+-  children,
+-  complete = false,
+-  target,
+-}: {
+-  children: ReactNode;
+-  complete?: boolean;
+-  target: CalendarSource;
+-}) {
+-  const source = complete
+-    ? target
+-    : target === "ATENDLY"
+-      ? "EXTERNAL"
+-      : "ATENDLY";
+-  useShellConfig({
+-    active: "configuracoes",
+-    module: "migration",
+-    source: source === "EXTERNAL" ? "external" : "atendly",
+-    title: "Migração de agenda",
+-  });
+-  return <>{children}</>;
+-}
+-
+-function MigrationLoading() {
+-  return (
+-    <section className="migration-process" aria-busy="true">
+-      <span className="migration-process-icon">
+-        <Icon name="refresh" />
+-      </span>
+-      <h2>Analisando dados reais</h2>
+-      <p>Consultando a fonte oficial e validando as condições do destino.</p>
+-    </section>
+-  );
+-}
+-
+-function MigrationFact({ text }: { text: string }) {
+-  return (
+-    <li>
+-      <Icon name="check" />
+-      <div>
+-        <strong>{text}</strong>
+-      </div>
+-    </li>
+-  );
+-}
+-
+-function ReviewRow({ label, value }: { label: string; value: string }) {
+-  return (
+-    <div className="migration-review-row">
+-      <div>
+-        <strong>{label}</strong>
+-      </div>
+-      <Status>{value}</Status>
+-    </div>
+-  );
+-}
+-
+-function sourceNames(target: CalendarSource) {
+-  return target === "EXTERNAL"
+-    ? { source: "Agenda Atendly", target: "Minha Agenda" }
+-    : { source: "Minha Agenda", target: "Agenda Atendly" };
+-}
+-
+-function publicTarget(source: CalendarSource): "atendly" | "external" {
+-  return source === "EXTERNAL" ? "external" : "atendly";
+-}
+-
+-function requestError(error: unknown): string {
+-  return error instanceof BffHttpError
+-    ? error.message
+-    : "Não foi possível concluir esta etapa da migração.";
+-}
+-
+-function entityLabel(value: string): string {
+-  return (
+-    {
+-      SERVICE: "Serviços",
+-      CUSTOMER: "Clientes",
+-      APPOINTMENT: "Agendamentos futuros",
+-      AVAILABILITY: "Disponibilidade",
+-    }[value] ?? "Dados da agenda"
+-  );
+-}
+-
+-function statusLabel(status: Migration["status"]): string {
+-  return {
+-    PENDING: "Pendente",
+-    ANALYZING: "Analisando",
+-    RUNNING: "Em andamento",
+-    PARTIAL: "Parcial",
+-    COMPLETED: "Concluída",
+-    FAILED: "Falha",
+-  }[status];
+-}
+-
+-function stepLabel(step: string | null): string {
+-  return (
+-    {
+-      QUEUED: "Aguardando execução",
+-      RECOVERING: "Retomando execução",
+-      ANALYZING_SOURCE: "Analisando a fonte",
+-      IMPORTING_DATA: "Importando dados",
+-      SOURCE_SWITCHED: "Fonte oficial alterada",
+-      REQUIRES_CORRECTION: "Correções necessárias",
+-      FAILED: "Falha no processo",
+-    }[step ?? ""] ?? "Processando migração"
+-  );
+-}
+-
+-function migrationSummary(value: unknown):
+-  | {
+-      services?: number;
+-      customers?: number;
+-      appointments?: number;
+-      availability?: number;
+-    }
+-  | undefined {
+-  if (!value || typeof value !== "object") return undefined;
+-  const imported = (value as Record<string, unknown>).imported;
+-  if (!imported || typeof imported !== "object") return undefined;
+-  const record = imported as Record<string, unknown>;
+-  return {
+-    services: numberValue(record.services),
+-    customers: numberValue(record.customers),
+-    appointments: numberValue(record.appointments),
+-    availability: numberValue(record.availability),
+-  };
+-}
+-
+-function numberValue(value: unknown): number | undefined {
+-  return typeof value === "number" ? value : undefined;
+-}
+diff --git a/apps/frontend/src/features/migration/types.ts b/apps/frontend/src/features/migration/types.ts
+deleted file mode 100644
+index 0f2e708..0000000
+--- a/apps/frontend/src/features/migration/types.ts
++++ /dev/null
+@@ -1,102 +0,0 @@
+-import type {
+-  ImportCategory,
+-  ImportCompletion,
+-  ImportDecisionKind,
+-  ImportExecution,
+-  ImportItem,
+-  ImportItemsPage,
+-  ImportItemStatus,
+-  ImportPreview,
+-  ImportProgress,
+-  ImportSessionStart,
+-  ImportSessionStatus,
+-} from "@/data/mappers/publicApiSchemas";
+-
+-export type MigrationTarget = "atendly" | "external";
+-export type MigrationScenario =
+-  | "to-atendly-intro"
+-  | "to-external-intro"
+-  | "diagnosis"
+-  | "diagnosis-external"
+-  | "diagnosis-external-available"
+-  | "conflicts"
+-  | "review"
+-  | "progress"
+-  | "success"
+-  | "partial"
+-  | "error";
+-export interface MigrationService {
+-  diagnose(
+-    target: MigrationTarget,
+-  ): Promise<{ conflicts: number; supported: boolean }>;
+-  run(target: MigrationTarget): Promise<void>;
+-}
+-
+-// --- Importacao unica do Minha Agenda (Goal010) ----------------------------
+-// O vocabulario da importacao para quem for montar a tela no Goal019. Aqui
+-// nao ha tela nem estado de UI: sao os tipos do contrato, reexportados de
+-// `publicApiSchemas` para que a feature tenha um unico lugar de referencia.
+-export type {
+-  ImportCategory,
+-  ImportCompletion,
+-  ImportDecisionKind,
+-  ImportExecution,
+-  ImportItem,
+-  ImportItemsPage,
+-  ImportItemStatus,
+-  ImportPreview,
+-  ImportProgress,
+-  ImportSessionStart,
+-  ImportSessionStatus,
+-};
+-
+-/**
+- * A jornada da importacao, uma etapa por operacao do contrato. Nao substitui
+- * `MigrationScenario`, que descreve as telas do protocolo bidirecional
+- * anterior e vive ate o Goal024.
+- */
+-export type ImportStage =
+-  | "origin"
+-  | "preview"
+-  | "review"
+-  | "executing"
+-  | "partial"
+-  | "completed";
+-
+-/**
+- * Porta da importacao para a camada de apresentacao (Goal019). Espelha as
+- * sete operacoes do contrato publico, sem sincronizacao e sem troca de fonte:
+- * uma sessao por negocio, concluida uma unica vez.
+- */
+-export interface ImportSessionService {
+-  start(input: {
+-    sourceAccountId: string;
+-    sourceAccountLabel?: string | null;
+-    replace?: boolean;
+-  }): Promise<ImportSessionStart>;
+-  analyze(sessionId: string): Promise<ImportPreview>;
+-  listItems(
+-    sessionId: string,
+-    category: ImportCategory,
+-    query?: { status?: ImportItemStatus; limit?: number; offset?: number },
+-  ): Promise<ImportItemsPage>;
+-  decide(
+-    sessionId: string,
+-    itemId: string,
+-    input: {
+-      decision: ImportDecisionKind;
+-      targetInternalId?: string;
+-      noteCode?: string;
+-    },
+-  ): Promise<ImportItem>;
+-  /** `previewVersion` e obrigatoria: executar e sempre executar o preview aprovado. */
+-  execute(
+-    sessionId: string,
+-    input: { previewVersion: number; maxItems?: number },
+-  ): Promise<ImportExecution>;
+-  progress(sessionId: string): Promise<ImportProgress>;
+-  complete(
+-    sessionId: string,
+-    input?: { acceptPending?: boolean },
+-  ): Promise<ImportCompletion>;
+-}
+diff --git a/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx b/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
+index 4574fee..bede754 100644
+--- a/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
++++ b/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
+@@ -34,6 +34,7 @@ export type OnboardingDraft = {
+   serviceId?: string;
+   serviceName: string;
+   serviceOperational: boolean;
++  servicePopulation: "IMPORT" | "SCRATCH";
+   servicePrice: string;
+   servicePriceType: "FIXED" | "STARTING_AT" | "ON_REQUEST" | "NOT_INFORMED";
+   startTime: string;
+@@ -62,6 +63,7 @@ const initialDraft: OnboardingDraft = {
+   serviceDuration: 60,
+   serviceName: "",
+   serviceOperational: false,
++  servicePopulation: "SCRATCH",
+   servicePrice: "",
+   servicePriceType: "FIXED",
+   startTime: "09:00",
+diff --git a/apps/frontend/src/features/onboarding/blocks/schedule.tsx b/apps/frontend/src/features/onboarding/blocks/schedule.tsx
+index 49b2d89..66da96c 100644
+--- a/apps/frontend/src/features/onboarding/blocks/schedule.tsx
++++ b/apps/frontend/src/features/onboarding/blocks/schedule.tsx
+@@ -62,16 +62,33 @@ export function scheduleStepBody(
+   if (scenario === "agenda-atendly-metodo")
+     return (
+       <>
+-        <Choice
+-          selected
+-          title="Começar do zero"
+-          copy="Cadastre seu primeiro serviço e disponibilidade agora."
+-          onClick={() => undefined}
+-        />
+-        <div className="onboarding-note">
+-          <Icon name="info" />
+-          <span>A importação única será habilitada no fluxo de migração.</span>
++        <div className="choice-grid">
++          <Choice
++            selected={draft.servicePopulation === "SCRATCH"}
++            title="Começar do zero"
++            copy="Cadastre seu primeiro serviço e disponibilidade agora."
++            onClick={() =>
++              setDraft((value) => ({ ...value, servicePopulation: "SCRATCH" }))
++            }
++          />
++          <Choice
++            selected={draft.servicePopulation === "IMPORT"}
++            title="Importar do Minha Agenda"
++            copy="Traga serviços, clientes, horários e agendamentos de uma vez."
++            onClick={() =>
++              setDraft((value) => ({ ...value, servicePopulation: "IMPORT" }))
++            }
++          />
+         </div>
++        {draft.servicePopulation === "IMPORT" && (
++          <div className="onboarding-note">
++            <Icon name="info" />
++            <span>
++              A importação acontece depois, em Configurações → Agenda. Cadastre
++              pelo menos um serviço agora para já ver a IA em ação.
++            </span>
++          </div>
++        )}
+       </>
+     );
+   if (scenario === "servico-nome")
+diff --git a/apps/frontend/src/features/settings/ProductSettingsScreen.tsx b/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
+index 52bda6f..8e6ceeb 100644
+--- a/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
++++ b/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
+@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
+ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+ 
+ import type { AiTone, BusinessModality, SettingsState } from "@/data";
++import { ImportSettingsSection } from "@/features/imports/ImportSettingsSection";
+ import {
+   BUSINESS_MODALITY_OPTIONS,
+   FREQUENT_BUSINESS_SEGMENTS,
+@@ -594,6 +595,7 @@ function CalendarSettings({ settings }: { settings: SettingsState }) {
+           </span>
+         </div>
+       </section>
++      <ImportSettingsSection />
+     </Page>
+   );
+ }
+diff --git a/apps/frontend/src/shared/layout/navigation.ts b/apps/frontend/src/shared/layout/navigation.ts
+index 241cfef..d340efa 100644
+--- a/apps/frontend/src/shared/layout/navigation.ts
++++ b/apps/frontend/src/shared/layout/navigation.ts
+@@ -77,7 +77,7 @@ export const MORE_DESTINATIONS: NavDestination[] = [
+     section: "whatsapp",
+   },
+   {
+-    href: "/migracao/para-atendly",
++    href: "/importacao",
+     icon: "refresh",
+     label: "Importação",
+     section: "importacao",
+diff --git a/apps/frontend/src/shared/styles/atendly-migration.css b/apps/frontend/src/shared/styles/atendly-migration.css
+deleted file mode 100644
+index 7f78fb9..0000000
+--- a/apps/frontend/src/shared/styles/atendly-migration.css
++++ /dev/null
+@@ -1,628 +0,0 @@
+-.migration-page {
+-  width: min(100%, 1080px);
+-  margin: 0 auto;
+-  padding: 40px 36px 120px;
+-}
+-
+-.migration-toolbar {
+-  margin-bottom: 28px;
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 16px;
+-}
+-
+-.migration-back {
+-  min-height: 44px;
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 8px;
+-  color: var(--fg-soft);
+-  font-size: 14px;
+-  font-weight: 600;
+-  text-decoration: none;
+-}
+-
+-.migration-back:hover {
+-  color: var(--fg);
+-}
+-.migration-back .icon {
+-  transform: rotate(180deg);
+-}
+-
+-.migration-progress-label {
+-  color: var(--muted);
+-  font: 500 12px/1.4 var(--font-mono);
+-  letter-spacing: 0.02em;
+-}
+-
+-.migration-header {
+-  margin-bottom: 28px;
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) auto;
+-  align-items: end;
+-  gap: 24px;
+-}
+-
+-.migration-header-copy {
+-  max-width: 700px;
+-}
+-.migration-header h1 {
+-  max-width: 20ch;
+-}
+-.migration-header p:last-child {
+-  margin-top: 10px;
+-  max-width: 64ch;
+-  color: var(--muted);
+-}
+-
+-.migration-stepper {
+-  margin: 0 0 28px;
+-  padding: 0;
+-  display: grid;
+-  grid-template-columns: repeat(3, minmax(0, 1fr));
+-  list-style: none;
+-  border-block: 1px solid var(--border);
+-}
+-
+-.migration-stepper li {
+-  min-height: 64px;
+-  padding: 12px 14px;
+-  display: flex;
+-  align-items: center;
+-  gap: 10px;
+-  color: var(--muted);
+-  font-size: 13px;
+-  font-weight: 600;
+-}
+-
+-.migration-stepper li + li {
+-  border-left: 1px solid var(--border);
+-}
+-.migration-stepper .is-current {
+-  color: var(--fg);
+-  background: var(--surface);
+-}
+-.migration-stepper .is-complete {
+-  color: var(--accent);
+-}
+-
+-.migration-step-index {
+-  width: 28px;
+-  height: 28px;
+-  flex: 0 0 auto;
+-  display: grid;
+-  place-items: center;
+-  border: 1px solid currentColor;
+-  border-radius: 50%;
+-  font: 500 11px/1 var(--font-mono);
+-}
+-
+-.migration-layout {
+-  display: grid;
+-  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+-  align-items: start;
+-  gap: 24px;
+-}
+-
+-.migration-stack {
+-  display: grid;
+-  gap: 20px;
+-}
+-.migration-content {
+-  margin-top: var(--s5);
+-}
+-
+-.migration-panel {
+-  padding: 24px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-  box-shadow: var(--shadow-sm);
+-}
+-
+-.migration-panel-header {
+-  margin-bottom: 20px;
+-  display: flex;
+-  align-items: flex-start;
+-  justify-content: space-between;
+-  gap: 16px;
+-}
+-
+-.migration-panel-header h2 {
+-  font-size: 20px;
+-}
+-.migration-panel-header p {
+-  margin-top: 5px;
+-  color: var(--muted);
+-  font-size: 14px;
+-}
+-
+-.migration-route {
+-  padding: 20px 24px;
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+-  align-items: center;
+-  gap: 18px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-
+-.migration-route-node {
+-  min-width: 0;
+-}
+-.migration-route-node span {
+-  display: block;
+-  color: var(--muted);
+-  font-size: 12px;
+-  letter-spacing: 0.02em;
+-}
+-.migration-route-node strong {
+-  margin-top: 3px;
+-  display: block;
+-  overflow-wrap: anywhere;
+-}
+-.migration-route .icon {
+-  color: var(--muted);
+-}
+-.migration-route .migration-route-node:last-child {
+-  text-align: right;
+-}
+-
+-.migration-facts,
+-.migration-checklist,
+-.migration-diagnostics,
+-.migration-side-list {
+-  margin: 0;
+-  padding: 0;
+-  list-style: none;
+-}
+-
+-.migration-facts {
+-  display: grid;
+-  gap: 16px;
+-}
+-.migration-facts li {
+-  display: grid;
+-  grid-template-columns: 24px minmax(0, 1fr);
+-  gap: 12px;
+-}
+-.migration-facts .icon {
+-  width: 20px;
+-  height: 20px;
+-  margin-top: 1px;
+-  color: var(--accent);
+-}
+-.migration-facts strong {
+-  display: block;
+-  font-size: 14px;
+-}
+-.migration-facts span {
+-  display: block;
+-  margin-top: 3px;
+-  color: var(--muted);
+-  font-size: 13px;
+-}
+-
+-.migration-diagnostics li,
+-.migration-review-row {
+-  min-height: 62px;
+-  padding: 12px 0;
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) auto;
+-  align-items: center;
+-  gap: 16px;
+-  border-top: 1px solid var(--border);
+-}
+-
+-.migration-diagnostics li:first-child,
+-.migration-review-row:first-child {
+-  border-top: 0;
+-  padding-top: 0;
+-}
+-.migration-diagnostics li:last-child,
+-.migration-review-row:last-child {
+-  padding-bottom: 0;
+-}
+-.migration-diagnostics strong,
+-.migration-review-row strong {
+-  display: block;
+-  font-size: 14px;
+-}
+-.migration-diagnostics small,
+-.migration-review-row small {
+-  display: block;
+-  margin-top: 2px;
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-
+-.migration-status {
+-  min-height: 30px;
+-  padding: 4px 10px;
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 6px;
+-  border-radius: 999px;
+-  color: var(--fg-soft);
+-  background: var(--surface-interactive);
+-  font-size: 12px;
+-  font-weight: 600;
+-  white-space: nowrap;
+-}
+-
+-.migration-status .icon {
+-  width: 16px;
+-  height: 16px;
+-}
+-.migration-status.is-ready {
+-  color: var(--accent);
+-  background: var(--accent-soft);
+-}
+-.migration-status.is-warning {
+-  color: var(--warning);
+-  background: var(--warning-soft);
+-}
+-.migration-status.is-danger {
+-  color: var(--danger);
+-  background: var(--danger-soft);
+-}
+-
+-.migration-side {
+-  position: sticky;
+-  top: 24px;
+-  display: grid;
+-  gap: 16px;
+-}
+-
+-.migration-side-card {
+-  padding: 20px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-
+-.migration-side-card h2 {
+-  font-size: 16px;
+-}
+-.migration-side-card > p {
+-  margin-top: 8px;
+-  color: var(--muted);
+-  font-size: 13px;
+-}
+-.migration-side-list {
+-  margin-top: 14px;
+-  display: grid;
+-  gap: 12px;
+-}
+-.migration-side-list li {
+-  display: grid;
+-  grid-template-columns: 20px minmax(0, 1fr);
+-  gap: 10px;
+-  color: var(--fg-soft);
+-  font-size: 13px;
+-}
+-.migration-side-list .icon {
+-  width: 18px;
+-  height: 18px;
+-  color: var(--accent);
+-}
+-
+-.migration-actions {
+-  margin-top: 24px;
+-  display: flex;
+-  align-items: center;
+-  justify-content: flex-end;
+-  flex-wrap: wrap;
+-  gap: 12px;
+-}
+-
+-.migration-actions.is-split {
+-  justify-content: space-between;
+-}
+-.migration-actions-note {
+-  max-width: 42ch;
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-.migration-actions a[aria-disabled="true"] {
+-  color: var(--disabled-fg);
+-  background: var(--disabled-bg);
+-  border-color: var(--border);
+-  cursor: not-allowed;
+-}
+-
+-.migration-inline-state {
+-  margin-top: 18px;
+-}
+-
+-.migration-conflict-group + .migration-conflict-group {
+-  border-top: 1px solid var(--border);
+-}
+-.migration-conflict-group {
+-  padding: 18px 0;
+-}
+-.migration-conflict-group:first-child {
+-  padding-top: 0;
+-}
+-.migration-conflict-group:last-child {
+-  padding-bottom: 0;
+-}
+-.migration-conflict-head {
+-  display: flex;
+-  justify-content: space-between;
+-  align-items: flex-start;
+-  gap: 16px;
+-}
+-.migration-conflict-head h3 {
+-  font-size: 15px;
+-}
+-.migration-conflict-head p {
+-  margin-top: 4px;
+-  color: var(--muted);
+-  font-size: 13px;
+-}
+-.migration-conflict-options {
+-  margin-top: 12px;
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 8px;
+-}
+-.migration-option {
+-  min-height: 44px;
+-  padding: 0 13px;
+-  border: 1px solid var(--border-strong);
+-  border-radius: var(--r-input);
+-  color: var(--fg-soft);
+-  background: var(--surface);
+-  font-size: 13px;
+-  font-weight: 600;
+-}
+-.migration-option:hover {
+-  color: var(--fg);
+-  background: var(--surface-interactive);
+-}
+-.migration-option.is-selected {
+-  color: var(--surface);
+-  background: var(--accent);
+-  border-color: var(--accent);
+-}
+-
+-.migration-confirm {
+-  margin-top: 20px;
+-  padding: 16px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-input);
+-  background: var(--surface-secondary);
+-}
+-
+-.migration-confirm .check-copy strong {
+-  display: block;
+-  font-size: 14px;
+-}
+-.migration-confirm .check-copy span {
+-  display: block;
+-  margin-top: 3px;
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-
+-.migration-process {
+-  padding: 34px 28px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-  text-align: center;
+-}
+-
+-.migration-process-icon {
+-  width: 56px;
+-  height: 56px;
+-  margin: 0 auto 18px;
+-  display: grid;
+-  place-items: center;
+-  border-radius: 50%;
+-  color: var(--accent);
+-  background: var(--accent-soft);
+-}
+-.migration-process-icon .icon {
+-  width: 26px;
+-  height: 26px;
+-}
+-.migration-process h2 {
+-  font-size: 22px;
+-}
+-.migration-process > p {
+-  max-width: 58ch;
+-  margin: 8px auto 0;
+-  color: var(--muted);
+-  font-size: 14px;
+-}
+-
+-.migration-process-track {
+-  max-width: 620px;
+-  margin: 26px auto 0;
+-  display: grid;
+-  grid-template-columns: repeat(4, minmax(0, 1fr));
+-  gap: 8px;
+-}
+-.migration-process-track span {
+-  height: 6px;
+-  border-radius: 999px;
+-  background: var(--border);
+-}
+-.migration-process-track .is-complete {
+-  background: var(--accent);
+-}
+-.migration-process-track .is-active {
+-  background: linear-gradient(
+-    90deg,
+-    var(--accent) 0 50%,
+-    var(--border) 50% 100%
+-  );
+-  background-size: 200% 100%;
+-  animation: migration-pulse 1.6s var(--ease) infinite alternate;
+-}
+-
+-.migration-current-step {
+-  margin-top: 16px;
+-  color: var(--fg-soft);
+-  font-size: 13px;
+-  font-weight: 600;
+-}
+-
+-.migration-result {
+-  padding: 30px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-.migration-result-mark {
+-  width: 52px;
+-  height: 52px;
+-  margin-bottom: 18px;
+-  display: grid;
+-  place-items: center;
+-  border-radius: 50%;
+-  color: var(--accent);
+-  background: var(--accent-soft);
+-}
+-.migration-result-mark.is-warning {
+-  color: var(--warning);
+-  background: var(--warning-soft);
+-}
+-.migration-result-mark.is-danger {
+-  color: var(--danger);
+-  background: var(--danger-soft);
+-}
+-.migration-result-mark .icon {
+-  width: 24px;
+-  height: 24px;
+-}
+-.migration-result h2 {
+-  margin-top: 12px;
+-  font-size: 24px;
+-}
+-.migration-result > p {
+-  margin-top: 8px;
+-  max-width: 60ch;
+-  color: var(--muted);
+-}
+-.migration-result .migration-review {
+-  margin-top: 22px;
+-}
+-
+-@keyframes migration-pulse {
+-  to {
+-    background-position: -100% 0;
+-  }
+-}
+-
+-@media (max-width: 899px) {
+-  .migration-page {
+-    padding-inline: 24px;
+-  }
+-  .migration-layout {
+-    grid-template-columns: 1fr;
+-  }
+-  .migration-side {
+-    position: static;
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
+-  }
+-}
+-
+-@media (max-width: 767px) {
+-  .migration-page {
+-    padding: 24px 16px 112px;
+-  }
+-  .migration-toolbar {
+-    margin-bottom: 20px;
+-  }
+-  .migration-progress-label {
+-    text-align: right;
+-  }
+-  .migration-header {
+-    grid-template-columns: 1fr;
+-    gap: 14px;
+-  }
+-  .migration-header h1 {
+-    max-width: none;
+-    font-size: 26px;
+-  }
+-  .migration-stepper {
+-    grid-template-columns: 1fr;
+-  }
+-  .migration-stepper li {
+-    min-height: 48px;
+-    padding: 8px 10px;
+-  }
+-  .migration-stepper li + li {
+-    border-left: 0;
+-    border-top: 1px solid var(--border);
+-  }
+-  .migration-stepper li:not(.is-current) {
+-    display: none;
+-  }
+-  .migration-panel,
+-  .migration-result,
+-  .migration-process {
+-    padding: 20px;
+-  }
+-  .migration-route {
+-    padding: 16px;
+-    gap: 10px;
+-  }
+-  .migration-route .icon {
+-    width: 18px;
+-    height: 18px;
+-  }
+-  .migration-diagnostics li,
+-  .migration-review-row {
+-    grid-template-columns: 1fr;
+-    gap: 8px;
+-  }
+-  .migration-status {
+-    justify-self: start;
+-    white-space: normal;
+-  }
+-  .migration-side {
+-    grid-template-columns: 1fr;
+-  }
+-  .migration-actions,
+-  .migration-actions.is-split {
+-    align-items: stretch;
+-    flex-direction: column-reverse;
+-  }
+-  .migration-actions .btn {
+-    width: 100%;
+-  }
+-  .migration-actions-note {
+-    max-width: none;
+-  }
+-  .migration-conflict-head {
+-    display: grid;
+-  }
+-  .migration-process-track {
+-    gap: 5px;
+-  }
+-}
+-
+-@media (max-width: 390px) {
+-  .migration-route {
+-    grid-template-columns: 1fr;
+-  }
+-  .migration-route .icon {
+-    transform: rotate(90deg);
+-  }
+-  .migration-route .migration-route-node:last-child {
+-    text-align: left;
+-  }
+-}
+-
+-@media (prefers-reduced-motion: reduce) {
+-  .migration-process-track .is-active {
+-    animation: none;
+-    background-position: -50% 0;
+-  }
+-}
+diff --git a/apps/frontend/src/shared/ui/RouteAnnouncer.tsx b/apps/frontend/src/shared/ui/RouteAnnouncer.tsx
+index dc32edf..c752549 100644
+--- a/apps/frontend/src/shared/ui/RouteAnnouncer.tsx
++++ b/apps/frontend/src/shared/ui/RouteAnnouncer.tsx
+@@ -17,7 +17,6 @@ const routeTitles: [RegExp, string][] = [
+   [/^\/clientes/, "Clientes"],
+   [/^\/servicos/, "Serviços"],
+   [/^\/configuracoes/, "Configurações"],
+-  [/^\/migracao/, "Migração de agenda"],
+   [/^\/termos-de-uso$/, "Termos de Uso"],
+   [/^\/politica-de-privacidade$/, "Política de Privacidade"],
+ ];
+diff --git a/apps/frontend/tests/goal016-a11y.test.tsx b/apps/frontend/tests/goal016-a11y.test.tsx
+index 989d38c..027efee 100644
+--- a/apps/frontend/tests/goal016-a11y.test.tsx
++++ b/apps/frontend/tests/goal016-a11y.test.tsx
+@@ -21,7 +21,7 @@
+ 
+ import { render, screen, waitFor, within } from "@testing-library/react";
+ import userEvent, { type UserEvent } from "@testing-library/user-event";
+-import { beforeEach, describe, expect, test, vi } from "vitest";
++import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+ 
+ import {
+   type Appointment,
+@@ -223,6 +223,10 @@ async function tabUntilFocused(
+ }
+ 
+ beforeEach(() => {
++  // AgendaBoard usa `new Date()` para o cursor inicial; as fixtures abaixo
++  // são todas ancoradas em ISO_TODAY, então o relógio precisa ficar preso
++  // nela — sem isso a suíte quebra sozinha assim que o dia real avança.
++  vi.setSystemTime(new Date(`${ISO_TODAY}T12:00:00.000Z`));
+   for (const spy of [
+     push,
+     replace,
+@@ -259,6 +263,10 @@ beforeEach(() => {
+   releaseHold.mockResolvedValue(holdFixture({ status: "RELEASED" }));
+ });
+ 
++afterEach(() => {
++  vi.useRealTimers();
++});
++
+ describe("grades da agenda (Dia, Semana e Mês)", () => {
+   test("grade do Dia: sem violação de acessibilidade e atendimento alcançável por link e por teclado", async () => {
+     listAppointments.mockResolvedValue([appointmentFixture()]);
+diff --git a/apps/frontend/tests/goal018-onboarding-reachability.test.tsx b/apps/frontend/tests/goal018-onboarding-reachability.test.tsx
+index a7c2c78..05893cb 100644
+--- a/apps/frontend/tests/goal018-onboarding-reachability.test.tsx
++++ b/apps/frontend/tests/goal018-onboarding-reachability.test.tsx
+@@ -356,6 +356,37 @@ describe("o encadeamento real de dados-do-negocio até validação", () => {
+     expect(push).toHaveBeenCalledWith("/onboarding/servico-nome");
+   });
+ 
++  test("agenda-atendly-metodo oferece as duas opções como escolha real, sem promessa de habilitação futura", async () => {
++    const user = userEvent.setup();
++    renderScreen(
++      "agenda-atendly-metodo",
++      stateFixture({ ...businessDone, ...calendarDone }),
++    );
++    expect(
++      screen.queryByText("A importação única será habilitada no fluxo de migração."),
++    ).not.toBeInTheDocument();
++
++    const scratch = await screen.findByRole("button", {
++      name: /Começar do zero/,
++    });
++    const imported = screen.getByRole("button", {
++      name: /Importar do Minha Agenda/,
++    });
++    expect(scratch.className).toContain("is-selected");
++    expect(imported.className).not.toContain("is-selected");
++
++    await user.click(imported);
++    expect(imported.className).toContain("is-selected");
++    expect(scratch.className).not.toContain("is-selected");
++    expect(
++      screen.getByText(/A importação acontece depois, em Configurações/),
++    ).toBeInTheDocument();
++
++    // Continua alcançando servico-nome independente da escolha (Goal020/WU-09).
++    await user.click(screen.getByRole("button", { name: "Continuar" }));
++    expect(push).toHaveBeenCalledWith("/onboarding/servico-nome");
++  });
++
+   test("servico-nome salva e avança para servico-duracao", async () => {
+     const user = userEvent.setup();
+     renderScreen(
+diff --git a/apps/scheduling-service/src/modules/internal-api/routes.ts b/apps/scheduling-service/src/modules/internal-api/routes.ts
+index 16f4f0d..55a4e30 100644
+--- a/apps/scheduling-service/src/modules/internal-api/routes.ts
++++ b/apps/scheduling-service/src/modules/internal-api/routes.ts
+@@ -59,8 +59,11 @@ import {
+   type ImportCompletionResult,
+   ImportCompletionService,
+   ImportExecutionService,
++  type ImportHistoryEntry,
++  type ImportLiveSession,
+   type ImportPreviewResult,
+   ImportPreviewService,
++  type ImportRight,
+ } from "../migrations/index.js";
+ import { AtendlyServiceService } from "../services/atendly-service-service.js";
+ 
+@@ -352,6 +355,9 @@ const executeImportBodySchema = z.object({
+ const completeImportBodySchema = z.object({
+   acceptPending: z.boolean().optional(),
+ });
++const setImportCategorySelectionBodySchema = z.object({
++  selected: z.boolean(),
++});
+ // `MERGE_WITH_EXISTING`/`KEEP_EXISTING` apontam para um registro ja
+ // cadastrado: sem alvo explicito a decisao nao tem o que preservar.
+ const importDecisionBodySchema = z
+@@ -1208,6 +1214,27 @@ export async function registerManagementRoutes(
+   // silenciosamente ignorado pelo `zod` (`z.object` descarta chave
+   // desconhecida por padrao).
+ 
++  // Leitura pura do estado da importação do negócio: direito, sessão viva
++  // (quando houver) e histórico (quando concluída). Nunca abre sessão, muda
++  // status, incrementa previewVersion ou consome o direito — é por isso que
++  // ela não passa por `requireIntegration`: negócio sem conexão, sem sessão
++  // e sem histórico é estado válido e vazio, não erro.
++  app.get("/internal/calendar/imports", internalOnly, async (request) => {
++    const context = currentInternalContext(request);
++    requireHumanCaller(context);
++    const completion = new ImportCompletionService(prisma);
++    const [right, session, history] = await Promise.all([
++      completion.getImportRight(context.tenantId),
++      completion.getLiveSession(context.tenantId),
++      completion.getHistory(context.tenantId),
++    ]);
++    return data(request, {
++      right: importRightDto(right),
++      session: session ? importLiveSessionDto(session) : null,
++      history: history ? importHistoryDto(history) : null,
++    });
++  });
++
+   app.post("/internal/calendar/imports", internalOnly, async (request) => {
+     const context = currentInternalContext(request);
+     requireHumanCaller(context);
+@@ -1306,6 +1333,42 @@ export async function registerManagementRoutes(
+     },
+   );
+ 
++  // Escolher o que importar (Goal020, WU-02): marca/desmarca uma categoria
++  // inteira da sessao. So muda `selected` — nunca invalida o preview nem
++  // mexe em `previewVersion`, porque a escolha de categoria e ortogonal a
++  // reanalise da origem (`ImportPreviewService.analyze` preserva o valor
++  // vigente na reanalise, ver import-preview-service.ts).
++  app.post(
++    "/internal/calendar/imports/:sessionId/categories/:category/selection",
++    internalOnly,
++    async (request) => {
++      const context = currentInternalContext(request);
++      requireHumanCaller(context);
++      const key = idempotencyKey(request);
++      const { sessionId, category } = parse(
++        importCategoryParamsSchema,
++        request.params,
++      );
++      const body = parse(setImportCategorySelectionBodySchema, request.body);
++      const result = await withImportIdempotency(
++        prisma,
++        {
++          tenantId: context.tenantId,
++          key,
++          operation: "import.category.selection",
++          request: { sessionId, category, ...body },
++        },
++        () =>
++          new ImportPreviewService(prisma).setCategorySelection(
++            { tenantId: context.tenantId, sessionId },
++            category,
++            body.selected,
++          ),
++      );
++      return data(request, result);
++    },
++  );
++
+   app.post(
+     "/internal/calendar/imports/:sessionId/items/:itemId/decision",
+     internalOnly,
+@@ -2018,6 +2081,33 @@ function importCompletionDto(
+   };
+ }
+ 
++function importRightDto(right: ImportRight): Record<string, unknown> {
++  return {
++    ...right,
++    completedAt: right.completedAt?.toISOString() ?? null,
++  };
++}
++
++function importLiveSessionDto(
++  session: ImportLiveSession,
++): Record<string, unknown> {
++  return {
++    ...session,
++    createdAt: session.createdAt.toISOString(),
++    startedAt: session.startedAt?.toISOString() ?? null,
++    finishedAt: session.finishedAt?.toISOString() ?? null,
++    previewGeneratedAt: session.previewGeneratedAt?.toISOString() ?? null,
++  };
++}
++
++function importHistoryDto(entry: ImportHistoryEntry): Record<string, unknown> {
++  return {
++    ...importCompletionDto(entry),
++    startedAt: entry.startedAt?.toISOString() ?? null,
++    finishedAt: entry.finishedAt?.toISOString() ?? null,
++  };
++}
++
+ type ImportItemUpdateData = Parameters<
+   PrismaClient["importItem"]["update"]
+ >[0]["data"];
+diff --git a/apps/scheduling-service/src/modules/migrations/import-completion-service.ts b/apps/scheduling-service/src/modules/migrations/import-completion-service.ts
+index 456799e..1233731 100644
+--- a/apps/scheduling-service/src/modules/migrations/import-completion-service.ts
++++ b/apps/scheduling-service/src/modules/migrations/import-completion-service.ts
+@@ -148,6 +148,28 @@ export interface ImportRight {
+   completedAt: Date | null;
+ }
+ 
++export interface ImportLiveSessionCategoryResult extends ImportCompletionCounts {
++  category: ImportCategory;
++  /** "Importar tudo" nasce selecionada; "Escolher o que importar" desmarca. */
++  selected: boolean;
++}
++
++/** Estado da sessão viva, para a tela de importação ler ao abrir. */
++export interface ImportLiveSession {
++  sessionId: string;
++  status: ImportSessionStatus;
++  previewVersion: number;
++  provider: IntegrationProvider;
++  sourceAccountId: string;
++  sourceAccountLabel: string | null;
++  createdAt: Date;
++  startedAt: Date | null;
++  finishedAt: Date | null;
++  previewGeneratedAt: Date | null;
++  counts: ImportCompletionCounts;
++  categories: ImportLiveSessionCategoryResult[];
++}
++
+ export interface StartImportSessionInput {
+   tenantId: string;
+   userId: string;
+@@ -276,6 +298,61 @@ export class ImportCompletionService {
+     };
+   }
+ 
++  /**
++   * A sessão viva do negócio, se houver — mesmo critério de `startSession`
++   * (`LIVE_STATUSES`). `null` quando não há sessão em curso, o que é resposta
++   * válida (nunca abriu, ou já concluiu). As contagens vêm de `ImportItem`,
++   * não dos contadores cacheados na sessão, pelo mesmo motivo de
++   * {@link describe}: o item é a linha que existe.
++   */
++  async getLiveSession(tenantId: string): Promise<ImportLiveSession | null> {
++    const session = await this.prisma.importSession.findFirst({
++      where: { tenantId, status: { in: LIVE_STATUSES } },
++      orderBy: { createdAt: "asc" },
++    });
++    if (!session) return null;
++
++    const [items, categories] = await Promise.all([
++      this.prisma.importItem.findMany({
++        where: { tenantId, sessionId: session.id },
++      }),
++      this.prisma.importSessionCategory.findMany({
++        where: { tenantId, sessionId: session.id },
++      }),
++    ]);
++    const selectedByCategory = new Map(
++      categories.map((entry) => [entry.category, entry.selected]),
++    );
++    const seen = new Set<ImportCategory>([
++      ...categories.map((entry) => entry.category),
++      ...items.map((item) => item.category),
++    ]);
++    const perCategory: ImportLiveSessionCategoryResult[] = [];
++    for (const category of CATEGORY_ORDER) {
++      if (!seen.has(category)) continue;
++      perCategory.push({
++        category,
++        selected: selectedByCategory.get(category) ?? true,
++        ...tally(items.filter((item) => item.category === category)),
++      });
++    }
++
++    return {
++      sessionId: session.id,
++      status: session.status,
++      previewVersion: session.previewVersion,
++      provider: session.provider,
++      sourceAccountId: session.sourceAccountId,
++      sourceAccountLabel: session.sourceAccountLabel,
++      createdAt: session.createdAt,
++      startedAt: session.startedAt,
++      finishedAt: session.finishedAt,
++      previewGeneratedAt: session.previewGeneratedAt,
++      counts: tally(items),
++      categories: perCategory,
++    };
++  }
++
+   /** Recusa quando o negócio já concluiu a importação. */
+   async assertImportAvailable(tenantId: string): Promise<void> {
+     const right = await this.getImportRight(tenantId);
+diff --git a/apps/scheduling-service/src/modules/migrations/import-preview-service.ts b/apps/scheduling-service/src/modules/migrations/import-preview-service.ts
+index 3b55fe9..0c0f5ef 100644
+--- a/apps/scheduling-service/src/modules/migrations/import-preview-service.ts
++++ b/apps/scheduling-service/src/modules/migrations/import-preview-service.ts
+@@ -92,6 +92,22 @@ export const CATEGORY_ENTITY_TYPE: Record<ImportCategory, ExternalEntityType> =
+ /** Sessao ainda analisavel: nao comecou execucao nem chegou a um terminal. */
+ const ANALYZABLE_STATUSES = new Set(["DRAFT", "ANALYZING", "READY", "PARTIAL"]);
+ 
++/** A sessao ja terminou (Goal020, WU-02): nao ha mais o que escolher. */
++export const IMPORT_SESSION_NOT_SELECTABLE = "IMPORT_SESSION_NOT_SELECTABLE";
++/** A categoria pedida nunca foi descoberta por uma analise desta sessao. */
++export const IMPORT_SESSION_CATEGORY_NOT_FOUND =
++  "IMPORT_SESSION_CATEGORY_NOT_FOUND";
++
++/**
++ * `COMPLETED` ja importou, `FAILED` e `SUPERSEDED` nao seguem para execucao
++ * nenhuma: escolher categoria depois disso e decisao sem efeito. `EXECUTING`
++ * fica de fora de proposito, no mesmo espirito do WU-06 — a escolha so vale
++ * na proxima passada, e recusa-la no meio de uma corrente ja em andamento
++ * nao protege nada que a leitura fresca de categorias no inicio de cada
++ * `execute()` nao ja resolva.
++ */
++const TERMINAL_SESSION_STATUSES = new Set(["COMPLETED", "FAILED", "SUPERSEDED"]);
++
+ /** Item ja resolvido por uma execucao anterior: reanalise nunca reverte. */
+ const RESOLVED_ITEM_STATUSES = new Set<ImportItemStatus>([
+   "IMPORTED",
+@@ -472,6 +488,67 @@ export class ImportPreviewService {
+       );
+     }
+   }
++
++  /**
++   * Escreve `selected` por sessao e categoria (Goal020, WU-02): o unico
++   * outro escritor deste campo e o upsert do preview acima, que so cria com
++   * o default do schema e nunca toca `selected` numa reanalise — a escolha
++   * do negocio sobrevive a qualquer numero de reanalises. Esta escrita, por
++   * simetria, nunca toca `previewVersion` nem os itens da categoria: quem
++   * honra a escolha e o motor de execucao, lendo a mesma tabela no inicio de
++   * cada passada.
++   */
++  async setCategorySelection(
++    context: { tenantId: string; sessionId: string },
++    category: ImportCategory,
++    selected: boolean,
++  ): Promise<{ sessionId: string; category: ImportCategory; selected: boolean }> {
++    const session = await this.prisma.importSession.findUnique({
++      where: {
++        tenantId_id: { tenantId: context.tenantId, id: context.sessionId },
++      },
++    });
++    if (!session) {
++      throw new AppError(
++        "IMPORT_SESSION_NOT_FOUND",
++        "Import session was not found.",
++        404,
++      );
++    }
++    if (TERMINAL_SESSION_STATUSES.has(session.status)) {
++      throw new AppError(
++        IMPORT_SESSION_NOT_SELECTABLE,
++        `Import session cannot have its categories chosen while in status ${session.status}.`,
++        409,
++        { status: session.status },
++      );
++    }
++    const row = await this.prisma.importSessionCategory.findUnique({
++      where: {
++        tenantId_sessionId_category: {
++          tenantId: context.tenantId,
++          sessionId: context.sessionId,
++          category,
++        },
++      },
++    });
++    if (!row) {
++      throw new AppError(
++        IMPORT_SESSION_CATEGORY_NOT_FOUND,
++        "This session has not discovered this category yet.",
++        404,
++      );
++    }
++    const updated = await this.prisma.importSessionCategory.update({
++      where: { tenantId_id: { tenantId: context.tenantId, id: row.id } },
++      data: { selected },
++    });
++    return {
++      sessionId: context.sessionId,
++      category: updated.category,
++      selected: updated.selected,
++    };
++  }
+ }
+ 
+ function collectCategorySnapshots(
+diff --git a/apps/scheduling-service/src/modules/migrations/index.ts b/apps/scheduling-service/src/modules/migrations/index.ts
+index 225690d..d1c842a 100644
+--- a/apps/scheduling-service/src/modules/migrations/index.ts
++++ b/apps/scheduling-service/src/modules/migrations/index.ts
+@@ -10,6 +10,8 @@ export {
+   type ImportCompletionResult,
+   ImportCompletionService,
+   type ImportHistoryEntry,
++  type ImportLiveSession,
++  type ImportLiveSessionCategoryResult,
+   type ImportPendingAcceptance,
+   type ImportRight,
+   type StartImportSessionInput,
+@@ -41,6 +43,8 @@ export {
+ } from "./import-lease.js";
+ export {
+   CATEGORY_ENTITY_TYPE,
++  IMPORT_SESSION_CATEGORY_NOT_FOUND,
++  IMPORT_SESSION_NOT_SELECTABLE,
+   type ImportMatchClass,
+   type ImportPreviewCategoryResult,
+   type ImportPreviewItemResult,
+diff --git a/apps/scheduling-service/tests/unit/import-execution-service.test.ts b/apps/scheduling-service/tests/unit/import-execution-service.test.ts
+index c6b306a..fcce1b4 100644
+--- a/apps/scheduling-service/tests/unit/import-execution-service.test.ts
++++ b/apps/scheduling-service/tests/unit/import-execution-service.test.ts
+@@ -328,6 +328,44 @@ describe("ImportExecutionService: processamento por item com checkpoint", () =>
+   });
+ });
+ 
++describe("ImportExecutionService: categoria desmarcada em 'Escolher o que importar' (Goal020, WU-02)", () => {
++  it("pula os itens da categoria desmarcada com motivo, e importa as demais normalmente", async () => {
++    const { database, preview, execution } = setup();
++    const snapshot = buildSnapshot({
++      services: category("SERVICE", [
++        { externalId: "900", raw: sourceService() },
++      ]),
++      customers: category("CUSTOMER", [
++        { externalId: "500", raw: sourceCustomer() },
++      ]),
++    });
++    const { sessionId, reader } = await analyzed(database, preview, snapshot);
++
++    await preview.setCategorySelection(
++      { tenantId, sessionId },
++      "CUSTOMER",
++      false,
++    );
++
++    const result = await execution.execute(
++      { tenantId, sessionId, userId: "user-1" },
++      reader,
++      snapshotInput,
++      { previewVersion: 1 },
++    );
++
++    const services = itemsByCategory(database, "SERVICE");
++    const customers = itemsByCategory(database, "CUSTOMER");
++    expect(services[0]?.status).toBe("IMPORTED");
++    expect(customers[0]?.status).toBe("SKIPPED");
++    expect(customers[0]?.reasonCode).toBe("CATEGORY_NOT_SELECTED");
++    // Motivo, nunca silêncio: nenhum cliente foi criado, mas o item deixa
++    // rastro do porquê.
++    expect(database.tables.customer.rows).toHaveLength(0);
++    expect(result.counts.skipped).toBe(1);
++  });
++});
++
+ describe("ImportExecutionService: falha parcial e contagens reais", () => {
+   it("um registro fora do contrato marca só aquele item e a sessão fica parcial", async () => {
+     const { database, preview, execution } = setup();
+diff --git a/apps/scheduling-service/tests/unit/import-routes.test.ts b/apps/scheduling-service/tests/unit/import-routes.test.ts
+index 9653079..2cc5da4 100644
+--- a/apps/scheduling-service/tests/unit/import-routes.test.ts
++++ b/apps/scheduling-service/tests/unit/import-routes.test.ts
+@@ -151,6 +151,22 @@ function seedItem(
+   });
+ }
+ 
++function seedCategory(
++  db: Database,
++  sessionId: string,
++  overrides: Partial<Record<string, unknown>> = {},
++) {
++  return db.client.importSessionCategory.create({
++    data: {
++      tenantId,
++      sessionId,
++      category: "SERVICE",
++      selected: true,
++      ...overrides,
++    },
++  });
++}
++
+ describe("import routes (Goal010, WU-08)", () => {
+   let db: Database;
+   let app: FastifyInstance;
+@@ -164,6 +180,156 @@ describe("import routes (Goal010, WU-08)", () => {
+     await app.close();
+   });
+ 
++  describe("GET /internal/calendar/imports (estado)", () => {
++    it("is a valid, empty response for a business without connection, session or history", async () => {
++      const response = await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: headers(),
++      });
++      expect(response.statusCode).toBe(200);
++      expect(response.json().data).toEqual({
++        right: { available: true, sessionId: null, completedAt: null },
++        session: null,
++        history: null,
++      });
++    });
++
++    it("reflects the live session's counts, selected flags and source identity", async () => {
++      const session = await seedSession(db, {
++        sourceAccountId: "external-account-9",
++        sourceAccountLabel: "Salao da Ana",
++        status: "PARTIAL",
++        previewVersion: 2,
++      });
++      await seedCategory(db, session.id, { category: "SERVICE", selected: true });
++      await seedCategory(db, session.id, {
++        category: "CUSTOMER",
++        selected: false,
++      });
++      await seedItem(db, session.id, { externalId: "s-1", status: "IMPORTED" });
++      await seedItem(db, session.id, {
++        category: "CUSTOMER",
++        externalId: "c-1",
++        status: "PENDING",
++      });
++
++      const response = await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: headers(),
++      });
++      expect(response.statusCode).toBe(200);
++      const body = response.json().data;
++      expect(body.right).toEqual({
++        available: true,
++        sessionId: null,
++        completedAt: null,
++      });
++      expect(body.history).toBeNull();
++      expect(body.session).toMatchObject({
++        sessionId: session.id,
++        status: "PARTIAL",
++        previewVersion: 2,
++        sourceAccountId: "external-account-9",
++        sourceAccountLabel: "Salao da Ana",
++      });
++      expect(body.session.counts).toEqual({
++        pending: 1,
++        imported: 1,
++        skipped: 0,
++        failed: 0,
++        needsReview: 0,
++      });
++      const serviceCategory = body.session.categories.find(
++        (entry: { category: string }) => entry.category === "SERVICE",
++      );
++      expect(serviceCategory).toMatchObject({ selected: true, imported: 1 });
++      const customerCategory = body.session.categories.find(
++        (entry: { category: string }) => entry.category === "CUSTOMER",
++      );
++      expect(customerCategory).toMatchObject({ selected: false, pending: 1 });
++    });
++
++    it("reflects the history and no live session once completed, never the stored credential", async () => {
++      seedConnection(db);
++      const session = await seedSession(db, { status: "READY" });
++      await seedItem(db, session.id, { status: "IMPORTED" });
++      await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/complete`,
++        headers: { ...headers(), "idempotency-key": "complete-state-1" },
++        payload: {},
++      });
++
++      const response = await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: headers(),
++      });
++      expect(response.statusCode).toBe(200);
++      const body = response.json().data;
++      expect(body.session).toBeNull();
++      expect(body.right).toMatchObject({
++        available: false,
++        sessionId: session.id,
++      });
++      expect(body.history).toMatchObject({
++        sessionId: session.id,
++        status: "COMPLETED",
++      });
++      const raw = JSON.stringify(response.json());
++      expect(raw).not.toContain(rawCredentials.basicAuth);
++      expect(raw).not.toContain(rawCredentials.password);
++    });
++
++    it("does not open a session, change status or bump previewVersion by being called", async () => {
++      const session = await seedSession(db, {
++        status: "READY",
++        previewVersion: 2,
++      });
++      await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: headers(),
++      });
++      const row = db.tables.importSession.rows.find(
++        (candidate) => candidate.id === session.id,
++      );
++      expect(row?.status).toBe("READY");
++      expect(row?.previewVersion).toBe(2);
++      expect(db.tables.importSession.rows).toHaveLength(1);
++    });
++
++    it("rejects the AI caller", async () => {
++      const response = await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: headers({ token: aiToken }),
++      });
++      expect(response.statusCode).toBe(403);
++      expect(response.json().error.code).toBe("AI_CALLER_NOT_ALLOWED");
++    });
++  });
++
++  describe("tenant isolation of the imports state", () => {
++    it("does not see another tenant's live session or history", async () => {
++      const session = await seedSession(db);
++      await seedItem(db, session.id, { status: "IMPORTED" });
++      const response = await app.inject({
++        method: "GET",
++        url: "/internal/calendar/imports",
++        headers: { ...headers(), "x-tenant-id": otherTenantId },
++      });
++      expect(response.statusCode).toBe(200);
++      expect(response.json().data).toEqual({
++        right: { available: true, sessionId: null, completedAt: null },
++        session: null,
++        history: null,
++      });
++    });
++  });
++
+   describe("POST /internal/calendar/imports (registrar origem)", () => {
+     it("requires Idempotency-Key", async () => {
+       seedConnection(db);
+@@ -314,6 +480,126 @@ describe("import routes (Goal010, WU-08)", () => {
+     });
+   });
+ 
++  describe("POST /internal/calendar/imports/:sessionId/categories/:category/selection", () => {
++    it("requires Idempotency-Key", async () => {
++      const session = await seedSession(db);
++      await seedCategory(db, session.id, { category: "SERVICE" });
++      const response = await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++        headers: headers(),
++        payload: { selected: false },
++      });
++      expect(response.statusCode).toBe(400);
++      expect(response.json().error.code).toBe("IDEMPOTENCY_KEY_REQUIRED");
++    });
++
++    it("404s for an unknown session", async () => {
++      const response = await app.inject({
++        method: "POST",
++        url: "/internal/calendar/imports/missing/categories/SERVICE/selection",
++        headers: { ...headers(), "idempotency-key": "selection-missing-session" },
++        payload: { selected: false },
++      });
++      expect(response.statusCode).toBe(404);
++      expect(response.json().error.code).toBe("IMPORT_SESSION_NOT_FOUND");
++    });
++
++    it("404s for a category this session never discovered", async () => {
++      const session = await seedSession(db);
++      const response = await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++        headers: { ...headers(), "idempotency-key": "selection-missing-category" },
++        payload: { selected: false },
++      });
++      expect(response.statusCode).toBe(404);
++      expect(response.json().error.code).toBe("IMPORT_SESSION_CATEGORY_NOT_FOUND");
++    });
++
++    it("deselects a category without touching previewVersion or the items", async () => {
++      const session = await seedSession(db, { previewVersion: 5 });
++      await seedCategory(db, session.id, { category: "SERVICE", selected: true });
++      const item = await seedItem(db, session.id, {
++        category: "SERVICE",
++        status: "PENDING",
++      });
++
++      const response = await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++        headers: { ...headers(), "idempotency-key": "selection-1" },
++        payload: { selected: false },
++      });
++
++      expect(response.statusCode).toBe(200);
++      const body = response.json().data;
++      expect(body).toEqual({
++        sessionId: session.id,
++        category: "SERVICE",
++        selected: false,
++      });
++      const row = db.tables.importSessionCategory.rows.find(
++        (candidate) => candidate.sessionId === session.id,
++      );
++      expect(row?.selected).toBe(false);
++      const refreshedSession = db.tables.importSession.rows.find(
++        (candidate) => candidate.id === session.id,
++      );
++      expect(refreshedSession?.previewVersion).toBe(5);
++      const refreshedItem = db.tables.importItem.rows.find(
++        (candidate) => candidate.id === item.id,
++      );
++      expect(refreshedItem?.status).toBe("PENDING");
++    });
++
++    it("reselects a category back to true", async () => {
++      const session = await seedSession(db);
++      await seedCategory(db, session.id, { category: "SERVICE", selected: false });
++      const response = await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++        headers: { ...headers(), "idempotency-key": "selection-2" },
++        payload: { selected: true },
++      });
++      expect(response.statusCode).toBe(200);
++      expect(response.json().data.selected).toBe(true);
++    });
++
++    it.each(["COMPLETED", "FAILED", "SUPERSEDED"] as const)(
++      "refuses to choose categories once the session is %s",
++      async (status) => {
++        const session = await seedSession(db, { status });
++        await seedCategory(db, session.id, { category: "SERVICE" });
++        const response = await app.inject({
++          method: "POST",
++          url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++          headers: { ...headers(), "idempotency-key": `selection-terminal-${status}` },
++          payload: { selected: false },
++        });
++        expect(response.statusCode).toBe(409);
++        expect(response.json().error.code).toBe("IMPORT_SESSION_NOT_SELECTABLE");
++      },
++    );
++
++    it("does not choose another tenant's category", async () => {
++      const session = await seedSession(db);
++      await seedCategory(db, session.id, { category: "SERVICE" });
++      const response = await app.inject({
++        method: "POST",
++        url: `/internal/calendar/imports/${session.id}/categories/SERVICE/selection`,
++        headers: {
++          ...headers(),
++          "x-tenant-id": otherTenantId,
++          "idempotency-key": "selection-cross-tenant",
++        },
++        payload: { selected: false },
++      });
++      expect(response.statusCode).toBe(404);
++      expect(response.json().error.code).toBe("IMPORT_SESSION_NOT_FOUND");
++    });
++  });
++
+   describe("POST /internal/calendar/imports/:sessionId/items/:itemId/decision", () => {
+     it("requires Idempotency-Key", async () => {
+       const session = await seedSession(db);
+diff --git a/docs/migration/CURRENT_STATE.md b/docs/migration/CURRENT_STATE.md
+index d6a3ff7..fe64f32 100644
+--- a/docs/migration/CURRENT_STATE.md
++++ b/docs/migration/CURRENT_STATE.md
+@@ -1677,3 +1677,52 @@ abaixo. Há **três migrations** na IA e **uma** no BFF, todas aditivas e sem ba
+   do teste exigem sessão. Elas foram verificadas em jsdom — estrutura, papéis e axe —, não em
+   largura, contraste ou foco reais. Fidelidade visual à referência aprovada continua sendo
+   conferência humana.
++
++## Delta em execução — Goal020, 2026-09-15 (rodada 1, ainda sem review)
++
++A fotografia acima permanece como registro. Isto é observação de código desta execução sobre a
++base `cf4cea9`, não fechamento revisado: reabrir a leitura se o review de 020 divergir. O FATO de
++"Frontend, referência visual e contratos" que descreve a agenda/importação como não redesenhada e
++o residual do G-19/G-10 na fotografia de GAP_ANALYSIS estão parcialmente superados pelos fatos
++abaixo.
++
++- **FATO atual:** `GET /v1/calendar/imports` (BFF) e `GET /internal/calendar/imports`
++  (Scheduling) leem o estado da importação do negócio sem efeito — direito (`right`), sessão viva
++  (`session`, `null` se não houver) e histórico (`history`, `null` até a conclusão) — e nunca abrem
++  sessão, mudam status nem consomem o direito. `ImportCompletionService.getLiveSession` monta a
++  sessão viva a partir de `ImportItem`/`ImportSessionCategory` (mesma fonte de `describe`, não os
++  contadores cacheados na sessão), com `selected` por categoria e contagem por categoria.
++- **FATO atual:** `POST /v1/calendar/imports/:sessionId/categories/:category/selection` (BFF) e o
++  equivalente interno marcam/desmarcam uma categoria inteira da sessão (`selected`) sem tocar
++  `previewVersion` nem os itens; recusam com `IMPORT_SESSION_NOT_SELECTABLE` (409) em sessão
++  terminal (`COMPLETED`/`FAILED`/`SUPERSEDED`) e com `IMPORT_SESSION_CATEGORY_NOT_FOUND` (404)
++  quando a categoria nunca foi descoberta por uma análise da sessão; a escrita passa pela mesma
++  `withImportIdempotency` das demais rotas de importação, exigindo `Idempotency-Key`.
++- **FATO atual:** a experiência que o G-19 registrava como ausente existe. `/importacao`
++  (`features/imports/ImportsScreen`) lê o estado acima e decide a tela sem tentativa própria de
++  abrir sessão: conexão da origem (`ConnectSourceScreen`) quando não há sessão nem histórico,
++  retomar a sessão viva (`ImportPreviewScreen` antes da primeira execução, `ImportRunScreen`
++  depois) quando há sessão, ou só o histórico (`ImportHistoryCard`) quando concluída — sem oferecer
++  nova importação depois da conclusão. `ImportConflictsScreen` cobre as cinco decisões por item.
++  `ImportSettingsSection` é o ponto de entrada equivalente dentro de Configurações → Agenda, e o
++  item "Importação" do menu Mais passou a apontar para `/importacao` (antes
++  `/migracao/para-atendly`). `features/migration/` (`MigrationScreen`, `ProductMigrationScreen`,
++  `types.ts`), as rotas `app/(platform)/migracao/[step]` e `migracao/layout.tsx` e
++  `shared/styles/atendly-migration.css` (628 linhas, substituído por `atendly-imports.css`) saíram
++  do repositório; `RouteAnnouncer` perdeu o título de `/migracao`, sem consumidor restante.
++- **FATO atual:** o onboarding oferece uma escolha real entre começar do zero e importar. No bloco
++  `schedule`, `draft.servicePopulation` (`SCRATCH`/`IMPORT`) substitui a nota estática anterior; a
++  importação em si não roda no onboarding — a opção só orienta por copy para Configurações →
++  Agenda depois —, e o onboarding continua exigindo cadastro de ao menos um serviço na hora,
++  independentemente da escolha.
++- **FATO atual:** `PUBLIC_API_V1.md` passou a datar a ausência de consumidor de frontend do
++  protocolo pré-Goal010 (`POST /v1/calendar/migrations/diagnose`, `POST /v1/calendar/migrations`,
++  `GET /v1/calendar/migrations/:id`) a partir do fechamento do Goal010 (2026-09-12); o único
++  consumidor de frontend que ainda apresentava diagnóstico/status/source-target da agenda externa
++  (`ProductMigrationScreen`) foi removido neste diff.
++- **LIMITE:** nada disso foi revisado. As nove suítes `goal020-*` novas no frontend (entrada por
++  estado, preview/seleção, conflitos, execução/conclusão, seção de Configurações, alcançabilidade,
++  invariante de shell, axe, schema) e as suítes de scheduling/BFF listadas no diff cobrem estrutura,
++  papéis, teclado e o contrato lido em `node`/jsdom — não largura, contraste, foco reais nem
++  execução contra a origem real do Minha Agenda. O gate de browser (`validate:ui`) continua
++  cobrindo só rotas públicas.
+diff --git a/docs/migration/GAP_ANALYSIS.md b/docs/migration/GAP_ANALYSIS.md
+index 0c832d2..6db490b 100644
+--- a/docs/migration/GAP_ANALYSIS.md
++++ b/docs/migration/GAP_ANALYSIS.md
+@@ -2,7 +2,7 @@
+ 
+ Baseline `5fb5d51`, 2026-09-05. Evidências completas: [CURRENT_STATE](CURRENT_STATE.md), [DATA_MIGRATION](DATA_MIGRATION.md), [REUSE_ANALYSIS](REUSE_ANALYSIS.md). Produto soberano: [Product Vault](../product-vault/00-HOME.md). Referências de arquivos abaixo são evidências do runtime, não autorização para executá-lo em produção.
+ 
+-Atualização após review001: G-01 fechado no diff aceito sobre HEAD4ca1301; G-35 acrescentado como descoberta independente. Atualização após [review003](reviews/003-review.md): G-02, G-03 (sessão/CSRF) e G-35 fechados e G-04 parcialmente fechado no diff aceito na rodada 2 sobre a base `99a7210`; o que resta de cada um está na própria linha. Atualização após [review004](reviews/004-review.md): G-04, G-05 e G-09 fechados e G-06 fechado na parte de transporte no diff aceito na rodada 2 sobre a base `b3a019c`. Atualização após [review005](reviews/005-review.md): G-06 (resto), G-07, G-08 e G-22 fechados no diff aceito na rodada 2 sobre a base `8551717`. Atualização após [review006](reviews/006-review.md): G-14 fechado e G-15 fechado na parte de cadastro no diff aceito na rodada 1 sobre a base `8acd4c6`; G-11 avança na parte de identidade. Atualização após [review007](reviews/007-review.md): G-16 fechado na parte de catálogo e snapshot e G-17 fechado na parte de catálogo no diff aceito na rodada 3 sobre a base `9494eb6`. Atualização após [review008](reviews/008-review.md): G-11, G-12 e G-18 fechados no diff aceito na rodada 2 sobre a base `26593db`. Atualização após [review009](reviews/009-review.md): G-13 fechado na parte de domínio e contratos no diff aceito na rodada 2 sobre a base `9013f14`; o que resta dele é interface (Goal016/018). Atualização após [review010](reviews/010-review.md): G-19 fechado, G-20 fechado na medida do que a origem comprovadamente fornece e G-10 fechado na parte de corte de writers/leitores operacionais, no diff aceito na rodada 2 sobre a base `e381c15`; o que resta de cada um está na própria linha. Atualização após [review011](reviews/011-review.md): G-21 fechado no diff aceito na rodada 3 sobre a base `0f4ac74`; G-17 perdeu o resíduo de recorrência pela IA. Atualização após [review012](reviews/012-review.md): G-24 fechado no diff aceito na rodada 3 sobre a base `4116149`, com os dois resíduos de vocabulário que o review011 dirigiu ao 012 fechados no mesmo diff; G-23 ficou explicitamente fora e seguia aberto. Atualização após [review013](reviews/013-review.md): G-23 fechado no diff aceito na rodada 2 sobre a base `e602b4b`. Atualização após [review014](reviews/014-review.md): G-30 fechado na parte de read model e shell, G-31 fechado na parte de fundação visual, navegação e layout compartilhado, e G-34 fechado na parte de UX, no diff aceito na rodada 3 sobre a base `7ad3b66`; o que resta de cada um está na própria linha. Atualização após [review015](reviews/015-review.md): G-15 fechado na parte de interface, G-17 fechado na parte de tela e G-31 avançado nas duas primeiras telas de módulo, no diff aceito na rodada 3 sobre a base `908c4a1`; o que resta de cada um está na própria linha. Atualização após [review016](reviews/016-review.md): G-13 fechado na parte de interface e G-31 avançado na tela de Agenda, no diff aceito na rodada 4 sobre a base `2297b71`; o que resta de cada um está na própria linha. Atualização após [review017](reviews/017-review.md): G-22, G-23 e G-09 fechados na parte de interface e G-31 avançado na tela de Conversas, no diff aceito na rodada 3 sobre a base `6582a65`; o que resta de cada um está na própria linha. Atualização após [review018](reviews/018-review.md): G-26 fechado na parte de dado de negócio e projeção versionada e G-25 fechado na parte de conclusão sem WhatsApp, com G-31 avançado no onboarding, no diff aceito na rodada 3 sobre a base `4606f54`; o que resta de cada um está na própria linha. Demais gaps mantêm a evidência da baseline, sem presumir implementação.
++Atualização após review001: G-01 fechado no diff aceito sobre HEAD4ca1301; G-35 acrescentado como descoberta independente. Atualização após [review003](reviews/003-review.md): G-02, G-03 (sessão/CSRF) e G-35 fechados e G-04 parcialmente fechado no diff aceito na rodada 2 sobre a base `99a7210`; o que resta de cada um está na própria linha. Atualização após [review004](reviews/004-review.md): G-04, G-05 e G-09 fechados e G-06 fechado na parte de transporte no diff aceito na rodada 2 sobre a base `b3a019c`. Atualização após [review005](reviews/005-review.md): G-06 (resto), G-07, G-08 e G-22 fechados no diff aceito na rodada 2 sobre a base `8551717`. Atualização após [review006](reviews/006-review.md): G-14 fechado e G-15 fechado na parte de cadastro no diff aceito na rodada 1 sobre a base `8acd4c6`; G-11 avança na parte de identidade. Atualização após [review007](reviews/007-review.md): G-16 fechado na parte de catálogo e snapshot e G-17 fechado na parte de catálogo no diff aceito na rodada 3 sobre a base `9494eb6`. Atualização após [review008](reviews/008-review.md): G-11, G-12 e G-18 fechados no diff aceito na rodada 2 sobre a base `26593db`. Atualização após [review009](reviews/009-review.md): G-13 fechado na parte de domínio e contratos no diff aceito na rodada 2 sobre a base `9013f14`; o que resta dele é interface (Goal016/018). Atualização após [review010](reviews/010-review.md): G-19 fechado, G-20 fechado na medida do que a origem comprovadamente fornece e G-10 fechado na parte de corte de writers/leitores operacionais, no diff aceito na rodada 2 sobre a base `e381c15`; o que resta de cada um está na própria linha. Atualização após [review011](reviews/011-review.md): G-21 fechado no diff aceito na rodada 3 sobre a base `0f4ac74`; G-17 perdeu o resíduo de recorrência pela IA. Atualização após [review012](reviews/012-review.md): G-24 fechado no diff aceito na rodada 3 sobre a base `4116149`, com os dois resíduos de vocabulário que o review011 dirigiu ao 012 fechados no mesmo diff; G-23 ficou explicitamente fora e seguia aberto. Atualização após [review013](reviews/013-review.md): G-23 fechado no diff aceito na rodada 2 sobre a base `e602b4b`. Atualização após [review014](reviews/014-review.md): G-30 fechado na parte de read model e shell, G-31 fechado na parte de fundação visual, navegação e layout compartilhado, e G-34 fechado na parte de UX, no diff aceito na rodada 3 sobre a base `7ad3b66`; o que resta de cada um está na própria linha. Atualização após [review015](reviews/015-review.md): G-15 fechado na parte de interface, G-17 fechado na parte de tela e G-31 avançado nas duas primeiras telas de módulo, no diff aceito na rodada 3 sobre a base `908c4a1`; o que resta de cada um está na própria linha. Atualização após [review016](reviews/016-review.md): G-13 fechado na parte de interface e G-31 avançado na tela de Agenda, no diff aceito na rodada 4 sobre a base `2297b71`; o que resta de cada um está na própria linha. Atualização após [review017](reviews/017-review.md): G-22, G-23 e G-09 fechados na parte de interface e G-31 avançado na tela de Conversas, no diff aceito na rodada 3 sobre a base `6582a65`; o que resta de cada um está na própria linha. Atualização após [review018](reviews/018-review.md): G-26 fechado na parte de dado de negócio e projeção versionada e G-25 fechado na parte de conclusão sem WhatsApp, com G-31 avançado no onboarding, no diff aceito na rodada 3 sobre a base `4606f54`; o que resta de cada um está na própria linha. Atualização durante a execução do Goal020 (rodada 1, ainda **sem review**, base `cf4cea9`): o residual de experiência do G-19 (tela de importação, preview visual e histórico) foi implementado, o residual de consumidor de frontend do protocolo pré-Goal010 citado em G-10 foi removido, e G-31 avançou no módulo de Importação; o que está descrito nessas linhas é observação de código desta execução, não fechamento revisado — reabrir a leitura se o review de 020 divergir. Demais gaps mantêm a evidência da baseline, sem presumir implementação.
+ 
+ **P0:** falha de autorização confirmada no caminho estático, corrigir primeiro; não significa incidente comprovado. **P1:** risco de perda/ação incorreta/privacidade ou regra central incompatível, resolver antes de corte/validação. **P2:** capacidade MVP/UX/qualidade faltante, igualmente obrigatória para o MVP completo. Não há rollout de produto reduzido implícito nesta priorização.
+ 
+@@ -37,7 +37,7 @@ Estas são as fontes dos requisitos confrontados abaixo. Os fatos de implementa
+ | G-07 P1 — controle humano — FECHADO no diff005 | Envio manual pausa; leitura não pausa; retorno explícito na sessão | Mensagem manual do dono pelo WhatsApp e envio pela Atendly assumem a sessão atomicamente (`assumeHumanControl`) e cancelam a resposta automática pendente; `POST /v1/conversations/:id/messages` não exige takeover prévio; `GET` não altera estado; Retomar IA (`release` e `/bot on`) reavalia o contexto por `contextResetAt`; sem retomada silenciosa por relógio dentro da sessão; nova sessão após ~24 h volta à IA salvo pausa explícita do contato ou ignore; guard determinístico antes de tool com efeito e antes de enviar | Handoffs OPEN remanescentes não são resolvidos na rotação de sessão; Retomar IA e `/bot on` também limpam a pausa explícita `/bot off` | [Review005](reviews/005-review.md): cinco cenários entre sessões com HandoffService, SessionService e grafo reais contra PostgreSQL |
+ | G-08 P1 — inbox independente — FECHADO no diff005 | IA off/pausada continua inbox | `operationalGuard` só anota a decisão e `sessionGate` encerra depois de `recordInbound`: a mensagem do cliente é persistida com IA desligada, canal desconectado, handoff, sessão pessoal e contato ignorado; conteúdo ignorado ou pessoal não chega a classificação, modelo, RAG, embedding nem memória; grupos continuam fora do processamento | — | [Review005](reviews/005-review.md): RED/GREEN do guard encerrando antes de persistir e do conteúdo ignorado chegando ao modelo |
+ | G-09 P1 — entrega — FECHADO no diff004 | Mostrar resultado real de envio | Saída persistida em `Message` antes do transporte com `correlationId` estável e `deliveryState` PENDING/SENT/FAILED/UNKNOWN; timeout de envio vira UNKNOWN sem apagar a tentativa; 4xx do transporte é FAILED; retry só quando a falha ocorreu antes do envio; recibo Delivered/Read reconcilia por `correlationId` ou `externalMessageId`; envio do dono não apaga mais a tentativa e devolve o estado real; DTO expõe `deliveryState`/`deliveryDetail` por operação, opcionais no BFF e no frontend | Composição visual dos quatro `deliveryState` (pendente/enviado/erro/não confirmado) no chat existe em `apps/frontend/src/features/conversations/MessageTimeline.tsx`; reconciliação depende de o WhatsApp honrar o `correlationId` como ID da mensagem (sem prova com transporte real) | [Review004](reviews/004-review.md). UI do estado de entrega fechada no Goal017 |
+-| G-10 P1 — agenda oficial — **fechado na parte de corte no diff010** | Somente Agenda Atendly operacional | `CalendarProviderFactory` não importa mais `MinhaAgendaCalendarProvider`: escrita ou oferta com fonte remota recebe `409 MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED`, e a leitura da origem sobrevive só dentro da importação, chamada direto pelo módulo. Endpoints de integração reescopados para o ciclo da importação: `connect` recusa `enableWrites` com `409 INTEGRATION_WRITES_NOT_SUPPORTED` e desconectar a origem não desativa a agenda operacional | O valor `EXTERNAL` continua no contrato público e os enums/campos de `source`/`target` legados continuam legíveis (compatibilidade declarada); tenant legado com `CalendarSettings.source = MINHA_AGENDA` ainda não tem caminho novo para voltar a `ATENDLY` | [Review010](reviews/010-review.md). Remoção do código e do vocabulário legado no Goal024 |
++| G-10 P1 — agenda oficial — **fechado na parte de corte no diff010; residual de consumidor de frontend fechado no diff020 (rodada 1, pendente de review)** | Somente Agenda Atendly operacional | `CalendarProviderFactory` não importa mais `MinhaAgendaCalendarProvider`: escrita ou oferta com fonte remota recebe `409 MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED`, e a leitura da origem sobrevive só dentro da importação, chamada direto pelo módulo. Endpoints de integração reescopados para o ciclo da importação: `connect` recusa `enableWrites` com `409 INTEGRATION_WRITES_NOT_SUPPORTED` e desconectar a origem não desativa a agenda operacional. O diff020 removeu `ProductMigrationScreen` — o único consumidor de frontend que ainda apresentava diagnóstico/status/source-target da agenda externa —, e `PUBLIC_API_V1.md` passou a datar essa ausência de consumidor desde o fechamento do Goal010 (2026-09-12) | O valor `EXTERNAL` continua no contrato público e os enums/campos de `source`/`target` legados continuam legíveis (compatibilidade declarada); tenant legado com `CalendarSettings.source = MINHA_AGENDA` ainda não tem caminho novo para voltar a `ATENDLY` | [Review010](reviews/010-review.md). Remoção do código e do vocabulário legado no Goal024 |
+ | G-11 P1 — atomicidade/replay — **fechado no diff008** | Confirmar somente após operação, erro recuperável | Cliente criado dentro da transação de confirmação (Goal006) e, desde o Goal008, efeito e resultado idempotente gravados no mesmo commit, com `effectEntityType`/`effectEntityId` recuperando `PENDING` vencido em vez de reexecutar | Sucesso perdido/repetição | Atendido: política única em `write-policy.ts` para todos os writers, retry limitado de `40001`/`40P01`/`P2034` com erro próprio no limite, provado por concorrência real em `goal008-agenda.test.ts` (D-006, D-024) |
+ | G-12 P1 — sobreposição/remarcação — **fechado no diff008** | Horário antigo preservado até confirmar novo; holds 5min | `AppointmentHold` com `expiresAt` TIMESTAMPTZ pelo `now()` do banco (300s configuráveis) conta como ocupação exceto para quem o consome; bloqueio, cancelamento e hold sob a mesma política, com lock de todos os dias afetados em ordem estável | Corrida com bloqueio/edição, proposta expirada | Atendido: remarcação mantém o original reservado até o commit e libera o hold no mesmo evento; sobreposição só por override humano com motivo registrado, recusado para `AI`. Exceções, compromisso pessoal e recorrência endereçados no Goal009 (ver G-13) |
+ | G-13 P2 — agenda completa — domínio e contratos FECHADOS no diff009, interface FECHADA no diff016 | Dia/Semana/Mês, exceções, pessoal, bloqueios recorrentes, multi-serviço | Regras de oferta (antecedência mínima/máxima, granularidade) aplicadas pelo próprio motor, buffer como ocupação externa com snapshot no atendimento e no hold, exceções geridas por rota com decisão humana registrada, `BlockSeries`/`AppointmentSeries` finitas com ocorrências materializadas, exceção por ocorrência e edição "desta data em diante", e confirmação da série de atendimento em transação única com hold por ocorrência — todos sob a política única de escrita do Goal008. Desde o diff016 a interface consome tudo isso: `features/agenda/` entrega Dia, Semana e Mês sobre a mesma janela, com atendimento, bloqueio operacional, compromisso pessoal, exceção e ocupação por buffer na grade; criação por `customerId` com múltiplos serviços, hold criado/consumido/liberado/expirado e sobreposição só com motivo; séries de bloqueio e de atendimento com "esta ocorrência" separada de "a série a partir daqui"; ciclo de vida com estado, presença e valor final distintos, histórico por evento e exceções por data. `GET /v1/time-blocks` nasceu neste diff, porque não havia leitura de bloco em camada alguma | Dias ocultos e configuração da grade continuam em Configurações (Goal023); modalidades e dados do negócio, no Goal018; nenhuma tela de agenda foi exercitada em browser, e bloco que atravessa a meia-noite não é exibido depois da virada | [review009](reviews/009-review.md) no domínio e [review016](reviews/016-review.md) na interface. Oferta proativa de recorrência pela IA foi fechada no Goal011; modalidades e dados do negócio seguem no Goal018 |
+@@ -46,7 +46,7 @@ Estas são as fontes dos requisitos confrontados abaixo. Os fatos de implementa
+ | G-16 P1 — acordo comercial — catálogo e snapshot FECHADOS no diff007 | Quatro preços, preço opcional, snapshots estáveis | `priceType` com quatro valores em `Service` e nos snapshots de `AppointmentItem`, com constraints SQL próprias; total do acordo derivado dos snapshots por regra única (Scheduling e IA) com `totalPriceType`; mapper de importação deixou de fabricar `FIXED`/zero; catálogo lido dentro da mesma transação que valida o slot (Goal006); edição do catálogo não reescreve snapshot | Proposta versionada, hold e valor final ainda não existem | [review007](reviews/007-review.md). Goal008 |
+ | G-17 P2 — catálogo completo — catálogo FECHADO no diff007, tela FECHADA no diff015 | Cor/descrição, buffers, recorrência, modalidades, regras privadas; importado sem duração em revisão | Duração opcional com `needsReview`/`reviewOrigin`, predicado operacional único (IA só oferece serviço operacional, ativação da IA exige um), `colorToken`, descrição, buffers antes/depois e `recurrenceIntervalDays` persistidos e validados; serviço importado sem duração nasce em revisão. Desde o diff015 `features/services/` mostra as quatro semânticas de preço distintas, duração ausente como ausente, ativo/inativo e a pendência com origem legível em texto, e o formulário revela descrição, cor com preview, buffers, recorrência e status atrás de progressive disclosure, recusando preço sem valor junto ao campo | Buffers passaram a afetar a ocupação (Goal009) e a recorrência tornou-se ofertável pela IA no Goal011 — `/internal/services` passou a emitir `recurrenceIntervalDays` e a IA o projeta no catálogo, sem criar série por iniciativa própria; modalidades e regras privadas continuam fora porque são dados do negócio (G-26, Goal018) e não têm campo em `/v1/services` | [review007](reviews/007-review.md) e [review015](reviews/015-review.md) |
+ | G-18 P1 — histórico — **fechado no diff008** | Confirmado/concluído/cancelado/falta; presença separada; final cobrado opcional | Quatro estados do produto com `Appointment_status_check` e bruto preservado em `statusRaw`; presença, valor final (Decimal, nunca inferido) e observação de falta como colunas próprias; `AppointmentEvent` por mutação na mesma transação, com ator, origem, antes/depois e `sequence` para desempate cronológico | Histórico insuficiente; receita prevista confundida com recebida | Atendido: nenhum evento retroativo fabricado e nenhum atendimento marcado concluído pela data; conclusão automática 30min após o término com lease no próprio Scheduling (D-008). Presença por lembrete é alimentada no Goal021 |
+-| G-19 P1 — importação única — **FECHADO no diff010** | Preview/categorias/destino com dados/parcial/concluir explícito | `ImportSession`/`ImportSessionCategory`/`ImportItem`/`ImportDecision` com preview versionado que não escreve dado operacional, execução por item com checkpoint e idempotência por `ExternalEntityMap`, falha parcial que marca só o item, lease pelo relógio do banco e conclusão única garantida pelo índice único parcial `ImportSession_one_completed_per_tenant`; `MigrationJob` legado é classificado (`legacyClass`), nunca convertido, e não consome o direito | A experiência — tela de importação, preview visual e histórico em Configurações — não existe; o inventário do U-02 não tem rota | [Review010](reviews/010-review.md). Telas no Goal020; remoção do protocolo antigo no Goal025 (numeração corrigida no planejamento após 019: a renumeração registrada na v35 do MASTER_PLAN moveu estas duas referências) |
++| G-19 P1 — importação única — **FECHADO no diff010; experiência implementada no diff020 (rodada 1, pendente de review)** | Preview/categorias/destino com dados/parcial/concluir explícito | `ImportSession`/`ImportSessionCategory`/`ImportItem`/`ImportDecision` com preview versionado que não escreve dado operacional, execução por item com checkpoint e idempotência por `ExternalEntityMap`, falha parcial que marca só o item, lease pelo relógio do banco e conclusão única garantida pelo índice único parcial `ImportSession_one_completed_per_tenant`; `MigrationJob` legado é classificado (`legacyClass`), nunca convertido, e não consome o direito. `GET /v1/calendar/imports` (direito/sessão/histórico) e `POST .../categories/:category/selection` chegaram no diff020, e a entrada `/importacao` (`features/imports/`) lê esse estado para decidir entre conectar a origem, retomar a sessão viva ou só mostrar o histórico | Nenhum inventário de tela pendente no U-02: a experiência existe em `/importacao` e como bloco de Configurações → Agenda (`ImportSettingsSection`). Falta prova de largura/contraste/foco real (gate de browser cobre só rotas públicas) e prova contra a origem real (ver G-20) | [Review010](reviews/010-review.md); telas do diff020 ainda não têm review próprio. Remoção do protocolo antigo no Goal025 (numeração corrigida no planejamento após 019: a renumeração registrada na v35 do MASTER_PLAN moveu estas duas referências) |
+ | G-20 P1 — fidelidade importada — **fechado na medida do que a origem fornece, no diff010** | Clientes/histórico/cancelados/faltas/bloqueios suportados e incerteza visível | Resposta da origem validada por schema antes de qualquer mapeamento; leitura por categoria sem reaproveitar filtros operacionais, com `raw` preservado e cobertura declarada por categoria (`sourceSupported`, `sourceReportedCount`, `readCount`, `limitationCode`); nada é fabricado para categoria ausente | A capacidade da API **real** continua sem prova: não há credencial autorizada, toda origem exercitada é dublê ou fixture e M4 não foi exercitado. Duas limitações já declaradas e quantificadas: `CUSTOMER_DIRECTORY_UNAVAILABLE` (sem listagem de clientes na origem) e `NO_SHOW_NOT_MODELED_BY_SOURCE` (falta não é estado distinto lá) | [Review010](reviews/010-review.md). Prova contra a origem real permanece gate operacional antes do corte, em [DATA_MIGRATION §3](DATA_MIGRATION.md#3-minha-agenda-matriz-de-destino) |
+ | G-21 P1 — políticas IA — **FECHADO no diff011** | Três estilos, sem persona, sem inventar/confirmar cedo | Estilo é dado do negócio com três valores (`PROFESSIONAL`, `BALANCED` default, `CASUAL`) nos dois bancos, do frontend ao prompt, com os dois valores antigos aceitos só como alias de entrada e saída sempre no vocabulário novo; prompt sem persona e sem instrução de parecer humana, com versão derivada do conteúdo montado por estilo e registrada no log de decisão; tool com efeito exige rascunho preparado em turno anterior (`CONFIRMATION_REQUIRED_SAME_TURN`, `NO_PENDING_CONFIRMATION`), sem enfraquecer o guard do Goal005; erro de infraestrutura vira `TOOL_INFRASTRUCTURE_ERROR` opaco para o modelo e só o log vê o detalhe, com erro de domínio mantendo código próprio; hold do rascunho substituído ou descartado é liberado no mesmo caminho do estado; suíte de evals com modelo dublê, sem rede e sem chave, dentro do `validate:core` | Os evals provam guards do runtime, não qualidade de modelo real: todo roteiro é escrito pelo próprio eval e nenhum modelo real foi chamado. `DOMAIN_ERROR_CODES` foi alinhado no Goal012: o que ninguém emite saiu para `RESERVED_DOMAIN_ERROR_CODES`, explicitamente reservado | [Review011](reviews/011-review.md). Mídia é G-23 (Goal013); conhecimento, memória e sugestões (G-24) foram fechados no Goal012; telas de conversa fechadas no Goal017; vocabulário legado de estilo sai no Goal024 |
+ | G-22 P1 — privacidade conversa — FECHADO no diff005; interface no diff017 | Comercial/Não classificadas/Pessoal; override; Ignorar IA absoluto | `Contact` (ignore com autor/origem/data, pausa explícita, override manual) e `ConversationSession` (categoria vigente com origem, sugestão do agente com proveniência, atendimento humano) persistidos; override manual prevalece sobre a sugestão e atravessa a troca de sessão; ignore é regra do contato avaliada antes de qualquer leitura de conteúdo; sessão pessoal desliga a IA só naquela sessão; classificação do agente nunca escreve override | Memória estruturada e transcrição ainda não existem (Goals 012 e 013), então a remoção de memória anterior do contexto se resume a `contextSince` no histórico do turno | [Review005](reviews/005-review.md). A interface chegou no diff017: as três abas saem de `category` na query do BFF, o override manual de categoria é declarado no painel de contexto, e marcar e desmarcar ignorado existem na tela pela mesma operação reversível (`setIgnored`), com a copy dizendo que o conteúdo deixa de virar contexto e que nada é apagado |
+@@ -58,7 +58,7 @@ Estas são as fontes dos requisitos confrontados abaixo. Os fatos de implementa
+ | G-28 P2 — central/alertas | Níveis informativo/atenção/crítico, handoff, falha lembrete, email crítico | Dashboard health/logs não são central de produto | Profissional não percebe falha/cliente esperando | Central persistida no BFF, eventos por dono, email crítico configurável; não novo app nativo/push |
+ | G-29 P1 — retenção/conta | 30/90/180/365, comercial90/pessoal30; reduzir confirma; exclusão recuperável7dias | Sem ciclo cross-store ou conta pendente | Retenção indefinida/cópias esquecidas; automações após exclusão | Jobs de purge de conteúdo/copias; suspender conta/WA, restore exige novo teste. Metadados mínimos e histórico operacional separados |
+ | G-30 P1 — status honesto — **fechado na parte de read model e shell no diff014** | IA/WA mostram estado real | `GET /v1/status` no BFF verifica Evolution e IA na própria requisição e devolve `whatsapp` (`CONNECTED`, `DISCONNECTED` ou `UNKNOWN`, com `phoneNumber` e `checkedAt`), `ai` com `desiredEnabled` do BFF, `effectiveEnabled` lido da IA por `GET /internal/ai-tenant-config` (escopo próprio `tenant-config:read`) ou `null`, e `state` derivado `ACTIVE`/`OFF`/`PENDING`/`UNKNOWN`, mais `degraded`; dependência indisponível vira `UNKNOWN` com `200`, nunca `500`. No frontend, `systemStatus.ts` distingue carregando, desconhecido, ativo e desligado, e o default `connected` do `AppShell` deixou de existir no código | A reconciliação desired/effective e a autoativação continuam ausentes — aqui só se **lê**. `PENDING` existe no contrato mas a UI ainda o apresenta com a copy de desligado, e `PUBLIC_API_V1.md` descreve `OFF` como independente do que a IA relate enquanto o código devolve `UNKNOWN` quando a dependência cai, mesmo com o desejado desligado | [Review014](reviews/014-review.md). Reconciliação, autoativação, copy de `PENDING` e alinhamento da tabela no Goal018 |
+-| G-31 P2 — navegação/visual — **fechado na parte de fundação no diff014; Clientes e Serviços no diff015; Agenda no diff016; Conversas no diff017; onboarding e o bloco de negócio no diff018** | Mobile→tablet→notebook→desktop; Clientes principal; Recepção | `tokens.css` centraliza cor, tipografia, espaço, raio, sombra, foco, z-index e movimento da direção Recepção, com Literata e Hanken Grotesk servidas localmente sob OFL e Inter/IBM Plex Mono fora da base; `AppShell` substituído com cinco destinos no mobile (Clientes deixou de estar escondido), `+` contextual e “Mais” como lista de destinos, sidebar em tablet/notebook/desktop; `app/(platform)/layout.tsx` monta o shell uma vez e as telas declaram só destino, título e ação por `useShellConfig`; rotas de preview e `personas-ui` removidas; primitivas acessíveis em `shared/ui/`. O diff015 entregou as duas primeiras telas de módulo: `ProductDirectoryScreen` (1318 linhas servindo sete rotas com cinco chamadas de `useShellConfig`) foi decomposto em `features/customers/` e `features/services/`, cada tela declarando a configuração de shell uma única vez, com `Field`, `ListItem`, `Spinner` e `Toast` ganhando consumidor real. O diff016 fez o mesmo com a Agenda: `features/calendar/ProductAgendaScreen.tsx` saiu e deu lugar a 24 módulos em `features/agenda/`, com nove cenários despachados por nove rotas e apenas dois call sites de `useShellConfig`, provados por render. O diff017 fez o mesmo com Conversas: `features/conversations/ProductConversationsScreen.tsx` deixou de ser o monolito de 964 linhas servindo duas rotas e virou um despachante de 28 linhas sobre módulos de inbox e chat, com um call site de `useShellConfig` por cenário. O diff018 fez o mesmo com a última superfície de entrada: `features/onboarding/` deixou de ser 2 437 linhas com protótipo embutido e virou 1 376 linhas em dez módulos — despachante, casca, runtime, mapa de blocos, registry e os quatro blocos Seu negócio/Sua agenda/Sua IA/WhatsApp —, com `PrototypeOnboardingScreen`, a prop `preview` e `types.ts` removidos, `scenarios.ts` de 34 para 15 entradas todas alcançáveis pelo fluxo do produto, progresso apresentado por bloco em vez de contagem de telas, e o bloco de negócio também na seção de negócio de `configuracoes`. O onboarding continua com casca própria, sem sidebar nem bottom navigation, como o vault manda | Configurações e Importação ainda não foram redesenhadas — continuam funcionais dentro do shell novo, com o CSS de módulo herdando os tokens —; o bloco de negócio foi redesenhado no diff018 no onboarding e reescrito dentro de `ProductSettingsScreen` como ela está, sem redecompor a tela. A Home ganhou o checklist pós-onboarding no diff018, com central e métricas ainda no Goal023. O gate renderizado continua cobrindo só rotas públicas nas cinco larguras: sidebar, bottom nav, “Mais”, a linha de status e as telas novas de Clientes, Serviços, Agenda e Conversas nunca foram exercitados em browser, e em ≤1099px o rail fica sem indicador de status por regra legada de CSS | [Review014](reviews/014-review.md), [review015](reviews/015-review.md), [review016](reviews/016-review.md), [review017](reviews/017-review.md) e [review018](reviews/018-review.md). Telas restantes no Goal023; o resíduo de tela autenticada renderizada foi assumido pelo 015 na parte que não exige sessão — `goal015-shell-invariant.test.tsx` monta `ShellConfigProvider` mais as telas reais em jsdom e falha em `Maximum update depth` —, enquanto estender o Playwright a rota autenticada segue como decisão de escopo própria, não tomada |
++| G-31 P2 — navegação/visual — **fechado na parte de fundação no diff014; Clientes e Serviços no diff015; Agenda no diff016; Conversas no diff017; onboarding e o bloco de negócio no diff018** | Mobile→tablet→notebook→desktop; Clientes principal; Recepção | `tokens.css` centraliza cor, tipografia, espaço, raio, sombra, foco, z-index e movimento da direção Recepção, com Literata e Hanken Grotesk servidas localmente sob OFL e Inter/IBM Plex Mono fora da base; `AppShell` substituído com cinco destinos no mobile (Clientes deixou de estar escondido), `+` contextual e “Mais” como lista de destinos, sidebar em tablet/notebook/desktop; `app/(platform)/layout.tsx` monta o shell uma vez e as telas declaram só destino, título e ação por `useShellConfig`; rotas de preview e `personas-ui` removidas; primitivas acessíveis em `shared/ui/`. O diff015 entregou as duas primeiras telas de módulo: `ProductDirectoryScreen` (1318 linhas servindo sete rotas com cinco chamadas de `useShellConfig`) foi decomposto em `features/customers/` e `features/services/`, cada tela declarando a configuração de shell uma única vez, com `Field`, `ListItem`, `Spinner` e `Toast` ganhando consumidor real. O diff016 fez o mesmo com a Agenda: `features/calendar/ProductAgendaScreen.tsx` saiu e deu lugar a 24 módulos em `features/agenda/`, com nove cenários despachados por nove rotas e apenas dois call sites de `useShellConfig`, provados por render. O diff017 fez o mesmo com Conversas: `features/conversations/ProductConversationsScreen.tsx` deixou de ser o monolito de 964 linhas servindo duas rotas e virou um despachante de 28 linhas sobre módulos de inbox e chat, com um call site de `useShellConfig` por cenário. O diff018 fez o mesmo com a última superfície de entrada: `features/onboarding/` deixou de ser 2 437 linhas com protótipo embutido e virou 1 376 linhas em dez módulos — despachante, casca, runtime, mapa de blocos, registry e os quatro blocos Seu negócio/Sua agenda/Sua IA/WhatsApp —, com `PrototypeOnboardingScreen`, a prop `preview` e `types.ts` removidos, `scenarios.ts` de 34 para 15 entradas todas alcançáveis pelo fluxo do produto, progresso apresentado por bloco em vez de contagem de telas, e o bloco de negócio também na seção de negócio de `configuracoes`. O onboarding continua com casca própria, sem sidebar nem bottom navigation, como o vault manda. O diff020 (rodada 1, pendente de review) redesenhou Importação: `ProductMigrationScreen` saiu e `features/imports/` entrega a jornada (`ConnectSourceScreen`, `ImportPreviewScreen`, `ImportConflictsScreen`, `ImportRunScreen`, `ImportHistoryCard`) com um único `useShellConfig` por árvore em `ImportsScreen`, CSS de módulo (`atendly-imports.css`) herdando os tokens, e a entrada do menu Mais atualizada para `/importacao` | Configurações ainda não foi redesenhada — continua funcional dentro do shell novo, com o CSS de módulo herdando os tokens —; o bloco de negócio foi redesenhado no diff018 no onboarding e reescrito dentro de `ProductSettingsScreen` como ela está, sem redecompor a tela; o diff020 acrescentou `ImportSettingsSection` a essa mesma tela ainda não decomposta. A Home ganhou o checklist pós-onboarding no diff018, com central e métricas ainda no Goal023. O gate renderizado continua cobrindo só rotas públicas nas cinco larguras: sidebar, bottom nav, “Mais”, a linha de status e as telas novas de Clientes, Serviços, Agenda e Conversas nunca foram exercitados em browser, e em ≤1099px o rail fica sem indicador de status por regra legada de CSS | [Review014](reviews/014-review.md), [review015](reviews/015-review.md), [review016](reviews/016-review.md), [review017](reviews/017-review.md) e [review018](reviews/018-review.md). Telas restantes no Goal023; o resíduo de tela autenticada renderizada foi assumido pelo 015 na parte que não exige sessão — `goal015-shell-invariant.test.tsx` monta `ShellConfigProvider` mais as telas reais em jsdom e falha em `Maximum update depth` —, enquanto estender o Playwright a rota autenticada segue como decisão de escopo própria, não tomada |
+ | G-32 P2 — contratos | Frontend/backend alinhados | Pacote domínios vazio, schemas locais duplicados e enums antigos | Mudança parcial quebra parser silenciosamente | Contratos por operação e testes producer/consumer; preservar replay e janela explícita |
+ | G-33 P1 — validação/deploy | Cada Goal repositório validável | Baseline: build-all omite Scheduling; BFF integration obsoleto; IA1fail; migrations no build; sem CI localizado. **Parcialmente fechado pelo Goal002** ([ACCEPTED na rodada 3](reviews/002-review.md#rodada-3)): Scheduling no build, integração BFF real em banco descartável com alvo verificado e client Prisma gerado pelo gate, asserção de `requestId` da IA corrigida, `validate:core`/`validate:integration` e CI versionada | Migração prossegue sem rede de segurança | Restante: migrate como etapa controlada no deploy, ensaio de restore, execução hospedada de CI e suites por risco nos demais domínios |
+ | G-34 P2 — escopo senha — **fechado na parte de UX no diff014** | Recuperação somente visual no MVP | `features/auth/recoveryMachine.ts` é máquina pura de quatro passos (e-mail, código, nova senha, sucesso), sem chamada de rede e sem nenhuma copy que afirme envio de e-mail; evento fora de ordem é ignorado e voltar não apaga o e-mail já informado | O backend do Goal003 (`POST /v1/auth/forgot-password`, `POST /v1/auth/reset-password`, `/nova-senha`, `/link-expirado` e o delivery opcional) continua existindo e funcional, agora **sem entrada pela UI** — resíduo declarado, e o serviço não foi ampliado | [Review014](reviews/014-review.md). Manter ou remover o fluxo por link quando o produto definir recuperação real |
+diff --git a/docs/migration/REUSE_ANALYSIS.md b/docs/migration/REUSE_ANALYSIS.md
+index e3e15c6..8dfc565 100644
+--- a/docs/migration/REUSE_ANALYSIS.md
++++ b/docs/migration/REUSE_ANALYSIS.md
+@@ -36,11 +36,11 @@ Os percentuais de reaproveitamento não foram estimados: quantidade de arquivos
+ | `data/services/registry.ts` e Bff*Service | Única fronteira de dados da UI | REUSE | Evoluir métodos e parsers junto do backend. Browser não passa a chamar serviços internos |
+ | `data/mappers/publicApiSchemas.ts` | Parsers efetivos, enums e modelos antigos | REFACTOR | Migrar para contratos consumidos/versionados; não substituir null/erro por defaults positivos |
+ | `shared/layout/AppShell.tsx` | Substituído no Goal014: cinco destinos, status real e shell montado uma vez | REPLACE (feito) | O modelo de navegação virou dado testável em `shared/layout/navigation.ts` (sidebar com Início/Conversas/Agenda/Clientes/Serviços; bottom nav com as quatro abas mais “Mais” como **lista** de destinos: Serviços, Negócio, Agenda, IA, WhatsApp, Importação e Conta), com `+` contextual por módulo. O estado conectado presumido não existe mais: o shell lê `GET /v1/status` por `shared/runtime/systemStatus.ts`, que distingue carregando, desconhecido, ativo e desligado. `app/(platform)/layout.tsx` monta `ShellConfigProvider` + `AppShell` uma vez e as telas declaram destino, título e ação por `useShellConfig` — vale a invariante de **uma chamada por árvore renderizada** |
+-| `shared/styles/atendly*.css` | Base substituída no Goal014; CSS por módulo preservado e herdando tokens | REPLACE (feito na base) | `shared/styles/tokens.css` passou a ser a fonte única de cor, tipografia, espaço, raio, sombra, foco, z-index e movimento na direção Recepção, com Literata e Hanken Grotesk servidas de `public/fonts/` sob OFL e Inter/IBM Plex Mono removidas. Os `atendly-*.css` por módulo continuam valendo para as telas ainda não redesenhadas, mas herdam os tokens pelos nomes de variável que já usavam. Resíduo herdado: em ≤1099px a regra `.sidebar .wa-status span` esconde também o `.status-dot` |
++| `shared/styles/atendly*.css` | Base substituída no Goal014; CSS por módulo preservado e herdando tokens | REPLACE (feito na base) | `shared/styles/tokens.css` passou a ser a fonte única de cor, tipografia, espaço, raio, sombra, foco, z-index e movimento na direção Recepção, com Literata e Hanken Grotesk servidas de `public/fonts/` sob OFL e Inter/IBM Plex Mono removidas. Os `atendly-*.css` por módulo continuam valendo para as telas ainda não redesenhadas, mas herdam os tokens pelos nomes de variável que já usavam. O diff020 substituiu `atendly-migration.css` por `atendly-imports.css` para o módulo novo, no mesmo padrão de herança. Resíduo herdado: em ≤1099px a regra `.sidebar .wa-status span` esconde também o `.status-dot` |
+ | `shared/ui/Button`, CurrencyInput, Dialog, States, RouteAnnouncer | Reusadas e ampliadas no Goal014 | REFACTOR (feito) | A lógica acessível foi preservada e o visual passou a sair dos tokens. O conjunto ganhou `Badge`, `Field`, `ListItem`, `PageHeader`, `Spinner` e `Toast`, com `Dialog` cobrindo modal, sheet e drawer; estado nunca é comunicado só por cor e o skeleton fica fora da árvore acessível. `Field`, `ListItem`, `Toast` e `Spinner` ganharam consumidor real nas telas de Clientes e Serviços do Goal015 e nas telas de Agenda do Goal016 |
+ | `shared/icons`, Brand | Infraestrutura própria reutilizável; desenho anterior | REFACTOR | Adequar SVGs e traços ao design sem copiar todo export HTML |
+ | `features/auth/AuthScreen.tsx` | Refeita no visual aprovado no Goal014, com a integração do Goal003 intacta | REFACTOR (feito) | Login e cadastro seguem chamando `/v1/auth/login`, `/v1/auth/register` (com aceite de Termos e Política), `/v1/auth/session` e `/v1/auth/logout`, com erro do BFF junto ao campo certo e os demais valores preservados. A recuperação virou máquina de estados pura em `recoveryMachine.ts` — quatro passos, sem rede e sem copy de envio. O fluxo real por link do Goal003 segue funcional, apenas sem entrada pela UI (resíduo declarado de G-34) |
+-| ProductOnboardingScreen + OnboardingRuntime | **Substituído no Goal018.** `ProductOnboardingScreen`, a prop `preview`, o `PrototypeOnboardingScreen` e `features/onboarding/types.ts` não existem mais; `OnboardingRuntime` sobreviveu como estado/retomada e o fluxo passou a ser um despachante sobre `blocks/{business,schedule,ai,whatsapp}`, com progresso por bloco e sem WhatsApp obrigatório | REPLACE — feito | Quatro blocos percebidos e progressivo; contratos de importação, mínimos operacionais, demo, estilo e ativação independentes |
++| ProductOnboardingScreen + OnboardingRuntime | **Substituído no Goal018.** `ProductOnboardingScreen`, a prop `preview`, o `PrototypeOnboardingScreen` e `features/onboarding/types.ts` não existem mais; `OnboardingRuntime` sobreviveu como estado/retomada e o fluxo passou a ser um despachante sobre `blocks/{business,schedule,ai,whatsapp}`, com progresso por bloco e sem WhatsApp obrigatório | REPLACE — feito | Quatro blocos percebidos e progressivo; contratos de importação, mínimos operacionais, demo, estilo e ativação independentes. O diff020 trocou, dentro do bloco `schedule`, a nota estática "a importação será habilitada no fluxo de migração" por uma escolha real (`draft.servicePopulation`: `SCRATCH`/`IMPORT`); a importação em si não roda no onboarding — escolher "Importar do Minha Agenda" só copy-orienta para Configurações → Agenda depois, e o onboarding continua exigindo cadastro de ao menos um serviço na hora |
+ | `features/dashboard/DashboardScreen.tsx` | Início mínimo entregue no Goal014 dentro do shell novo | REFACTOR (feito em parte) | A Home usa as primitivas e o read model: status de IA e WhatsApp com os quatro estados, pendências e próximos do `GET /v1/dashboard`, skeleton, erro recuperável que preserva a estrutura e empty states. O checklist pós-onboarding ganhou o quarto item no Goal019 — "Concluir o teste da IA", derivado de `calendar.capabilities.activationTestCompleted`, que só é `true` com execução do teste em `SUCCEEDED` e ainda válida para o WhatsApp de hoje. Central de alertas e métricas adicionais ficam para o Goal023; distinguir IA pausada de instável passou a depender de `ai.reconciled`, entregue no Goal019 |
+ | `features/conversations/ProductConversationsScreen.tsx` | Decomposta em `features/conversations/` no diff017; o monolito de 964 linhas servindo duas rotas saiu do repositório | REFACTOR (feito) | O arquivo tem 28 linhas e só despacha inbox e chat, cada um declarando a configuração de shell uma única vez. Os filtros locais inventados (`ai`/`waiting`/`paused`/`unread`) deram lugar ao vocabulário do produto: três abas servidas pelo backend por `category`, entrada própria de ignorados por `ignored` com marcar e desmarcar reversíveis pela mesma operação, busca por `search` viajando com a aba, prioridade de quem aguarda atendimento humano, override manual de categoria, assumir ao enviar, sugestões de resposta com as cinco recusas, mídia sob demanda pelo proxy (player de áudio, imagem, documento e vídeo), transcrição nos quatro estados e estado de entrega nos quatro valores mais a ausência. Envio de mídia pela profissional fica declarado fora, por falta de contrato |
+ | `features/calendar/ProductAgendaScreen.tsx` | Decomposta em `features/agenda/` no Goal016; o arquivo único que servia seis rotas saiu do repositório | REFACTOR (feito) | 24 módulos com um despachante de nove cenários, nove rotas e apenas dois call sites de `useShellConfig`. O domínio dos Goals 008 e 009 ficou visível: Dia, Semana e Mês mobile-first sobre a mesma janela, com atendimento, bloqueio operacional, compromisso pessoal, exceção e ocupação por buffer distinguíveis por texto e forma; criação por `customerId` com múltiplos serviços e total obedecendo `totalPriceType`; hold reservado, consumido, liberado ao abandonar e expirado com mensagem própria; sobreposição só com motivo; séries de bloqueio e de atendimento com ocorrência separada da série; ciclo de vida com estado, presença e valor final distintos, histórico por evento e exceções por data. `GET /v1/time-blocks` nasceu neste Goal, porque não havia leitura de bloco em camada alguma. Notificar cliente continua fora (Goal021) |
+@@ -48,10 +48,10 @@ Os percentuais de reaproveitamento não foram estimados: quantidade de arquivos
+ | ProductDirectoryScreen área services | Decomposta em `features/services/` no Goal015 | REFACTOR (feito em parte) | `ProductServicesScreen` despacha lista e formulário de criar/editar. A lista mostra as quatro semânticas de preço distintas, duração ausente como ausente, ativo/inativo e `needsReview` com origem legível em texto — estado nunca só por cor. O formulário tem progressive disclosure real: nome, duração, preço e tipo visíveis; descrição, `colorToken` com preview, buffers antes/depois, recorrência e status atrás da revelação, com preço sem valor recusado junto ao campo. Modalidades e regras privadas continuam fora (negócio, Goal018); snapshot do atendimento já agendado segue imutável desde o Goal007 |
+ | ProductSettingsScreen | Negócio/IA/disponibilidade/integração antigas | REFACTOR | Seções progressivas, negócio/modalidades, agenda, estilos/FAQ, retenção, notificações e conta; APIs hoje ausentes |
+ | WhatsAppConnectionPanel | QR/pairing/reconnect e polling reais | REFACTOR | Preservar transporte; consentimento/número misto/ignorados, status exato e teste de ativação; não considerar QR emitido como conectado |
+-| ProductMigrationScreen | Diagnóstico/status/source-target da migração antiga | REPLACE | Sessão única, preview/categorias/conflitos/execução parcial/concluir/histórico. Depende do novo import engine |
++| ProductMigrationScreen / `features/migration/` | Decomposto em `features/imports/` no diff020 (rodada 1, pendente de review); `ProductMigrationScreen`, `MigrationScreen`, `features/migration/types.ts`, as rotas `app/(platform)/migracao/[step]` e `migracao/layout.tsx` e `shared/styles/atendly-migration.css` (628 linhas) saíram do repositório | REPLACE (feito) | A entrada única `/importacao` (`ImportsScreen`) decide a tela pelo estado lido em `GET /v1/calendar/imports` (direito/sessão/histórico), nunca por uma tentativa de abrir sessão: conexão da origem, retomar sessão viva (preview ou execução), ou só o histórico quando concluída — nunca oferecendo nova importação depois de concluída. `ConnectSourceScreen`, `ImportPreviewScreen`, `ImportConflictsScreen`, `ImportRunScreen` e `ImportHistoryCard` substituem o diagnóstico/status/source-target antigo; `ImportSettingsSection` é o ponto de entrada dentro de Configurações → Agenda, e o item "Importação" do menu Mais passou a apontar para `/importacao` (antes `/migracao/para-atendly`). Nenhum consumidor de frontend do protocolo pré-Goal010 (`/v1/calendar/migrations/*`) restou depois deste diff |
+ | Notificações, retenção e exclusão recuperável | Não localizadas como capacidades integradas | CREATE | Endpoints + estados persistidos + telas; não confundir frames do design com implementação |
+ | `features/preview`, mocks e telas sem prefixo Product | Removidos no Goal014, exceto o resíduo de auth | REMOVE (feito em parte) | Saíram do repositório `src/app/%5Fpreview/`, `features/preview/PreviewScreen.tsx`, as telas de demonstração sem prefixo `Product` (`AgendaScreen`, `ConversationsScreen`, `DirectoryScreen`) e a pasta `public/personas-ui/` inteira, junto com o desvio que o `ProductRuntime` mantinha para não aplicar o gate de sessão em rota de preview. `src/mocks/data/directory.ts` saiu no Goal015 com a decomposição do diretório. **Correção da linha anterior, que dizia `mocks/services` removido:** `src/mocks/services/MockAuthService.ts`, seu export em `src/mocks/index.ts` e o branch `preview` de `features/auth/AuthScreen.tsx` continuam existindo — nenhuma rota passa `preview=true`, então o caminho está morto, mas não foi removido. Divergência verificada no [review015](reviews/015-review.md); a remoção cabe a um Goal que possa tocar auth |
+-| Testes frontend | Suíte existente e crescendo; tela autenticada coberta em jsdom desde o Goal015, em browser ainda não | CREATE (feito em parte) | Há vitest de contrato e de lógica (`goal014-shell.test.ts` para navegação e mapeamento de status, `goal014-auth.test.tsx` para a recuperação visual e os erros de login/cadastro), testes de componente em jsdom para as primitivas e o gate renderizado `validate:ui` (Playwright em 360, 390, 768, 1024 e 1440, com overflow, alvo de toque, contraste, foco e reduced-motion). O Goal016 acrescentou dez suítes `goal016-*` no frontend — invariante de shell, alcance das rotas, visualizações, criação, séries, exceções e fonte, ciclo de vida e histórico, schema aditivo e axe —, mais integração do BFF contra PostgreSQL descartável e unidade do módulo de blocos do Scheduling. O Goal015 acrescentou `goal015-shell-invariant.test.tsx`, `goal015-customers.test.tsx` e `goal015-services.test.tsx`, que montam as telas autenticadas reais em jsdom com `ShellConfigProvider` — invariante de `useShellConfig`, autorização de IA negada por padrão, requisição por `customerId`, semânticas de preço e axe. O gate **de browser** continua cobrindo apenas rotas públicas: nenhuma tela de dentro do shell é exercitada em largura, contraste ou foco reais, e nenhum snapshot de frame foi adotado. Nenhum gate cobre `apps/frontend/tests/`: `npm run lint` é `eslint src`, e nem `validate-core.mjs` nem o workflow de CI têm passo de lint sobre os testes |
++| Testes frontend | Suíte existente e crescendo; tela autenticada coberta em jsdom desde o Goal015, em browser ainda não | CREATE (feito em parte) | Há vitest de contrato e de lógica (`goal014-shell.test.ts` para navegação e mapeamento de status, `goal014-auth.test.tsx` para a recuperação visual e os erros de login/cadastro), testes de componente em jsdom para as primitivas e o gate renderizado `validate:ui` (Playwright em 360, 390, 768, 1024 e 1440, com overflow, alvo de toque, contraste, foco e reduced-motion). O Goal016 acrescentou dez suítes `goal016-*` no frontend — invariante de shell, alcance das rotas, visualizações, criação, séries, exceções e fonte, ciclo de vida e histórico, schema aditivo e axe —, mais integração do BFF contra PostgreSQL descartável e unidade do módulo de blocos do Scheduling. O Goal015 acrescentou `goal015-shell-invariant.test.tsx`, `goal015-customers.test.tsx` e `goal015-services.test.tsx`, que montam as telas autenticadas reais em jsdom com `ShellConfigProvider` — invariante de `useShellConfig`, autorização de IA negada por padrão, requisição por `customerId`, semânticas de preço e axe. O diff020 (rodada 1, pendente de review) acrescentou nove suítes `goal020-*` para o módulo de importação: `goal020-imports-entry`, `goal020-import-preview`, `goal020-import-conflicts`, `goal020-import-run` e `goal020-import-settings-section` montam as telas reais em jsdom cobrindo entrada decidida pelo estado (conexão/retomada/histórico), "importar tudo" versus escolher categoria, as cinco decisões de conflito, `previewVersion` obrigatória na execução, `PARTIAL` como estado legítimo e a conclusão definitiva com confirmação; `goal020-reachability` prova que `/importacao` e o bloco de Configurações → Agenda montam conteúdo real pela própria rota; `goal020-shell-invariant` e `goal020-a11y` repetem a invariante de uma chamada de `useShellConfig` por árvore e a ausência de violação de axe nos mesmos cenários; `goal020-schema.test.ts` prova o contrato de `ImportState`/seleção de categoria em `node`, sem DOM. O gate **de browser** continua cobrindo apenas rotas públicas: nenhuma tela de dentro do shell é exercitada em largura, contraste ou foco reais, e nenhum snapshot de frame foi adotado. Nenhum gate cobre `apps/frontend/tests/`: `npm run lint` é `eslint src`, e nem `validate-core.mjs` nem o workflow de CI têm passo de lint sobre os testes |
+ 
+ ## Referência visual usada e divergências
+ 
+@@ -76,10 +76,10 @@ Design exportado não define modelo de estado, APIs ou arquitetura de componente
+ | BFF público | Auth, ownership de conta e agregação úteis | REFACTOR | Preservar serviço; separar comandos de aplicação, projeções e sincronização durável; nunca guardar segunda agenda |
+ | JWT/cookie/membership/registro | Base sólida; revogação por sessão, CSRF/origem e vínculo tenant/instância entregues no Goal003 | REFACTOR | Endurecido e testado sem trocar o auth provider; restam gates de conta ativa/exclusão (Goal022) |
+ | HTTP clients/error/request-id | Centralização local válida; schemas duplicados | REFACTOR | Contratos efetivamente importados, timeout/backoff de leitura, mutação com status recuperável |
+-| Scheduling core | Transações, cálculo de disponibilidade, multi-serviço e snapshots; agenda refeita no Goal008 (política única de escrita em `write-policy.ts` para confirmar, remarcar, cancelar, bloquear e holds, resultado idempotente no mesmo commit do efeito, hold pelo relógio do banco, quatro estados do produto e histórico por evento) e ocupação completada no Goal009 (regras de oferta do negócio aplicadas dentro do próprio motor de disponibilidade, buffer do catálogo como ocupação externa com snapshot, exceções geridas por rota e séries finitas de bloqueio e de atendimento sob a mesma política) | REFACTOR (feito para os writers e para o motor de disponibilidade) | Unidade transacional preservada, sem novo serviço, banco, fila ou fonte de agenda; o cálculo de intervalos existente foi reaproveitado, não reescrito. Restam as telas (Goal016/018); a importação foi entregue no Goal010, reusando `write-policy.ts`, a idempotência com resultado no mesmo commit e o padrão de lease pelo relógio do banco em vez de criar mecanismo paralelo |
++| Scheduling core | Transações, cálculo de disponibilidade, multi-serviço e snapshots; agenda refeita no Goal008 (política única de escrita em `write-policy.ts` para confirmar, remarcar, cancelar, bloquear e holds, resultado idempotente no mesmo commit do efeito, hold pelo relógio do banco, quatro estados do produto e histórico por evento) e ocupação completada no Goal009 (regras de oferta do negócio aplicadas dentro do próprio motor de disponibilidade, buffer do catálogo como ocupação externa com snapshot, exceções geridas por rota e séries finitas de bloqueio e de atendimento sob a mesma política) | REFACTOR (feito para os writers e para o motor de disponibilidade) | Unidade transacional preservada, sem novo serviço, banco, fila ou fonte de agenda; o cálculo de intervalos existente foi reaproveitado, não reescrito. Restam as telas de Agenda (Goal016/018); a importação foi entregue no Goal010, reusando `write-policy.ts`, a idempotência com resultado no mesmo commit e o padrão de lease pelo relógio do banco em vez de criar mecanismo paralelo. O diff020 (rodada 1, pendente de review) acrescentou só leitura e uma escrita pontual sobre esse mesmo motor, sem novo mecanismo: `ImportCompletionService.getLiveSession`/`getHistory` leem `ImportItem`/`ImportSessionCategory` para compor o estado que a tela de entrada consome (direito/sessão/histórico), e `ImportPreviewService.setCategorySelection` grava `selected` por categoria dentro da mesma `withImportIdempotency` usada pelas demais rotas de importação, sem tocar `previewVersion` nem os itens |
+ | CalendarProvider como escolha operacional | Duas agendas | REMOVE (feito no Goal010 para escrita e oferta) | `CalendarProviderFactory` não importa mais `MinhaAgendaCalendarProvider` e recusa a fonte remota com `409 MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED`; o gateway da agenda local foi preservado e o adapter externo ficou exclusivo da importação, chamado direto pelo módulo. Resta remover o vocabulário legado (`EXTERNAL`, campos de `source`/`target`) no Goal024 |
+ | Minha Agenda leitor/cifra/conversão horários | Conhecimento real da integração | REFACTOR (feito no Goal010) | Reusado para importação sem reescrever a integração: a resposta passou a ser validada por schema antes de qualquer mapeamento, a leitura é por categoria com `raw` preservado e sem os filtros operacionais, e cobertura/limitação são declaradas por categoria em vez de presumidas. A cifra com AAD por tenant foi reusada como estava. O que a origem comprovadamente não fornece está declarado e quantificado; o resto continua sem prova contra a API real |
+-| Minha Agenda escrita/source switching | Incompatível com produto | REMOVE (corte feito no Goal010; código removido no Goal025) | Nenhum caminho operacional novo escreve na origem nem troca de fonte: `connect` recusa `enableWrites` com `409 INTEGRATION_WRITES_NOT_SUPPORTED` e desconectar a origem não desativa a agenda. O protocolo antigo (`importToAtendly`, migração bidirecional) sobrevive como compatibilidade declarada até o Goal024 e já não reabre o direito de importação (`assertImportAvailable`); sem fallback remoto |
++| Minha Agenda escrita/source switching | Incompatível com produto | REMOVE (corte feito no Goal010; código removido no Goal025) | Nenhum caminho operacional novo escreve na origem nem troca de fonte: `connect` recusa `enableWrites` com `409 INTEGRATION_WRITES_NOT_SUPPORTED` e desconectar a origem não desativa a agenda. O protocolo antigo (`importToAtendly`, migração bidirecional) sobrevive como compatibilidade declarada até o Goal024 e já não reabre o direito de importação (`assertImportAvailable`); sem fallback remoto. No diff020, o único consumidor de frontend desse protocolo (`ProductMigrationScreen`) foi removido; `PUBLIC_API_V1.md` passou a datar essa ausência de consumidor a partir do fechamento do Goal010 (2026-09-12) |
+ | Migração antiga/jobs/maps/conflitos | Dados rastreáveis parciais, execução errada para alvo | REPLACE / REFACTOR | Substituir orquestração; evoluir registro/mapas preservando história |
+ | Cliente e serviço Scheduling | Cliente refeito no Goal006 (pessoa por ID, responsável, notas e tags com autorização, criação só na confirmação) e serviço refeito no Goal007 (quatro semânticas de preço, duração opcional com revisão, predicado operacional único, atributos do MVP, snapshot do acordo com total por regra única) | REFACTOR (feito) | Buffers na ocupação (Goal009), importação (Goal010), recorrência ofertável pela IA feita no Goal011 (`/internal/services` passou a emitir `recurrenceIntervalDays`), preferências e memória feitas no Goal012 (a memória da pessoa vive na IA em `CustomerMemory`, referenciando o `customerId` do Scheduling por ID, e o resumo só consome notas e tags `aiAuthorized` pela porta já existente), telas (Goal015) |
+ | IA graph/tools/LLM gateway | Separação entre modelo e efeito de agenda útil; políticas de conversa endurecidas no Goal011 e conhecimento/memória/sugestões no Goal012, sem trocar framework, provider nem fronteira | REFACTOR (feito para políticas, conhecimento e memória) | O grafo e as tools existentes foram reusados: a confirmação explícita virou regra de código (rascunho preparado em turno anterior, com códigos de recusa próprios), o erro de infraestrutura deixou de entrar no contexto do modelo, o hold do rascunho substituído passou a ser liberado no mesmo caminho do estado e o prompt ficou sem persona com versão derivada do conteúdo. Testes de falha, confirmação e handoff existem como evals determinísticos com modelo dublê no `validate:core`. O Goal012 reusou a mesma estrutura para conhecimento, memória e sugestões sem trocar framework nem fronteira: a recuperação continua sendo o nó `retrieval` do grafo, agora filtrando por serviço em foco e apresentando a precedência do produto; a memória da pessoa entrou como módulo próprio ao lado da `ConversationMemory` de sessão, sem substituí-la; e a sugestão ao humano roda **fora** do grafo, com binding somente leitura das tools existentes, para que nenhuma tool com efeito seja sequer oferecida ao modelo. O Goal013 fechou mídia sobre a mesma estrutura, também sem trocar framework, provider de modelo nem fronteira: a transcrição entrou como porta própria (`TranscriptionProvider`, implementação OpenAI por HTTP na conta já configurada, dublê em teste) atrás de um nó novo do grafo entre `recordInbound` e `sessionGate`, e imagem reusa o nó `handoff` que já existia, de forma determinística e sem chamar o modelo. A exibição chegou no Goal017, sobre o mesmo contrato e sem rota nova: player de áudio, imagem, documento e vídeo sob demanda pelo proxy, com transcrição apresentada como transcrição nos quatro `transcriptStatus`. De mídia sobra retenção (Goal022) e envio pela profissional, declarado fora por falta de contrato no transporte |

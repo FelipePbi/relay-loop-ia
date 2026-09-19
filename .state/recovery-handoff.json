@@ -1,0 +1,17 @@
+{
+  "status": "CONSUMED",
+  "autonomousRunId": "auto-3667d89d",
+  "nonce": "handoff-d42261a4-472",
+  "recoveryAttempt": 1,
+  "recoveredFromState": "DEVELOPER_RUNNING",
+  "nextSafeAction": "CONSUME_RESULT",
+  "jobId": "024-r1-developer-9e106da3",
+  "agent": "developer",
+  "goal": "024",
+  "round": 1,
+  "supersededOwner": "28392-39d71ff5",
+  "proof": "PROCESS_GONE",
+  "createdAt": "2026-09-16T02:50:24.217Z",
+  "consumedAt": "2026-09-16T02:50:26.799Z",
+  "consumedBy": "416-1d360d5a"
+}

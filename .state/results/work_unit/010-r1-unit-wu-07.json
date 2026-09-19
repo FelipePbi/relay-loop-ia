@@ -1,0 +1,65 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T03:49:46.340Z",
+  "attemptId": "010-r1-unit-wu-07-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-wu-07",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "WU-07",
+      "status": "COMPLETED",
+      "summary": "CalendarProviderFactory agora recusa MINHA_AGENDA para toda operação operacional, e os MigrationJob legados ganham classificação/inventário conservador (U-02) sem tocar na conclusão única do Goal010.",
+      "report": "O que mudou e por quê:\n\n1. `provider-factory.ts`: removida a construção de `MinhaAgendaCalendarProvider` da factory. `create()` agora lança `AppError(\"MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED\", ..., 409)` para qualquer `source === \"MINHA_AGENDA\"`, sem sequer consultar `IntegrationConnection`. Como `CalendarService.provider()` é o único caminho que toda leitura/escrita/oferta de horário atravessa, isso corta o provider remoto de listServices, listAppointments, getAvailability, createAppointment, rescheduleAppointment, cancelAppointment e holds, todos de uma vez. A leitura da origem sobrevive só em `MinhaAgendaCalendarProvider.getImportSnapshot`/`getMigrationSnapshot`, chamados fora desta factory.\n\n2. `internal-api/routes.ts`: `capabilities.createAppointments` deixou de anunciar escrita possível para MINHA_AGENDA (ficaria mentindo, já que a factory sempre recusa agora); removida a lógica/`schema` `enableWrites` que ficou órfã. Comentários de compatibilidade temporária foram adicionados nas rotas `connect`/`reconnect`/`disconnect` e `migrations*`, declarando que o contrato (enums, `source`/`target`, respostas idempotentes já gravadas) continua legível e que a remoção definitiva é no Goal024. A rota `DELETE /internal/calendar/integration` não foi alterada porque já não mexia em `CalendarSettings`: desconectar a integração nunca desativava a agenda operacional, e isso continua valendo.\n\n3. `migrations/legacy-job-reconciliation.ts` (novo): `classifyLegacyJob` classifica um `MigrationJob` legado em `TECHNICAL_COMPLETED` (COMPLETED com `summary.imported`), `TECHNICAL_FAILED` (FAILED), `TECHNICAL_INCOMPLETE` (PARTIAL) ou `NEEDS_REVIEW` (COMPLETED sem prova de importação, ou PENDING/ANALYZING/RUNNING sem estado terminal). `LegacyMigrationJobReconciliation.classifyPending()` é idempotente (nunca reclassifica um job já classificado) e nunca apaga linha; `.inventory()` devolve contagem por classe (reportável, U-02); `.needsReview()` lista os casos isolados sem removê-los.\n\n4. `migrations/calendar-migration-service.ts`: comentário de compatibilidade temporária na classe; corrigido um erro de tipo pré-existente introduzido pelo schema do WU-01 (`ExternalEntityType` ganhou `TIME_BLOCK`/`AVAILABILITY_EXCEPTION`, e o `entityType` lido de `MigrationConflict` — coluna que usa esse enum — não cabia mais no tipo local `EntityType` de 4 valores usado por `migrationDto`); ajustado o tipo de leitura para `ExternalEntityType`, sem mudar nenhum valor produzido pelo protocolo antigo.\n\n5. `migrations/index.ts`: passou a exportar `CalendarMigrationService`, `classifyLegacyJob` e `LegacyMigrationJobReconciliation` (estava vazio).\n\n6. Testes novos: `tests/unit/calendar-provider-factory.test.ts` (dublê de `MinhaAgendaCalendarProvider` via `vi.mock` que lança se instanciado — prova que nenhum caminho o chama; prisma dublê cujo `integrationConnection.findUnique` lança se chamado — prova que a factory nem consulta a conexão; `CalendarService` com fonte MINHA_AGENDA recusando listServices/getAvailability/createAppointment, e continuando normal com ATENDLY) e `tests/unit/legacy-job-reconciliation.test.ts` (classificação por status, idempotência, nunca apaga, inventário completo por classe, `needsReview` preserva linhas).\n\nComandos executados e resultado real:\n- `npx prisma generate` — OK, cliente já refletia os enums do WU-01 (`LegacyMigrationJobClass`, `ImportSessionStatus` etc.).\n- `npx tsc -p tsconfig.json --noEmit` — sem erros (corrigido o erro pré-existente de `ExternalEntityType` acima).\n- `npm run lint` (`eslint src --max-warnings=0`) — restam só 2 erros pré-existentes em `appointment-series-service.ts` (arquivo não tocado por esta WU, fora do meu diff); zero erros nos arquivos que modifiquei/criei.\n- `npx vitest run --dir tests/unit` — 11 arquivos, 155 testes, todos passando (inclui os 2 arquivos novos desta WU e os arquivos do WU-02 já presentes no worktree, que não toquei).\n\nNão toquei em `apps/scheduling-service/src/modules/migrations/` além dos arquivos citados, não revertei nem reimplementei nada do WU-01/WU-02 (schema, migration.sql, `provider.ts`/`client.ts`/`types.ts` do Minha Agenda, e os testes deles ficaram intocados), não criei commit, não mudei de branch e não toquei em `docs/migration/goals|reviews|MIGRATION_STATUS.md`.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/calendar/provider-factory.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+        "apps/scheduling-service/src/modules/migrations/index.ts",
+        "apps/scheduling-service/src/modules/migrations/legacy-job-reconciliation.ts",
+        "apps/scheduling-service/tests/unit/calendar-provider-factory.test.ts",
+        "apps/scheduling-service/tests/unit/legacy-job-reconciliation.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Qualquer escrita ou oferta operacional com fonte remota é recusada com erro próprio e identificável",
+          "met": true,
+          "detail": "provider-factory.ts lança AppError(\"MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED\", ..., 409) para qualquer source MINHA_AGENDA; coberto por testes em calendar-provider-factory.test.ts para createAppointment, getAvailability e listServices."
+        },
+        {
+          "criterion": "Nenhum caminho novo instancia o provider remoto fora da importação, provado por dublê que falha se for chamado",
+          "met": true,
+          "detail": "calendar-provider-factory.test.ts usa vi.mock para substituir MinhaAgendaCalendarProvider por uma classe que lança no construtor, e um prisma dublê cujo integrationConnection.findUnique lança se chamado; ambos os testes passam sem disparar esses erros, provando que a factory nunca os alcança."
+        },
+        {
+          "criterion": "Desconectar a origem de importação não desativa a agenda operacional",
+          "met": true,
+          "detail": "A rota DELETE /internal/calendar/integration (routes.ts) nunca escreveu em CalendarSettings — só remove IntegrationConnection — e não foi alterada; AtendlyCalendarProvider (fonte operacional) nunca lê IntegrationConnection."
+        },
+        {
+          "criterion": "Enums, campos de source/target e respostas idempotentes já gravadas continuam legíveis, com a compatibilidade temporária declarada e a remoção apontada ao Goal024",
+          "met": true,
+          "detail": "Nenhum contrato das rotas connect/reconnect/disconnect e migrations*/CalendarMigrationService foi alterado; comentários em routes.ts e calendar-migration-service.ts declaram a compatibilidade temporária e a remoção no Goal024."
+        },
+        {
+          "criterion": "MigrationJob legado, inclusive em estado COMPLETED, é preservado e classificado: não vira conclusão de importação, não consome o direito e não habilita segunda importação por default",
+          "met": true,
+          "detail": "legacy-job-reconciliation.ts classifica COMPLETED como TECHNICAL_COMPLETED (ou NEEDS_REVIEW sem prova) sem apagar/converter a linha; teste 'nunca converte COMPLETED do protocolo antigo em conclusão de importação' confirma ausência de completedAt; o direito é estrutural de ImportSession (WU-01), tabela não tocada por esta classificação."
+        },
+        {
+          "criterion": "Casos legados sem prova de conclusão ficam isolados para revisão e contados, e nenhum é apagado",
+          "met": true,
+          "detail": "classifyLegacyJob isola PENDING/ANALYZING/RUNNING e COMPLETED sem summary.imported como NEEDS_REVIEW; .needsReview() lista sem remover; .inventory() conta todas as classes, inclusive zeradas; testes cobrem os quatro casos e confirmam que nenhuma linha é removida."
+        },
+        {
+          "criterion": "O inventário e a classificação dos jobs legados são reportáveis, cobrindo U-02",
+          "met": true,
+          "detail": "LegacyMigrationJobReconciliation.inventory() devolve contagem por classe e .needsReview() lista os casos isolados; exportados via migrations/index.ts; cobertos por testes de inventário completo."
+        }
+      ]
+    },
+    "attemptId": "010-r1-unit-wu-07-a1"
+  }
+}

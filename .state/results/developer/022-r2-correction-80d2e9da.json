@@ -1,0 +1,82 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T19:04:52.604Z",
+  "attemptId": "022-r2-correction-80d2e9da-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "022-r2-correction-80d2e9da",
+      "goal": "022",
+      "round": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 0 em Sonnet, 1 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 022, rodada 2\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one COMPLEX unit scoped to them — behaviourally the legacy correction round. O Tech Lead havia escolhido OPUS_MEDIUM para esta rodada; a unidade é declarada COMPLEX para preservar esse julgamento sem que o plano nomeie um modelo.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 2 blocker(s) registrados pelo Tech Lead na revisão da rodada 1, preservando o que já foi aceito.\nexecutor: opus (high), tier COMPLEX · 1 tentativa(s)\nArquivos alterados (14): apps/ai-orchestrator/src/modules/handoff/HandoffService.ts, apps/ai-orchestrator/src/modules/internal/routes.ts, apps/ai-orchestrator/tests/internal/awaiting-human.routes.test.ts, apps/bff/PUBLIC_API_V1.md, apps/bff/src/clients/ai-orchestrator/index.ts, apps/bff/src/modules/notifications/index.ts, apps/bff/src/modules/notifications/plan.ts, apps/bff/src/modules/notifications/reconcile.ts, apps/bff/src/modules/notifications/store.ts, apps/bff/tests/goal022-notification-center.integration.test.ts, apps/bff/tests/goal022-notification-engine.test.ts, apps/bff/tests/goal022-notification-rules.test.ts, apps/bff/tests/helpers/notification-prisma-double.ts, docs/migration/CURRENT_STATE.md\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: CONDIÇÃO RESOLVIDA NUNCA REABRE — a central para de reportar a partir da segunda ocorrência (materialize usa createMany skipDuplicates e dedupeKey de condição é constante). — store.ts: materialize agora chama reopenResolvedConditions após o createMany — findMany por CONDITION com resolvedAt NOT NULL e updateMany (ainda filtrado por resolvedAt NOT NULL) que zera resolvedAt/readAt e move occurredAt/payload para o episódio novo. Provado por 3 testes novos em goal022-notification-engine.test.ts (32 passed) e por 2 casos novos na suíte de integração (não executados: RUN_INTEGRATION desligado). Condição aberta segue intocada.\n- OK: Blocker 2 resolvido: TELEFONE PERSISTIDO EM payload, contra o critério 5 (contactIdentification/formatPhone devolve telefone formatado ou dígitos crus, que atravessa planAwaitingHuman e é gravado). — HandoffService.ts: contactIdentification/formatPhone removidos e externalContactId fora do select; contactName é string|null. Rota interna, schema do cliente do BFF (z.string().nullable()) e plan.ts acompanham — sem nome a chave nem entra no payload. Provado por awaiting-human.routes.test.ts (contactName nulo e corpo sem o número, 6 passed) e por caso novo em goal022-notification-rules.test.ts.\n\n## Blocker 1 — CONDIÇÃO RESOLVIDA NUNCA REABRE\n\nCausa: `materialize` só fazia `createMany({ skipDuplicates: true })` (`ON CONFLICT DO NOTHING` sobre `(tenantId, dedupeKey)`) e o `dedupeKey` de condição é a identidade da **condição**, não da ocorrência (`WHATSAPP_DISCONNECTED:tenant`, `CUSTOMER_WAITING_HUMAN:conversation:<id>`). Depois da primeira resolução, o segundo episódio colidia com a linha do primeiro e era engolido em silêncio.\n\nCorreção (`apps/bff/src/modules/notifications/store.ts`): `materialize` passou a completar o `createMany` com `reopenResolvedConditions` — um `findMany` (shape `CONDITION`, `dedupeKey in [...]`, `resolvedAt: { not: null }`) que, no caso comum, termina sem UPDATE nenhum; havendo linha resolvida, um `updateMany` por `dedupeKey` ainda filtrado por `resolvedAt: { not: null }` devolve `resolvedAt` a nulo, zera `readAt` (o episódio novo é fato novo e ficaria invisível na caixa de entrada) e move `occurredAt`/`payload` para o episódio novo. Propriedades preservadas: condição **ainda aberta** não é tocada (o `readAt` de quem já viu sobrevive); `EVENT` nunca entra; o filtro em `resolvedAt` mantém a operação idempotente sob concorrência (a segunda requisição não acha linha resolvida). `materialize` agora devolve `{ created, reopened }` (`MaterializeResult`, exportado em `notifications/index.ts`); nenhum chamador usava o número antigo.\n\nDoc de `reconcile.ts` (propriedade 3, \"o upsert nunca reescreve readAt/occurredAt/resolvedAt\") corrigida, senão passaria a mentir.\n\nTestes: 3 casos novos em `apps/bff/tests/goal022-notification-engine.test.ts` (cliente volta a esperar → reabre não lida com o novo `openedAt`; canal cai, volta e cai de novo → uma linha só, reaberta; condição ainda aberta não é reaberta). O dublê `notification-prisma-double.ts` ganhou `findMany` e um predicado de filtro compartilhado com `updateMany` (incluindo `dedupeKey` e `resolvedAt: { not: null }`). Em `goal022-notification-center.integration.test.ts` foram acrescentados o caso de reabertura do canal contra PostgreSQL e a continuação do caso de cliente esperando.\n\n## Blocker 2 — TELEFONE PERSISTIDO EM `payload`\n\nCorrigido na fonte, não no consumidor: `listConversationsAwaitingHuman` (`apps/ai-orchestrator/src/modules/handoff/HandoffService.ts`) devolve `contactName: string | null` — nome do contato ou nada. `contactIdentification`/`formatPhone` foram removidos (era deles a queda para telefone formatado e, fora dos padrões BR de 12/13 dígitos, para os dígitos crus) e `externalContactId` saiu do `select` da conversa. A rota interna passa o valor adiante; o schema do cliente do BFF virou `z.string().nullable()`; `planAwaitingHuman` (`plan.ts`) só inclui `contactName` no `payload` quando existe — a chave ausente é exatamente o que a copy genérica do frontend (`\"Um cliente\"`) já esperava, então nenhuma tela mudou.\n\nTestes: `awaiting-human.routes.test.ts` passou a exigir `contactName` nulo e que o corpo não contenha o número; caso novo em `goal022-notification-rules.test.ts` prova que sem nome o `payload` fica só com `reason`.\n\n## Documentação afetada\n\n- `apps/bff/PUBLIC_API_V1.md`: `contactName` pode não aparecer (sem queda para telefone) e semântica da condição que reabre (`resolvedAt` a nulo, `occurredAt` novo, não lida de novo, mesma linha).\n- `docs/migration/CURRENT_STATE.md`: FATO novo sobre a reabertura e ajuste do FATO das leituras dos donos (`awaiting-human` devolve nome ou `null`).\n\n## Comandos executados\n\n- `npx vitest run` (apps/ai-orchestrator): 75 files passed, 9 skipped — 706 passed, 69 skipped.\n- `npx vitest run` (apps/bff): 4 files passed, 22 skipped — 39 passed, 169 skipped (a suíte de integração está atrás de `RUN_INTEGRATION`, que não está ligado neste ambiente).\n- `npx vitest run tests/goal022-notification-rules.test.ts tests/goal022-notification-engine.test.ts` (bff): 32 passed.\n- `npx vitest run tests/goal022-notifications-model.test.ts tests/goal022-notifications-screen.test.tsx` (frontend): 12 passed.\n- `npx tsc --noEmi\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 0 · opus: 1\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "COMPLEX",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "opus",
+            "effort": "high",
+            "tier": "COMPLEX",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/ai-orchestrator/src/modules/handoff/HandoffService.ts",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/tests/internal/awaiting-human.routes.test.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/modules/notifications/index.ts",
+              "apps/bff/src/modules/notifications/plan.ts",
+              "apps/bff/src/modules/notifications/reconcile.ts",
+              "apps/bff/src/modules/notifications/store.ts",
+              "apps/bff/tests/goal022-notification-center.integration.test.ts",
+              "apps/bff/tests/goal022-notification-engine.test.ts",
+              "apps/bff/tests/goal022-notification-rules.test.ts",
+              "apps/bff/tests/helpers/notification-prisma-double.ts",
+              "docs/migration/CURRENT_STATE.md"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "COMPLEX": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 0,
+            "opus": 1,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 10000,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "022-r2-correction-80d2e9da-a1"
+  }
+}

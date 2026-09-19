@@ -1,0 +1,86 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T00:52:08.292Z",
+  "attemptId": "019-r3-correction-41471796-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "019-r3-correction-41471796",
+      "goal": "019",
+      "round": 3,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 0 em Sonnet, 1 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 019, rodada 3\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one COMPLEX unit scoped to them — behaviourally the legacy correction round. O Tech Lead havia escolhido OPUS_HIGH para esta rodada; a unidade é declarada COMPLEX para preservar esse julgamento sem que o plano nomeie um modelo.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 4 blocker(s) registrados pelo Tech Lead na revisão da rodada 2, preservando o que já foi aceito.\nexecutor: opus (high), tier COMPLEX · 1 tentativa(s)\nArquivos alterados (18): apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts, apps/ai-orchestrator/src/modules/activation-test/ActivationTestReplySender.ts, apps/ai-orchestrator/src/modules/activation-test/ActivationTestRunStore.ts, apps/ai-orchestrator/src/modules/activation-test/ActivationTestService.ts, apps/ai-orchestrator/src/modules/activation-test/activation-test-run.ts, apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts, apps/ai-orchestrator/src/modules/internal/routes.ts, apps/ai-orchestrator/src/modules/tenant-config/tenant-execution-context.ts, apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts, apps/ai-orchestrator/tests/activation-test/activation-test-codes-documented.test.ts, apps/ai-orchestrator/tests/activation-test/activation-test-service.test.ts, apps/ai-orchestrator/tests/activation-test/support/in-memory-activation-test-runs.ts, apps/ai-orchestrator/tests/security/platform-credential-isolation.test.ts, apps/bff/PUBLIC_API_V1.md, apps/scheduling-service/src/modules/calendar/removal.ts\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: o driver entrega a mensagem à IA com businessContext e aiSettings — ActivationTestAiDriver ganhou a dep obrigatória `tenantContext` (loadTenantExecutionContext) e passa businessContext/aiSettings no ChannelInboundMessage e em handleIncomingText; ChannelConnectionService usa o mesmo helper. Provado em tests/activation-test/activation-test-ai-driver.test.ts, que assere com o predicado de produção businessContextConfigured.\n- OK: Blocker 2 resolvido: a resposta da IA sai pelo canal do tenant — Novo TenantChannelReplySender (credencial do vínculo do tenant + EvolutionProvider + OutboxStore) é dep obrigatória do driver; findAiReply devolve deliveryState e requireAiReply recusa resposta não entregue com ACTIVATION_TEST_AI_REPLY_NOT_DELIVERED. Provado no teste do driver, no teste de serviço (replyDelivery=PENDING falha o passo) e em platform-credential-isolation.test.ts.\n- OK: Blocker 3 resolvido: deleteAppointment não esbarra mais no ON DELETE RESTRICT — removal.ts apaga AppointmentItem, AppointmentEvent e Appointment na mesma transação; o dublê passou a lançar P2003 como o banco. Provado contra PostgreSQL real em goal019-calendar-removal.test.ts (59 testes de integração exit 0) e, com o fix revertido, o banco recusou com AppointmentItem_tenantId_appointmentId_fkey.\n- OK: Blocker 4 resolvido: códigos de recusa nomeiam a causa real e estão documentados — AI_DID_NOT_ACT, AI_DID_NOT_REPLY, AI_REPLY_NOT_DELIVERED e AI_DID_NOT_CONFIRM_APPOINTMENT substituem o uso de NO_ELIGIBLE_SERVICE/NO_AVAILABILITY; NOT_PAUSED (inalcançável) removido. PUBLIC_API_V1.md ganhou a tabela de failureCode, com teste (activation-test-codes-documented.test.ts) que lê o doc publicado e cobre os 12 códigos.\n\n## O que mudou e por quê\n\n### Blocker 1 — o teste real entregava a mensagem sem contexto de negócio\n`ActivationTestAiDriver.deliver` chamava `assistant.handleIncomingText` sem `businessContext` e sem `aiSettings`. Em `prepareGraphTurn`, `businessContextConfigured` ficava falso e **todo** turno virava a decisão imediata de \"contexto incompleto\": a IA nunca consultaria catálogo, agenda nem confirmaria agendamento em produção.\n\n- Novo `apps/ai-orchestrator/src/modules/tenant-config/tenant-execution-context.ts` (`loadTenantExecutionContext` / `tenantExecutionContextFrom`): a montagem do contexto do turno a partir de `AiTenantConfig`, num lugar só.\n- O driver ganhou a dep obrigatória `tenantContext` e passa `businessContext`/`aiSettings` tanto no `ChannelInboundMessage` quanto na chamada do assistente.\n- `ChannelConnectionService.resolveEvolutionInboundContext` passou a usar o mesmo helper — era a divergência entre os dois caminhos que produziu o blocker.\n\n### Blocker 2 — a resposta da IA não saía pelo canal do tenant\n`handleIncomingText` grava `Message{source: AI, deliveryState: PENDING}` e para; o envio é o nó `sendResponse` do grafo, que este caminho não executa.\n\n- Novo `ActivationTestReplySender.ts`: porta `ActivationTestReplyPort` + implementação `TenantChannelReplySender`, que resolve a credencial do vínculo **do tenant** (`ChannelConnectionService.resolveChannelCredential`), envia pelo `EvolutionProvider` e reconcilia a linha via `OutboxStore` (`markSent` / `markUndelivered` com `classifySendFailure`; falha comprovadamente pré-envio sobe para o passo retentar).\n- O driver ganhou a dep obrigatória `replySender` e entrega a resposta ao número da plataforma (o cliente simulado), devolvendo `aiDelivery` no turno.\n- `ActivationTestRunStore.findAiReply` passou a devolver `deliveryState`, e `requireAiReply` recusa resposta que não saiu (`SENT`), em vez de marcar \"preço informado\" sobre um envio que não aconteceu.\n- Wiring de produção em `internal/routes.ts`.\n\n### Blocker 3 — `deleteAppointment` quebrava em produção\n`AppointmentItem` e `AppointmentEvent` referenciam `Appointment` com `onDelete: Restrict`; o `appointment.delete` direto ficava verde no dublê (que cascateava) e quebrava com `P2003` no banco.\n\n- `CalendarRemovalService.deleteAppointment` apaga item, evento e atendimento na **mesma transação** (`inTransaction` respeita o caso de já estar dentro de uma `Prisma.TransactionClient`), sempre só por `tenantId` + ID.\n- `tests/unit/support/database-double.ts` deixou de mentir: `appointment.delete` agora lança `P2003` (helper `foreignKeyViolation`) enquanto houver filho.\n- Fixtures do teste unitário passaram a criar o atendimento como a IA cria (com item e com evento).\n\n### Blocker 4 — o código de recusa mentia sobre a causa\n`requireAiToolCall`/`requireAiReply` lançavam `ACTIVATION_TEST_NO_ELIGIBLE_SERVICE` (\"nenhum serviço apto\"), que chega ao consumidor em `failureCode` e mandava mexer no catálogo — que já é verificado antes de o teste começar.\n\n- Novos códigos em `ACTIVATION_TEST_REFUSALS`: `ACTIVATION_TEST_AI_DID_NOT_ACT`, `ACTIVATION_TEST_AI_DID_NOT_REPLY`, `ACTIVATION_TEST_AI_REPLY_NOT_DELIVERED`, `ACTIVATION_TEST_AI_DID_NOT_CONFIRM_APPOINTMENT` (este último substitui o `NO_AVAILABILITY` usado quando a ferramenta de agendamento roda sem confirmar).\n- Removido `ACTIVATION_TEST_NOT_PAUSED`: declarado e inalcançável — documentá-lo seria publicar um código que nunca acontece.\n- `apps/bff/PUBLIC_API_V1.md` ganhou a seção \"Códigos de falha da execução (`failureCode`)\" com significado e caminho de resolução de cada um, e a linha de `failureCode` passou a apontar para ela.\n\n## Provas novas (sensíveis a reversão)\n\n- `apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts` (6 testes): contexto do tenant chega ao assistente e é aceito pelo predicado de produção `businessContextConfigured`; a resposta é enviada pelo canal do tenant para o número da plataforma; IA silenciosa não gera envio; entrega não confirmada \n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 0 · opus: 1\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "COMPLEX",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "opus",
+            "effort": "high",
+            "tier": "COMPLEX",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts",
+              "apps/ai-orchestrator/src/modules/activation-test/ActivationTestReplySender.ts",
+              "apps/ai-orchestrator/src/modules/activation-test/ActivationTestRunStore.ts",
+              "apps/ai-orchestrator/src/modules/activation-test/ActivationTestService.ts",
+              "apps/ai-orchestrator/src/modules/activation-test/activation-test-run.ts",
+              "apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/src/modules/tenant-config/tenant-execution-context.ts",
+              "apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts",
+              "apps/ai-orchestrator/tests/activation-test/activation-test-codes-documented.test.ts",
+              "apps/ai-orchestrator/tests/activation-test/activation-test-service.test.ts",
+              "apps/ai-orchestrator/tests/activation-test/support/in-memory-activation-test-runs.ts",
+              "apps/ai-orchestrator/tests/security/platform-credential-isolation.test.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/scheduling-service/src/modules/calendar/removal.ts",
+              "apps/scheduling-service/tests/integration/goal019-calendar-removal.test.ts",
+              "apps/scheduling-service/tests/unit/calendar-removal.test.ts",
+              "apps/scheduling-service/tests/unit/support/database-double.ts"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "COMPLEX": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 0,
+            "opus": 1,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 10126,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "019-r3-correction-41471796-a1"
+  }
+}

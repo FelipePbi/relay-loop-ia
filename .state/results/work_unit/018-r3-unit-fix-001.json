@@ -1,0 +1,40 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T21:49:29.450Z",
+  "attemptId": "018-r3-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: nextRequiredStep deve ter teste que falharia se a checagem de modalities.length===0/ON_SITE-sem-address fosse revertida",
+          "met": true,
+          "detail": "2 testes novos em goal018-onboarding-reachability.test.tsx (describe 'a retomada...') com business.name/category preenchidos e modalities:[] ou ['ON_SITE'] sem address, esperando 'dados-do-negocio'. Confirmado manualmente: revertendo a checagem em OnboardingRuntime.tsx:140-146 o resultado muda para 'whatsapp-conectar', fazendo os testes falharem."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: onboardingError (409) precisa de teste que falhe se o texto voltar a citar WhatsApp",
+          "met": true,
+          "detail": "Novo describe 'erro 409 ao salvar uma etapa não cita WhatsApp': teste unitário de onboardingError(BffHttpError 409) e teste end-to-end no cenário 'tom-da-ia' com updateOnboarding rejeitando 409, verificando a copy exata e ausência de 'WhatsApp' na tela."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: prova de que address é omitido ao desmarcar ON_SITE deve existir também em Configurações/negócio, não só no onboarding",
+          "met": true,
+          "detail": "Novo teste no describe 'BusinessSettings' de goal018-business-block.test.tsx, espelhando o teste do onboarding: desmarca ON_SITE após digitar endereço, troca para Online, e verifica com toHaveBeenCalledWith exato que updateBusiness é chamado sem a chave address."
+        }
+      ],
+      "changedFiles": [
+        "apps/frontend/tests/goal018-onboarding-reachability.test.tsx",
+        "apps/frontend/tests/goal018-business-block.test.tsx"
+      ],
+      "goal": "018",
+      "jobId": "018-r3-unit-fix-001",
+      "protocolVersion": 2,
+      "report": "Os 3 blockers da rodada 2 eram todos de PROVA ausente, não de código incorreto: em cada caso a implementação já existia (nextRequiredStep em OnboardingRuntime.tsx:138-156, a copy 409 em blocks/shared.tsx:78-83, e a omissão da chave `address` em blocks/business.tsx:192 e ProductSettingsScreen.tsx:255), mas nenhum teste falharia se a correção fosse revertida. Adicionei apenas testes, sem tocar em código de produção:\n\n1. `apps/frontend/tests/goal018-onboarding-reachability.test.tsx`: dois novos testes em 'a retomada abre a próxima pendência real' com business.name/category preenchidos (diferente dos 4 call sites existentes, que usavam `emptyState()` com business:null e por isso nunca exercitavam o `modalities.length===0`/`ON_SITE sem address`). Confirmei manualmente restaurando uma cópia temporária do arquivo com a checagem revertida (só `!name || !category`) que o resultado muda de 'dados-do-negocio' para 'whatsapp-conectar', ou seja, os novos testes detectam a regressão.\n2. Mesma suíte: novo describe 'erro 409 ao salvar uma etapa não cita WhatsApp' com (a) teste unitário de `onboardingError` importado de `blocks/registry` chamado com um `BffHttpError` de status 409, e (b) teste end-to-end no cenário 'tom-da-ia' fazendo `updateOnboarding.mockRejectedValueOnce` com o mesmo erro e verificando a copy exata na tela e ausência de qualquer menção a 'WhatsApp'.\n3. `apps/frontend/tests/goal018-business-block.test.tsx`: novo teste no describe de `BusinessSettings` espelhando o teste equivalente do onboarding (linha 189 original), desmarcando ON_SITE depois de digitar endereço e trocando para Online, verificando com `toHaveBeenCalledWith` de objeto exato que `updateBusiness` é chamado sem a chave `address`.\n\nComandos executados: `npx vitest run tests/goal018-onboarding-reachability.test.tsx tests/goal018-business-block.test.tsx` (57 testes, todos passando), depois `npx vitest run` completo em apps/frontend (42 arquivos, 416 testes, todos passando), e `npx tsc --noEmit -p tsconfig.json` (sem erros).\n\nIncidente e recuperação: durante a investigação do Blocker 1, testei manualmente uma reversão da checagem em `OnboardingRuntime.tsx` usando `node -e` para simular o comportamento antigo, e por engano rodei `git checkout -- OnboardingRuntime.tsx` antes de restaurar o conteúdo original, o que reverteu o arquivo para a versão em HEAD (perdendo o trabalho não commitado de rodadas anteriores deste Goal — `businessAddress`/`businessModalities` no draft e a lógica de `nextRequiredStep`). Recuperei o conteúdo exato via `git fsck --unreachable` (o blob ficou órfão mas presente no object store local) e confirmei byte a byte contra o que eu havia lido no início desta sessão antes de restaurar. `git status` no repositório inteiro após a recuperação bate exatamente com o snapshot do início da conversa — nenhum outro arquivo foi afetado. Não usei `git checkout`/`reset`/`restore` novamente depois disso.",
+      "round": 3,
+      "status": "COMPLETED",
+      "summary": "Adicionados testes que provam os 3 blockers da rodada 2 (nextRequiredStep, copy 409 sem WhatsApp, e persistência do address em Configurações), sem alterar código de produção; suíte completa do frontend (416 testes) e typecheck passam.",
+      "workUnitId": "FIX-001"
+    },
+    "attemptId": "018-r3-unit-fix-001-a1"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-19T22:14:38.155Z",
+  "base": "7253ce0d71cd3b3024031c47577f5e91c2cd2865",
+  "worktreeInitialHead": "7253ce0d71cd3b3024031c47577f5e91c2cd2865",
+  "head": "7253ce0d71cd3b3024031c47577f5e91c2cd2865",
+  "branch": "ai-loop/goal-026",
+  "trackedDiffHash": "754ced535e1b9d403dd6526040236739fafc9d4d4524bacdf78417d2567410b4",
+  "trackedFileCount": 28,
+  "trackedFiles": [
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/modules/migrations/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffMigrationService.ts",
+    "apps/frontend/src/features/auth/AuthScreen.tsx",
+    "apps/frontend/src/features/auth/types.ts",
+    "apps/frontend/src/mocks/index.ts",
+    "apps/frontend/src/mocks/services/MockAuthService.ts",
+    "apps/frontend/tests/goal010-import-schema.test.ts",
+    "apps/scheduling-service/src/modules/calendar/provider-factory.ts",
+    "apps/scheduling-service/src/modules/integrations/index.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/availability.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/import-source-reader.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+    "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+    "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+    "apps/scheduling-service/src/modules/migrations/index.ts",
+    "apps/scheduling-service/tests/unit/agenda-write-policy.test.ts",
+    "apps/scheduling-service/tests/unit/appointment-hold.test.ts",
+    "apps/scheduling-service/tests/unit/calendar-provider-factory.test.ts",
+    "apps/scheduling-service/tests/unit/import-completion-service.test.ts",
+    "apps/scheduling-service/tests/unit/import-lease.test.ts",
+    "apps/scheduling-service/tests/unit/import-origin-connection.test.ts",
+    "apps/scheduling-service/tests/unit/import-routes.test.ts",
+    "apps/scheduling-service/tests/unit/minha-agenda-import-snapshot.test.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts"
+  ],
+  "untrackedHash": "9150e6d25d70b7b7d84c8f38f9343bce7a877348208b0ee1bb447d3c49fe7ec3",
+  "untrackedFileCount": 2,
+  "untracked": [
+    {
+      "path": "apps/scheduling-service/pnpm-lock.yaml",
+      "sha256": "9e2e38a00b5416b27c1c79ce82327dbc8142caa52ac53d40d0703735a3c16ba6",
+      "bytes": 116162
+    },
+    {
+      "path": "apps/scheduling-service/pnpm-workspace.yaml",
+      "sha256": "70af0ad1b1b6f311a7c76c6a04c0bda60e81f8070142553d70546f8e59825137",
+      "bytes": 133
+    }
+  ],
+  "contentHash": "135dff8594adabb78212a726c3dbff32bfa39214ec835afbb3c8488e4f1ae707",
+  "attempt": 1,
+  "jobId": "026-r1-developer-0e6c9fca"
+}

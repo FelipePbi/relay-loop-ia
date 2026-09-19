@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T18:48:04.922Z",
+  "attemptId": "022-r1-unit-wu-09-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "G-28 é registrado como fechado na parte de central e aberto na parte de alerta externo, com U-03 nomeada",
+          "met": true,
+          "detail": "docs/migration/GAP_ANALYSIS.md linha 58: G-28 marcado '**fechado na parte de central, níveis, banner e preferências no diff022; aberto na parte de alerta externo**', com a lacuna nomeando U-03 explicitamente e linkando a Incerteza correspondente."
+        },
+        {
+          "criterion": "Nenhuma afirmação documental descreve superfície ausente do diff",
+          "met": true,
+          "detail": "Todas as afirmações foram checadas contra o diff real (git diff cb0312b..HEAD nos arquivos de código, leitura de species.ts/reconcile.ts/onboarding-state.ts/rotas). E-mail crítico, retenção/purga e a não-idempotência da migration foram registrados como LIMITE, não como entregues."
+        },
+        {
+          "criterion": "MIGRATION_STATUS.md, MASTER_PLAN.md, DECISIONS.md e reviews/ não são tocados",
+          "met": true,
+          "detail": "git status --porcelain -- docs/migration/ mostra apenas CURRENT_STATE.md, DATA_MIGRATION.md, GAP_ANALYSIS.md, REUSE_ANALYSIS.md e VALIDATION_GATE.md modificados."
+        }
+      ],
+      "changedFiles": [
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/VALIDATION_GATE.md"
+      ],
+      "goal": "022",
+      "jobId": "022-r1-unit-wu-09",
+      "protocolVersion": 2,
+      "report": "Antes de editar, li os cinco documentos-alvo e depois fundamentei cada afirmação em evidência real do diff: `git diff cb0312b9268aa16c8e013aecf92561218ca1d43e --stat/--` nos arquivos de código do WU-03/04/05/06/07/08 (schema.prisma, PUBLIC_API_V1.md, app.ts, env.ts, status/routes.ts, validate-integration.mjs, AppShell.tsx, navigation.ts, systemStatus.tsx, scheduling client, internal routes da IA), leitura completa de `species.ts`, `reconcile.ts`, `onboarding-state.ts` e do ensaio `scripts/goal022-notification-center-migration-rehearsal.mjs` (incluindo seu próprio cabeçalho, que declara a migration como NÃO retomável — divergência que registrei como LIMITE em vez de inventar retomada provada).\n\nAlterações:\n- **CURRENT_STATE.md**: acrescentei a seção `## Delta implementado — Goal022, 2026-09-15 (em execução)` ao final, no mesmo formato dos deltas anteriores — schema novo (TenantNotification/NotificationPreference/NotificationSyncState, sete espécies), motor sem worker, leituras reusadas dos donos (IA/Scheduling/onboarding/importação), as quatro rotas públicas, o que o frontend/chrome entregam, o novo passo do gate (25→26), e dois LIMITEs: a divergência de padrão de retomada da migration (declarada pelo próprio ensaio) e a ausência de e-mail crítico/push/app nativo.\n- **GAP_ANALYSIS.md**: reescrevi a linha G-28 marcando fechamento na parte de central/níveis/banner/preferências e abertura explícita na parte de alerta externo, nomeando **U-03** (a incerteza de capacidade/custo já isolada na tabela \"Incertezas isoladas\"). Também corrigi duas referências que atribuíam a central de notificações ao \"Goal023\" (na linha G-31 e implicitamente ligadas a G-27), já que ela chegou de fato no Goal022.\n- **REUSE_ANALYSIS.md**: adicionei entrada nomeando explicitamente os reaproveitamentos pedidos — `onboardingState`, `GET /v1/calendar/imports` (via `importState`), `SystemStatusProvider`/`systemStatus.tsx` e `GET /v1/status` — e ajustei a linha de `AppShell.tsx` e a de `DashboardScreen.tsx` (que também citava \"Goal023\" para a central).\n- **DATA_MIGRATION.md**: atualizei a linha da tabela §9 sobre notificações/lembretes para refletir Goal021 (Scheduling) e Goal022 (BFF) executados, e inseri um novo parágrafo \"Atualização do Goal022\" com a migration, os dois invariantes de banco, o ensaio e seus limites — incluindo, com o mesmo peso que os fatos positivos, a divergência de não-retomada que o próprio ensaio declara fora do seu escopo (WU-03, não WU-05).\n- **VALIDATION_GATE.md**: atualizei a contagem de passos de 25 para 26 na tabela de comandos e na lista numerada, e troquei a referência ao último ensaio de `rehearse:goal021-reminder-migration` para `rehearse:goal022-notification-center-migration`.\n\nComandos executados (leitura/inspeção apenas, nenhum teste ou build): `git diff --stat/--`, `grep`/`wc -l`/`sed -n` sobre os arquivos de código e docs, `node -e` para inserir texto preservando CRLF (os cinco documentos usam terminador CRLF; validei com `file` antes e depois que nenhum arquivo mudou de terminador). Não executei `validate:core`/`validate:integration` — nenhuma afirmação de teste passado foi inventada; onde cito arquivos de teste, cito só nome e escopo, nunca resultado de execução.\n\nVerifiquei que nenhum documento de controle (`goals/`, `reviews/`, `MIGRATION_STATUS.md`, `MASTER_PLAN.md`, `DECISIONS.md`) foi tocado, e que a integridade das tabelas Markdown (contagem de `|` por linha) foi preservada em todas as linhas editadas.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Atualizei os cinco documentos de migração do Goal022 com o que o diff realmente entrega, fechando G-28 na parte de central e deixando o alerta externo explicitamente aberto com U-03 nomeada.",
+      "workUnitId": "WU-09"
+    },
+    "attemptId": "022-r1-unit-wu-09-a1"
+  }
+}

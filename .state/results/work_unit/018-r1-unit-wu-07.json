@@ -1,0 +1,64 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T20:13:57.872Z",
+  "attemptId": "018-r1-unit-wu-07-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-07",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-07",
+      "status": "COMPLETED",
+      "summary": "Decompus features/onboarding em módulos por bloco com um despachante, removi PrototypeOnboardingScreen/preview/types.ts e 20 cenários órfãos do protótipo, provando alcançabilidade por 39 testes novos.",
+      "report": "O que havia: `OnboardingScreen.tsx` concentrava o protótipo inteiro (PrototypeOnboardingScreen, prop `preview`, componentes Summary/Body/ImportRow) e `ProductOnboardingScreen.tsx` concentrava o produto inteiro (shell + corpo de 13 cenários + persistStep com switch de 13 casos), com `types.ts` sem nenhum importador real.\n\nO que mudou:\n- `scenarios.ts`: removidos 20 cenários sem consumidor real — as 8 variações `importar-*` (só existiam no protótipo descontinuado; a importação real é do Goal019) e 12 das 13 `minha-agenda-*` (só `minha-agenda-conectar` é alcançada pelo produto hoje; as demais simulavam etapas de uma integração externa inexistente, contrariando \"não inventar feature\" de AGENTS.md). `onboardingOrder` caiu de 34 para 14 chaves, o que remove a rota estática correspondente via `generateStaticParams`.\n- `blocks.ts` (novo): mapeia cada cenário sobrevivente a um dos 4 blocos do vault (Seu negócio / Sua agenda / Sua IA / WhatsApp), define `onboardingFlow` (ordem real de navegação, preservada do `flow` antigo) e `progressPercent`.\n- `blocks/shared.tsx`, `blocks/business.tsx`, `blocks/schedule.tsx`, `blocks/ai.tsx`, `blocks/whatsapp.tsx`, `blocks/registry.ts` (novos): cada bloco só conhece seus próprios cenários — corpo (JSX) e persistência (chamada ao BFF + navegação), extraídos 1:1 do `ProductOnboardingScreen.tsx` antigo, sem mudança de comportamento.\n- `OnboardingShell.tsx` (novo): chrome puramente apresentacional (topbar, progresso, form, erro, ações) — mostra só o nome do bloco corrente, sem \"Etapa X de Y\".\n- `OnboardingScreen.tsx` (reescrito): despachante — escolhe o bloco pelo cenário e delega corpo/persistência aos módulos de `blocks/`; nenhum arquivo concentra o fluxo inteiro.\n- Removidos: `ProductOnboardingScreen.tsx` e `types.ts`.\n- `apps/frontend/tests/goal018-onboarding-reachability.test.tsx` (novo, 39 testes): prova que os 14 cenários sobreviventes montam pela rota real (`app/onboarding/[step]/page.tsx`), encadeia toda a jornada linear dados-do-negocio→validação clicando \"Continuar\" (assertindo `router.push`/`update`/`complete` reais), prova o desvio para `minha-agenda-conectar` e sua recusa honesta (só \"Escolher Agenda Atendly\", sem \"Continuar\"), prova ausência de PrototypeOnboardingScreen no módulo, prova bloco nomeado sem contagem de telas, e prova que a retomada (`nextRequiredStep`) abre a pendência real mais antiga sem forçar WhatsApp.\n\nComandos executados (todos em `apps/frontend`): `npx tsc --noEmit` (limpo), `npx eslint src tests --max-warnings=0` via `npm run lint` (limpo), `npx vitest run` (39 arquivos, 384 testes, todos passando, incluindo a suíte nova). Também restaurei via `git checkout --` 4 arquivos (`app/onboarding/layout.tsx`, `page.tsx`, `[step]/page.tsx`, `OnboardingRuntime.tsx`) que o `prettier --write` tocou só por normalização de fim de linha, sem diff de conteúdo — não fazem parte do escopo desta unidade.\n\n`shared/styles/atendly.css` não precisou de alteração: `.step-progress-row` já usa `justify-content: space-between` e funciona com um único filho (o nome do bloco).",
+      "changedFiles": [
+        "apps/frontend/src/features/onboarding/scenarios.ts",
+        "apps/frontend/src/features/onboarding/OnboardingScreen.tsx",
+        "apps/frontend/src/features/onboarding/OnboardingShell.tsx",
+        "apps/frontend/src/features/onboarding/blocks.ts",
+        "apps/frontend/src/features/onboarding/blocks/shared.tsx",
+        "apps/frontend/src/features/onboarding/blocks/business.tsx",
+        "apps/frontend/src/features/onboarding/blocks/schedule.tsx",
+        "apps/frontend/src/features/onboarding/blocks/ai.tsx",
+        "apps/frontend/src/features/onboarding/blocks/whatsapp.tsx",
+        "apps/frontend/src/features/onboarding/blocks/registry.ts",
+        "apps/frontend/tests/goal018-onboarding-reachability.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "features/onboarding é um conjunto de módulos com um despachante; nenhum arquivo concentra o fluxo inteiro",
+          "met": true,
+          "detail": "OnboardingScreen.tsx (despachante) delega a blocks/{business,schedule,ai,whatsapp}.tsx via blocks/registry.ts; blocks.ts guarda metadados; OnboardingShell.tsx é só chrome. Nenhum arquivo tem corpo+persistência+navegação de mais de um bloco."
+        },
+        {
+          "criterion": "PrototypeOnboardingScreen, a prop preview e features/onboarding/types.ts não existem mais",
+          "met": true,
+          "detail": "ProductOnboardingScreen.tsx e types.ts deletados; OnboardingScreen.tsx reescrito sem PrototypeOnboardingScreen nem prop preview, confirmado por tsc limpo e pelo teste 'PrototypeOnboardingScreen não existe mais no módulo despachante' (Object.keys do módulo == ['OnboardingScreen'])."
+        },
+        {
+          "criterion": "Todo cenário declarado em scenarios.ts é alcançável pelo fluxo do produto, provado por teste de alcance, e cada cenário removido é declarado no relatório",
+          "met": true,
+          "detail": "14 cenários restantes cobertos por test.each via app/onboarding/[step]/page.tsx e pelo encadeamento real dados-do-negocio→validação (39 testes, todos passando). 20 cenários removidos declarados no docblock do teste e no report: 8 importar-* e 12 minha-agenda-* (mantido só minha-agenda-conectar)."
+        },
+        {
+          "criterion": "O progresso é apresentado pelos quatro blocos com o bloco corrente nomeado, e nenhuma contagem de telas aparece em tela",
+          "met": true,
+          "detail": "OnboardingShell mostra só blockLabel (ex.: 'Sua agenda'); testes confirmam presença do nome do bloco e ausência do padrão /Etapa \\d+ de \\d+/."
+        },
+        {
+          "criterion": "A retomada abre a próxima pendência real e não força o passo de WhatsApp",
+          "met": true,
+          "detail": "nextRequiredStep em OnboardingRuntime.tsx inalterado (checa negócio→agenda→serviço→disponibilidade→IA antes de WhatsApp); 3 testes novos provam pendência mais antiga vence, mesmo com WhatsApp ainda pendente."
+        },
+        {
+          "criterion": "Voltar continua disponível e o progresso continua salvo por etapa concluída",
+          "met": true,
+          "detail": "Link 'Voltar' calculado por onboardingFlow no despachante, testado com href explícito; cada persist de bloco chama onboarding.update antes de navegar, testado por asserções em updateOnboarding.mock.calls."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-07-a1"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:48:59.570Z",
+  "attemptId": "018-r1-unit-wu-05-a2",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-05",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Corrigido o último resíduo falso em CURRENT_STATE.md (WhatsApp na composição de onboarding/complete); PUBLIC_API_V1.md, GAP_ANALYSIS.md e REUSE_ANALYSIS.md já estavam corretamente documentados pelas WUs anteriores.",
+      "report": "Verifiquei os quatro documentos do escopo contra o diff real das WU-01/03/04 (git diff dos arquivos de código, leitura de business-profile.ts, dto.ts, schema.prisma e onboarding/routes.ts).\n\n`apps/bff/PUBLIC_API_V1.md`: já continha, gravado pelas próprias WU-01/WU-03/WU-04, as seções \"Negócio: modalidades de atendimento, endereço e versão do contexto (Goal018/WU-01)\", \"Estado de projeção do contexto para a IA (Goal018/WU-03)\" e \"Onboarding: conclusão não exige mais WhatsApp (Goal018/WU-04)\" — todas com significado (não só forma), a mudança subtrativa declarada explicitamente como tal, e a tabela de `error.details.issues` nomeando os oito códigos (`BUSINESS_PROFILE_INCOMPLETE`, `BUSINESS_MODALITY_NOT_SELECTED`, `BUSINESS_ADDRESS_REQUIRED`, `CALENDAR_NOT_SELECTED`, `AI_TONE_NOT_SELECTED`, `ACTIVE_SERVICE_REQUIRED`, `AVAILABILITY_REQUIRED`, `CALENDAR_INTEGRATION_NOT_CONNECTED`) com significado e resolução. Conferi cada código contra `apps/bff/src/modules/onboarding/routes.ts` (linhas 190-214): bate exatamente. Não precisei editar este arquivo.\n\n`docs/migration/GAP_ANALYSIS.md` e `docs/migration/REUSE_ANALYSIS.md`: já estavam corrigidos (G-25, G-26 e a linha de onboarding em REUSE_ANALYSIS) — evidência de uma tentativa anterior desta mesma Work Unit (o job trouxe `previousRelevantFailures` com `UNKNOWN_TRANSIENT`) que deixou o trabalho de conteúdo pronto mas não finalizou a execução. Conferi os nomes internos citados (`businessContextVersion`/`businessContextProjectedVersion`) contra `apps/bff/prisma/schema.prisma:143,147` e `apps/bff/src/lib/business-profile.ts:29,56-59` — batem exatamente. Não precisei editar estes arquivos.\n\n`docs/migration/CURRENT_STATE.md`: encontrei três afirmações que o diff tornou falsas e corrigi, preservando o resíduo verdadeiro em vez de apagar a linha:\n1. Linha 61 (tabela de rotas): dizia que `/v1/onboarding` + `/complete` compõe \"perfil, catálogo, disponibilidade, IA e WhatsApp\" — WhatsApp saiu da composição (o import de `EvolutionClient` e a consulta a `WhatsAppInstance` foram removidos da rota `complete`, confirmado por `git diff` do arquivo). Corrigido para declarar que WhatsApp saiu da composição no Goal018.\n2. Linha 70: citava `onboarding/routes.ts:166–195` exigindo \"WhatsApp conectado\" — código removido; range de linha também estava desatualizado (a rota `complete` agora vai de 174 a 235, conferido por leitura direta do arquivo). Corrigido: range de linha atualizado, WhatsApp removido da lista de exigências, modalidade/endereço (Goal018/WU-01) adicionados como exigências novas e reais.\n3. Linha 82 (tabela BusinessProfile): não citava `modalities`, `address`, `businessContextVersion`/`businessContextProjectedVersion` — colunas novas da migration `20260914000000_goal018_business_profile_modalities`. Adicionadas à linha.\n\nNão toquei `MIGRATION_STATUS.md`, `MASTER_PLAN.md`, `DECISIONS.md`, `goals/` nem `reviews/` — `git status` confirma zero mudança nesses caminhos.\n\nComandos executados: `git status --short`, múltiplos `git diff` (arquivo a arquivo e por trecho), `grep -n` em GAP_ANALYSIS.md/REUSE_ANALYSIS.md/CURRENT_STATE.md/onboarding routes.ts/business-profile.ts/schema.prisma, leitura direta de `PUBLIC_API_V1.md`, `CURRENT_STATE.md` (trechos relevantes) e `OnboardingRuntime.tsx` para validar a referência de linha 139 já presente em REUSE_ANALYSIS.md (bateu exatamente: `if (state.whatsapp?.status !== \"CONNECTED\") return \"whatsapp\";`). Não rodei build/test porque a unidade é só documentação e nenhum código foi alterado.",
+      "changedFiles": [
+        "docs/migration/CURRENT_STATE.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Os campos novos de negócio e o estado de projeção estão documentados com significado, não só com forma",
+          "met": true,
+          "detail": "PUBLIC_API_V1.md linhas 96-124 (seções Goal018/WU-01 e Goal018/WU-03) explicam o porquê de cada campo (modalities, address, contextVersion, contextProjectedVersion, contextProjectionStatus), não só o tipo; CURRENT_STATE.md linha 82 agora cita as colunas novas do BusinessProfile."
+        },
+        {
+          "criterion": "Todos os códigos de pendência de complete estão nomeados, com o que significam e como se resolvem",
+          "met": true,
+          "detail": "PUBLIC_API_V1.md linhas 133-140: tabela com os oito códigos, significado e resolução, conferida linha a linha contra apps/bff/src/modules/onboarding/routes.ts:190-214."
+        },
+        {
+          "criterion": "A mudança subtrativa (complete deixa de recusar por WhatsApp) está declarada como tal",
+          "met": true,
+          "detail": "PUBLIC_API_V1.md linha 127 abre com '**Mudança subtrativa:**' e nomeia os dois códigos removidos (WHATSAPP_NOT_CONFIGURED, WHATSAPP_NOT_CONNECTED); CURRENT_STATE.md linhas 61 e 70 agora também declaram a remoção."
+        },
+        {
+          "criterion": "G-25, G-26 e a linha do onboarding em REUSE_ANALYSIS deixam de afirmar o que o diff tornou falso",
+          "met": true,
+          "detail": "GAP_ANALYSIS.md linhas 55-56 e REUSE_ANALYSIS.md linha 12 já reescritos (por tentativa anterior desta mesma WU) para refletir a remoção da exigência de WhatsApp e os campos novos do negócio; conferido por git diff."
+        },
+        {
+          "criterion": "MIGRATION_STATUS.md, MASTER_PLAN.md, DECISIONS.md e os documentos de fechamento não são tocados",
+          "met": true,
+          "detail": "git status --short desses caminhos não retorna nenhuma mudança."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-05-a2"
+  }
+}

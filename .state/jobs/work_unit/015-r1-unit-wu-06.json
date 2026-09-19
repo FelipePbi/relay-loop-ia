@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T09:11:34.186Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "015-r1-unit-wu-06-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "015-r1-unit-wu-06",
+    "role": "work_unit",
+    "goal": "015",
+    "round": 1,
+    "workUnitId": "WU-06",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "LOW",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-015",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\015-ui-clientes-servicos.md",
+    "parentJobId": "015-r1-developer-314bf39b",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_LOW"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T11:34:09.005Z"
+}

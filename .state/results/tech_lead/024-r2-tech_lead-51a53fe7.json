@@ -1,0 +1,486 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T03:45:07.340Z",
+  "attemptId": "024-r2-tech_lead-51a53fe7-a3",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r2-tech_lead-51a53fe7",
+      "goal": "024",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "025",
+      "nextGoalTitle": "Ciclo de vida da conta",
+      "nextGoalPath": "docs/migration/goals/025-ciclo-de-vida-da-conta.md",
+      "developerProfile": "OPUS_HIGH",
+      "developerProfileReason": "Exclusão irreversível de conta com purga multistore, guarda contra reativação automática de IA e lease concorrente é dado crítico de alto custo de erro.",
+      "summary": "Goal024 registrado ACCEPTED na baseline d24d68146617ffe1ebb7eedb6617947a843a9bb8. Achado desta passada: o Goal preparado como 024B não é despachável (o contrato PlanningDecision exige nextGoalId de três dígitos), então foi renumerado para 025, com 025 e 026 deslocados para 026 e 027 — mesma correção que v35 aplicou ao 018B, com título, escopo, dependências e histórico preservados. MASTER_PLAN v46 e MIGRATION_STATUS registram a renumeração e o mapa de tradução; referências de corpo em CURRENT_STATE, DATA_MIGRATION, DECISIONS, GAP_ANALYSIS e REUSE_ANALYSIS foram remapeadas por significado, e reviews/Goals já aceitos ficam como foram escritos. Goal025 (ciclo de vida da conta) é o único READY, com perfil OPUS_HIGH. Nenhuma decisão nova: D-041 segue prevista para o fechamento do 025.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/goals/025-ciclo-de-vida-da-conta.md"
+      ],
+      "executionPlan": {
+        "goalSummary": "Goal025 fecha a metade de conta de G-29: exclusão da própria conta com sete dias de recuperação, automações desligadas e WhatsApp desconectado no início, cancelamento dentro do prazo sem restaurar automação, e purga efetiva e irreversível quando o prazo vence — BFF, IA, Scheduling, Evolution e tela de Conta. A constatação que governa o desenho é da baseline: desligar automação não é gravar booleano, porque reconcileAiActivation religa a IA em qualquer requisição a partir de execução SUCCEEDED, e DELETE /v1/whatsapp não toca a IA. Nem IA nem Scheduling têm tabela raiz de tenant, então a purga por negócio é enumeração com cobertura derivada do schema.",
+        "executionStrategy": "Fundação durável primeiro (modelo e migration), depois a máquina de estados e seus efeitos, que é o núcleo. A guarda de reativação e as duas rotas internas de purga são frentes independentes que só precisam do estado durável ou de nada. O worker de purga fecha em cima de todas elas, porque só faz sentido quando as lojas já sabem purgar. Tela depois do contrato público. A suíte de integração contra PostgreSQL descartável entra como unidade própria porque atravessa unidades (pedir, cancelar, vencer, retomar, login recusado depois da purga) e é a prova central do Goal. Documentação depois do código. Verificação determinística dirigida por app antes das globais; validate-ui depois de validate-core porque consome o build que ele produz.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "Estado durável da exclusão de conta no BFF",
+            "objective": "Criar o modelo Prisma que guarda a exclusão de conta por negócio — negócio, usuário solicitante, instante do pedido, vencimento, cancelamento, conclusão da purga, estado (SCHEDULED/CANCELLED/PURGED) e campos de lease (leaseToken, leaseExpiresAt em TIMESTAMPTZ) — mais a migration aditiva correspondente. A linha NÃO pode ser filha cascateada de Tenant: ela sobrevive à purga como prova de que a exclusão aconteceu, e depois dela não guarda nenhum dado pessoal. O prazo de sete dias é constante de produto declarada em código, com relógio injetável para teste.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/prisma/migrations/",
+              "apps/bff/src/modules/account/constants.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/src/modules/retention/"
+            ],
+            "implementationHints": "Seguir o formato de RetentionSweepState do Goal023 para lease e fencing por token. Migration aditiva e retomável, sem remoção de coluna existente e sem backfill que dependa de dado ausente — mesmo padrão das quatro migrations do Goal023.",
+            "acceptanceCriteria": [
+              "Existe modelo no schema do BFF com pedido, vencimento, cancelamento, conclusão e estado, e com leaseToken/leaseExpiresAt em TIMESTAMPTZ",
+              "O modelo não é cascateado por Tenant: apagar o Tenant não apaga a linha de exclusão",
+              "Os campos do modelo não comportam e-mail, nome de negócio, telefone nem conteúdo",
+              "O prazo de sete dias está em constante declarada de produto, não em variável de ambiente nem em campo configurável",
+              "O relógio usado para calcular e avaliar o vencimento é injetável",
+              "A migration é aditiva, não remove coluna existente e é retomável"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-02",
+            "title": "Máquina de estados da exclusão e efeitos de início e cancelamento",
+            "objective": "Implementar, no módulo novo apps/bff/src/modules/account/, a máquina de estados da exclusão e seus efeitos. Iniciar grava SCHEDULED com vencimento, desliga a IA desejada (enabled: false e activatedByRunId: null), projeta o desejado para a IA, derruba o canal do negócio na IA para que supersededByChannelChange passe a valer, e desconecta o WhatsApp pelo caminho existente (logout, remoção remota, remoção da linha local, tolerando falha remota). Pedir duas vezes não cria duas exclusões nem repete efeito. A sessão NÃO é revogada por pedir exclusão. Cancelar dentro do prazo volta o estado e não dispara purga; fora do prazo ou em estado terminal recusa com código próprio e não faz nada. Cancelar não restaura automação.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/account/service.ts",
+              "apps/bff/src/modules/account/state.ts",
+              "apps/bff/src/modules/account/errors.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/whatsapp/routes.ts",
+              "apps/bff/src/lib/ai-activation.ts",
+              "apps/bff/src/clients/ai-orchestrator/index.ts"
+            ],
+            "implementationHints": "A ordem dos efeitos importa: uma falha no meio precisa deixar estado retomável e nunca deixar automação ligada. Reusar o caminho de desconexão que DELETE /v1/whatsapp já executa em vez de duplicá-lo. Derrubar o canal na IA é o que torna a não-reativação verificável, porque supersededByChannelChange é true quando não há canal ativo.",
+            "acceptanceCriteria": [
+              "Iniciar grava a exclusão como SCHEDULED com vencimento calculado pelo relógio injetado",
+              "Iniciar desliga a IA desejada com enabled: false e activatedByRunId: null e projeta o desejado para a IA",
+              "Iniciar derruba o canal do negócio na IA e desconecta o WhatsApp pelo caminho já existente, tolerando falha remota",
+              "Pedir duas vezes não cria segunda exclusão nem repete efeito, e o comportamento escolhido (devolver estado vigente ou recusar com código próprio) está declarado",
+              "A sessão do usuário não é revogada ao pedir exclusão",
+              "Cancelar com estado SCHEDULED e dentro do prazo volta para não agendado e não dispara efeito de purga",
+              "Cancelar fora do prazo ou em estado terminal recusa com código próprio e não altera nada",
+              "Cancelar não reconecta WhatsApp nem religa a IA"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-03",
+            "title": "Rotas públicas de exclusão, estado em GET /v1/status e contrato",
+            "objective": "Expor a máquina de estados: rota pública de iniciar exclusão sob sessão e CSRF exigindo a senha atual do usuário autenticado (mesmo grau de reautenticação de PATCH /v1/auth/password), sem aceitar userId/tenantId do corpo; rota pública de cancelar; e o estado da exclusão no read model que GET /v1/status já devolve, incluindo o vencimento que a tela usa para contar dias. Documentar as rotas novas e o campo novo em apps/bff/PUBLIC_API_V1.md, na tabela de rotas registradas e em seção própria com corpo, códigos de erro e o que cada transição garante.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-02"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/account/routes.ts",
+              "apps/bff/src/modules/status/routes.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/auth/routes.ts",
+              "apps/bff/src/modules/status/routes.ts",
+              "apps/bff/PUBLIC_API_V1.md"
+            ],
+            "implementationHints": "A identidade vem só da sessão. Senha errada recusa antes de qualquer efeito. Nenhuma rota existente muda de forma ou de código de erro.",
+            "acceptanceCriteria": [
+              "Iniciar a exclusão exige sessão, CSRF e a senha atual, e não aceita userId nem tenantId do corpo",
+              "Senha errada recusa e não inicia efeito nenhum, afirmado por teste",
+              "GET /v1/status devolve o estado da exclusão e o vencimento",
+              "PUBLIC_API_V1.md mudou nas rotas novas e no campo novo de status, e em nenhum outro ponto",
+              "Nenhuma rota existente mudou de forma ou de código de erro"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-04",
+            "title": "Automação não volta sozinha: guarda na reconciliação e intenções pendentes",
+            "objective": "Enquanto houver exclusão SCHEDULED, nenhum caminho do produto pode religar a IA do negócio: reconcileAiActivation não ativa nesse estado, e existe teste que falha se a guarda for removida. Reconciliar continua funcionando para todo o resto, afirmado por teste sobre negócio sem exclusão agendada. Determinar e declarar, com evidência no código, o que acontece com as intenções de notificação pendentes do negócio em exclusão: elas não são entregues e terminam com motivo do vocabulário fechado vigente (AI_NOT_ENABLED quando a IA desligada for avaliada primeiro). Se a ordem vigente produzir CHANNEL_NOT_CONNECTED — falha auditável e alerta na central para uma conta que o próprio dono mandou excluir — corrigir a ordem ou suprimir o alerta para esse negócio. O vocabulário de motivos não ganha valor novo.",
+            "type": "COMPLEX",
+            "complexity": "MEDIUM",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/lib/ai-activation.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/lib/ai-activation.ts",
+              "apps/bff/src/modules/status/routes.ts",
+              "apps/bff/prisma/schema.prisma"
+            ],
+            "implementationHints": "reconcileAiActivation roda em qualquer requisição a partir de GET /v1/status e dos demais chamadores; a guarda precisa estar no caminho comum, não em um chamador. O vocabulário AppointmentNotificationReason é fechado por constraint SQL — nada de motivo novo.",
+            "acceptanceCriteria": [
+              "Com exclusão SCHEDULED, reconcileAiActivation não religa a IA",
+              "Existe teste que falha se a guarda for removida",
+              "Negócio sem exclusão agendada tem exatamente o comportamento de reconciliação da baseline, afirmado por teste",
+              "As intenções de notificação pendentes do negócio em exclusão não são entregues e terminam com motivo do vocabulário fechado vigente",
+              "Nenhum valor novo foi acrescentado a AppointmentNotificationReason",
+              "O relatório nomeia qual motivo foi produzido e por quê"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-05",
+            "title": "Purga por negócio na IA, com cobertura derivada do schema",
+            "objective": "Rota interna nova no ai-orchestrator, sob a mesma autenticação interna das demais /internal/, que apaga tudo do negócio no banco da IA, em ordem segura de chave estrangeira, de forma idempotente e limitada por teto por passada, sinalizando trabalho restante. A lista de tabelas purgadas é declarada em código, e existe teste que a compara com o conjunto de modelos que carregam tenantId no schema.prisma da IA: tabela nova sem purga declarada quebra o teste. Modelo alcançável só por relação é purgado pela cascata do pai ou entra na lista com o caminho declarado, e o teste cobre isso. A rota nunca aceita purgar tudo, lista de negócios nem ausência de tenantId.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [],
+            "scope": "apps/ai-orchestrator",
+            "expectedFiles": [
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/src/modules/internal/tenantPurge.ts",
+              "apps/ai-orchestrator/tests/"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/prisma/schema.prisma"
+            ],
+            "implementationHints": "Não existe tabela raiz de tenant na IA: são cerca de 80 ocorrências de tenantId espalhadas, então a purga é enumeração e a cobertura precisa ser derivada do schema, não escrita à mão. Seguir o padrão de POST /internal/retention/conversation-content do Goal023 para forma de rota e autenticação.",
+            "acceptanceCriteria": [
+              "Existe rota interna de purga por negócio sob a autenticação interna vigente",
+              "A rota recusa ausência de tenantId, lista de negócios e qualquer forma de purgar tudo",
+              "A purga é idempotente: executar duas vezes não é erro e não produz efeito colateral",
+              "A purga é limitada por teto por passada e sinaliza trabalho restante",
+              "Existe teste comparando a lista declarada de tabelas purgadas com os modelos que carregam tenantId no schema: tabela nova sem purga quebra o teste",
+              "Modelos alcançáveis só por relação estão cobertos explicitamente, por cascata do pai ou por caminho declarado",
+              "Teste com dois negócios povoados prova que purgar um deixa o outro inteiro em cada tabela tocada"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-06",
+            "title": "Purga por negócio no Scheduling, com cobertura derivada do schema",
+            "objective": "Rota interna nova no scheduling-service, sob a mesma autenticação interna das demais /internal/, que apaga tudo do negócio no banco do Scheduling, em ordem segura de chave estrangeira, idempotente e limitada por teto por passada, sinalizando trabalho restante. Mesma exigência de cobertura derivada do schema.prisma do Scheduling, com teste que quebra quando uma tabela com tenantId não está declarada, e mesmo teste de isolamento entre dois negócios. A rota nunca aceita purgar tudo, lista de negócios nem ausência de tenantId.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [],
+            "scope": "apps/scheduling-service",
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/internal-api/tenantPurge.ts",
+              "apps/scheduling-service/tests/"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/prisma/schema.prisma"
+            ],
+            "implementationHints": "São cerca de 120 ocorrências de tenantId no schema do Scheduling e não há raiz de tenant. Atenção a agregados com histórico e a tabelas de fatos/detalhe já tocadas pela retenção do Goal023, que continuam existindo com semântica própria.",
+            "acceptanceCriteria": [
+              "Existe rota interna de purga por negócio sob a autenticação interna vigente",
+              "A rota recusa ausência de tenantId, lista de negócios e qualquer forma de purgar tudo",
+              "A purga é idempotente e limitada por teto por passada, sinalizando trabalho restante",
+              "Existe teste comparando a lista declarada de tabelas purgadas com os modelos que carregam tenantId no schema: tabela nova sem purga quebra o teste",
+              "Modelos alcançáveis só por relação estão cobertos explicitamente",
+              "Teste com dois negócios povoados prova que purgar um deixa o outro inteiro em cada tabela tocada"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-07",
+            "title": "Purga efetiva no vencimento: laço, lease e ordem entre lojas",
+            "objective": "Quando o relógio passa do vencimento e o estado ainda é SCHEDULED, a conta é purgada. Laço batido no processo do BFF no formato do RetentionSweepWorker: timer unref, desligado por default por variável de ambiente própria, nunca lança para fora, parada esperando só o ciclo em voo; as suítes chamam a função de purga diretamente e nenhum teste sobe o worker. Lease com fencing por leaseToken impede duas instâncias de purgar o mesmo negócio. Ordem: primeiro IA e Scheduling, cada um por sua rota interna, depois o BFF, com o User por último; enquanto houver loja não confirmada a conta não é marcada PURGED. Retomável e idempotente: passada que falhe no meio deixa estado retomável e a seguinte conclui sem intervenção manual. Limitada por teto por passada. Conferir e, se ainda houver instância na Evolution, removê-la, sem inventar caminho novo de transporte.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-01",
+              "WU-02",
+              "WU-05",
+              "WU-06"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/account/purge.ts",
+              "apps/bff/src/modules/account/worker.ts",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/retention/",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/bff/src/modules/whatsapp/routes.ts"
+            ],
+            "implementationHints": "Reusar literalmente o formato de lease e fencing do RetentionSweepState. A ordem importa porque IA e Scheduling não cascateiam e o BFF cascateia a partir de Tenant e User: apagar o User antes deixaria órfãos inalcançáveis nos outros dois bancos. Purgar duas vezes não é erro.",
+            "acceptanceCriteria": [
+              "Vencido o prazo, a purga acontece em IA, Scheduling e BFF, com o User apagado por último",
+              "A conta só é marcada PURGED depois de todas as lojas confirmarem",
+              "Uma passada que falhe no meio deixa estado retomável e a seguinte conclui sem intervenção manual",
+              "Purgar duas vezes não é erro e não produz efeito colateral",
+              "A purga é limitada por teto por passada e sinaliza trabalho restante",
+              "O laço é desligado por default por variável de ambiente própria, é timer unref e nunca lança para fora",
+              "Nenhum teste sobe o worker: as suítes chamam a função de purga diretamente",
+              "Duas instâncias não purgam o mesmo negócio ao mesmo tempo, garantido por lease com fencing por token",
+              "A linha de exclusão sobrevive à purga e, depois dela, não contém dado pessoal"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-08",
+            "title": "Tela de Conta: pedir, acompanhar e cancelar a exclusão",
+            "objective": "Em Configurações → Conta, substituir o bloco desabilitado Excluir conta pelo fluxo real. Pedir exige confirmação explícita e a senha atual, e enuncia antes de executar: automações desligadas, WhatsApp desconectado, sete dias para cancelar, depois disso os dados apagados sem volta. Com exclusão agendada, a tela mostra o estado e os dias restantes calculados a partir do vencimento devolvido pelo servidor, nunca contados no cliente a partir do pedido. Cancelar dentro do prazo, dizendo com clareza o que não volta sozinho (WhatsApp e IA) e o que é preciso fazer para voltar a operar. Aviso persistente enquanto o prazo corre, a partir do estado de GET /v1/status e não de um segundo estado inventado no cliente. Erro de rede ou recusa do servidor nunca é apresentado como sucesso.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-03"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/settings/AccountSettings.tsx",
+              "apps/frontend/src/data/services/",
+              "apps/frontend/src/shared/",
+              "apps/frontend/src/features/settings/__tests__/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/settings/AccountSettings.tsx",
+              "apps/frontend/src/features/settings/shared/SettingsPage.tsx",
+              "apps/frontend/src/data/services/BffAuthService.ts"
+            ],
+            "implementationHints": "A copy antiga sobre etapa futura do produto tem de sair do src. O defeito de apresentar falha como sucesso é o mesmo que a rodada 1 do Goal024 produziu em sair de todos os dispositivos e que o aceite exigiu corrigir — não repetir. Seguir D-030/D-031 e o módulo já decomposto pelo Goal024.",
+            "acceptanceCriteria": [
+              "O bloco desabilitado Excluir conta não existe mais e a copy sobre etapa futura do produto saiu do src",
+              "A tela exige confirmação explícita e a senha atual antes de pedir",
+              "A tela enuncia antes de executar: automações desligadas, WhatsApp desconectado, sete dias para cancelar, depois disso sem volta",
+              "Com exclusão agendada, a tela mostra os dias restantes calculados a partir do vencimento devolvido pelo servidor",
+              "Cancelar está disponível dentro do prazo e a tela diz que WhatsApp e IA não voltam sozinhos e que voltar a operar exige reconectar e novo teste real",
+              "O aviso persistente vem do estado de GET /v1/status, não de estado inventado no cliente",
+              "Falha de rede ou recusa do servidor nunca é apresentada como sucesso"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-09",
+            "title": "Suíte de integração contra PostgreSQL descartável",
+            "objective": "Provar o ciclo inteiro no padrão de apps/bff/tests/*.integration.test.ts, contra banco descartável: pedir e cancelar dentro do prazo; pedir, vencer o prazo com relógio injetado e purgar; purgar duas vezes; purgar com uma loja falhando e retomar na passada seguinte. Afirmar que, depois da purga, o login daquele e-mail não autentica e que nenhuma sessão anterior autentica. Nenhum teste pode falhar por motivo diferente do que anuncia, nem conter asserção trivialmente verdadeira, nem usar fixture que mascare o defeito que o teste diz cobrir — foi assim que o defeito de edição de conhecimento passou pela rodada 1 do Goal024.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-03",
+              "WU-04",
+              "WU-07"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/tests/goal025-account-lifecycle.integration.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/tests/goal024-session-revocation.integration.test.ts",
+              "scripts/validate-integration.mjs"
+            ],
+            "implementationHints": "Usar o relógio injetável de WU-01 para envelhecer o prazo em vez de esperar sete dias. A falha de loja deve ser injetada no cliente, não simulada por flag no código de produção.",
+            "acceptanceCriteria": [
+              "Existe cenário pedir → cancelar dentro do prazo",
+              "Existe cenário pedir → vencer o prazo com relógio injetado → purgar",
+              "Existe cenário de purgar duas vezes sem erro e sem efeito colateral",
+              "Existe cenário com uma loja falhando e retomada concluída na passada seguinte",
+              "Depois da purga, o login daquele e-mail não autentica, afirmado por teste",
+              "Depois da purga, nenhuma sessão anterior autentica, afirmado por teste",
+              "Nenhum teste usa fixture que mascare o comportamento que ele diz cobrir"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-10",
+            "title": "Documentação afetada e registro de D-041",
+            "objective": "Atualizar apenas o que a mudança fizer mentir: a linha de G-29 em GAP_ANALYSIS, CURRENT_STATE nas partes de BFF, IA, Scheduling e frontend, DATA_MIGRATION na parte de migrations do BFF, REUSE_ANALYSIS se algum módulo mudar de consumidor e VALIDATION_GATE se algum passo de gate mudar. Registrar D-041 em DECISIONS, no formato das anteriores, cobrindo a máquina de estados da conta, a guarda contra reativação automática, a purga por negócio derivada do schema e o que sobrevive à purga. Não criar documento novo.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07",
+              "WU-08",
+              "WU-09"
+            ],
+            "scope": "docs/migration",
+            "expectedFiles": [
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/DATA_MIGRATION.md",
+              "docs/migration/DECISIONS.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/VALIDATION_GATE.md"
+            ],
+            "relevantFiles": [
+              "docs/migration/DECISIONS.md",
+              "docs/migration/GAP_ANALYSIS.md"
+            ],
+            "implementationHints": "G-29 passa a estar fechado nas duas partes, conteúdo e conta; escrever o estado real depois do diff, não a intenção. O bloco de nenhuma decisão anterior pode quebrar.",
+            "acceptanceCriteria": [
+              "GAP_ANALYSIS reflete o estado real de G-29 depois do diff",
+              "DECISIONS tem D-041 registrada no formato das anteriores, sem quebrar o bloco de nenhuma decisão anterior",
+              "CURRENT_STATE descreve BFF, IA, Scheduling e frontend como ficaram",
+              "Nenhum documento novo foi criado"
+            ],
+            "verification": []
+          },
+          {
+            "id": "WU-11",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "objective": "Typecheck do BFF depois da máquina de estados, das rotas, da guarda e do worker.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/ai-orchestrator",
+            "objective": "Typecheck do ai-orchestrator depois da rota interna de purga por negócio.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/scheduling-service",
+            "objective": "Typecheck do scheduling-service depois da rota interna de purga por negócio.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-14",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "objective": "Typecheck do frontend depois do fluxo de exclusão na tela de Conta.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-15",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/bff",
+            "objective": "Lint do BFF, onde está a maior parte do código novo.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-16",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/bff",
+            "pattern": "goal025",
+            "objective": "Testes dirigidos do Goal025 no BFF.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-11",
+              "WU-12",
+              "WU-13",
+              "WU-14",
+              "WU-15"
+            ]
+          },
+          {
+            "id": "WU-17",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "objective": "Gate central: builds e suítes sem banco, em todos os apps.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-18",
+            "type": "DETERMINISTIC",
+            "action": "validate-integration",
+            "objective": "Gate de integração contra PostgreSQL descartável, onde o ciclo de exclusão e purga é exercitado de ponta a ponta.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-17"
+            ]
+          },
+          {
+            "id": "WU-19",
+            "type": "DETERMINISTIC",
+            "action": "validate-ui",
+            "objective": "Gate renderizado nas larguras 360, 390, 768, 1024 e 1440, sobre o build produzido por validate-core: overflow horizontal, touch target mínimo de 24px, contraste computado, foco visível e prefers-reduced-motion na tela de Conta.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-17"
+            ]
+          },
+          {
+            "id": "WU-20",
+            "type": "DETERMINISTIC",
+            "action": "git-diff-check",
+            "objective": "Conferência final do diff.",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-18",
+              "WU-19"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "024-r2-tech_lead-51a53fe7-a3"
+  }
+}

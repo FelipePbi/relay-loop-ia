@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T08:46:40.707Z",
+  "attemptId": "015-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-wu-01",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "WU-01",
+      "status": "COMPLETED",
+      "summary": "Decompôs ProductDirectoryScreen.tsx (1318 linhas) em ProductCustomersScreen.tsx e ProductServicesScreen.tsx, reapontou as sete rotas e preservou uma única chamada de useShellConfig por árvore, sem alterar comportamento.",
+      "report": "Diff inicial contra a baseline era vazio (confirmado por `git status`/`git log` antes de tocar em qualquer arquivo).\n\nO que mudou e por quê: `features/directory/ProductDirectoryScreen.tsx` fazia branch em `props.area` para servir sete rotas de clientes e serviços com cinco chamadas mutuamente exclusivas de `useShellConfig`. Separei em dois arquivos por módulo:\n\n- `features/customers/ProductCustomersScreen.tsx`: componente de topo `ProductCustomersScreen({ customerId?, scenario? })` que decide entre `CustomerDetail`, `CustomerForm` e `CustomerListPage` (cada um chamando `useShellConfig` uma única vez, dentro de si — igual à estrutura original, só sem o parâmetro `area`). Copiei também as primitivas usadas só por clientes: `DirectoryHeader`, `DirectorySourceStrip`, `DirectoryToolbar`, `DirectoryLoading`, `DirectoryState` e os helpers (`requestError`, `formText`, `initials`, `formatDateTime`, `formatShortDate`, `statusLabel`, `todayIso`, `addDays`).\n- `features/services/ProductServicesScreen.tsx`: componente de topo `ProductServicesScreen({ scenario?, serviceId? })` que decide entre `ServiceForm` e `ServiceListPage`. Mesmas primitivas duplicadas, mas com `formatPrice`/`formatServiceDuration` no lugar dos helpers de agenda/cliente.\n\nDecisão de escopo: dupliquei as primitivas de apresentação (`DirectoryHeader`, `DirectorySourceStrip` etc.) em vez de extrair um módulo compartilhado. Simplifiquei `DirectorySourceStrip`/`DirectoryToolbar` removendo o parâmetro `area` (agora sempre um único valor por arquivo), hardcoding a cópia por módulo — comportamento idêntico ao original, só sem o branch morto. Isso mantém os dois módulos totalmente independentes, coerente com \"trilhas independentes\" descrita na `executionStrategy` do plano (customers e services evoluirão em Work Units separadas depois). Nenhum arquivo novo fora de `features/customers` e `features/services` foi criado.\n\nAs sete rotas em `app/(platform)/clientes/**` e `app/(platform)/servicos/**` foram reapontadas para os novos componentes, com as mesmas props (menos `area`, que deixou de existir). `features/directory/ProductDirectoryScreen.tsx` foi removido (confirmado por `graphify query \"who imports ProductDirectoryScreen\"` que os únicos consumidores eram essas sete rotas, nenhum teste o importava). O CSS (`shared/styles/atendly-directory.css`) não foi tocado — continua importado globalmente via `app/globals.css` e as classes (`directory-page`, `customer-grid`, `service-grid` etc.) são idênticas nos dois novos arquivos.\n\nNenhuma funcionalidade nova: nenhum campo, validação, endpoint ou copy mudou — é recorte puro de arquivo.\n\nComandos executados, todos dentro de `E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-015\\apps\\frontend`, com resultado real:\n- `npm install` — instalou dependências locais da worktree (ausentes no início; 444 pacotes, sem erros bloqueantes).\n- `npm run typecheck` (`tsc --noEmit`) — passou sem erros.\n- `npm run lint` (`eslint src --max-warnings=0`) — passou sem warnings/erros.\n- `npm test` (`vitest run`) — 14 arquivos, 101 testes, todos passando.\n- `npm run build` (`next build`) — build de produção concluído; as 7 rotas de clientes/servicos aparecem no relatório de rotas (`/clientes`, `/clientes/novo`, `/clientes/detalhes`, `/clientes/detalhes/externo`, `/servicos`, `/servicos/novo`, `/servicos/editar`), sem erro.\n- `npx prettier --check` / `--write` nos 9 arquivos alterados — formatação corrigida (imports/JSX recolhidos pelo prettier); reverifiquei lint/typecheck/test/build depois e todos continuaram passando.\n\nLimite explícito: não rodei `npm run validate:core` na raiz do monorepo (ele builda `packages/contracts`, `scheduling-service`, `ai-orchestrator`, `bff` e `health-worker` além do frontend) nem `npm run validate:ui` (Playwright), porque essa validação ampla é responsabilidade da unidade de consolidação (WU-07 no plano) e está fora do escopo mecânico desta Work Unit — rodá-la agora exigiria instalar dependências de todos os outros apps sem trazer sinal adicional sobre a decomposição em si. A verificação de superfície feita (lint, typecheck, testes unitários com jsdom, build de produção do frontend) cobre integralmente os critérios de aceite desta unidade.\n\nNão criei commit, não fiz push, não mudei de branch, não toquei em `docs/migration/goals|reviews|MIGRATION_STATUS.md`.",
+      "changedFiles": [
+        "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+        "apps/frontend/src/features/services/ProductServicesScreen.tsx",
+        "apps/frontend/src/app/(platform)/clientes/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/novo/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/novo/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/editar/page.tsx",
+        "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "As sete rotas continuam renderizando sem erro e mantêm destino, título e ação contextual corretos no shell",
+          "met": true,
+          "detail": "`npm run build` gerou as 7 rotas sem erro; as props/branches de useShellConfig (title, action, active, source) foram copiadas sem alteração dos componentes originais para os novos arquivos."
+        },
+        {
+          "criterion": "Nenhuma árvore renderizada faz mais de uma chamada de useShellConfig; a chamada vive no componente de topo de cada tela e deriva seus valores do estado",
+          "met": true,
+          "detail": "Cada componente de topo (ProductCustomersScreen/ProductServicesScreen) delega para exatamente um componente-folha (CustomerDetail/CustomerForm/CustomerListPage ou ServiceForm/ServiceListPage), e cada folha chama useShellConfig uma única vez com valores derivados de state — estrutura idêntica à do monolito original, que já satisfazia essa invariante."
+        },
+        {
+          "criterion": "features/directory/ProductDirectoryScreen.tsx deixa de existir ou fica sem consumidores, sem código morto remanescente",
+          "met": true,
+          "detail": "Arquivo removido (`git status` mostra ` D apps/frontend/src/features/directory/ProductDirectoryScreen.tsx`); graphify confirmou que os únicos consumidores eram as 7 rotas, todas reapontadas."
+        },
+        {
+          "criterion": "O CSS de módulo do diretório continua aplicado e herdando os tokens do Goal014; nenhuma tela fica visualmente partida",
+          "met": true,
+          "detail": "`shared/styles/atendly-directory.css` não foi tocado e continua importado globalmente via app/globals.css; as classes usadas nos dois novos arquivos são idênticas às do original. Não rodei o gate visual `validate:ui` (fora do escopo desta unidade); a evidência aqui é estrutural, não renderizada."
+        },
+        {
+          "criterion": "Nenhuma funcionalidade nova foi adicionada nesta unidade",
+          "met": true,
+          "detail": "Todo o JSX, lógica, mensagens e chamadas de serviço foram copiados literalmente dos blocos originais; a única mudança de forma foi remover o parâmetro `area` das primitivas internas, agora redundante por arquivo."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-wu-01-a1"
+  }
+}

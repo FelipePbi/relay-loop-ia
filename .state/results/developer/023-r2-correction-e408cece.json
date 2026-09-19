@@ -1,0 +1,97 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T22:10:09.905Z",
+  "attemptId": "023-r2-correction-e408cece-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r2-correction-e408cece",
+      "goal": "023",
+      "round": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 0 em Sonnet, 1 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 023, rodada 2\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one COMPLEX unit scoped to them — behaviourally the legacy correction round. O Tech Lead havia escolhido OPUS_HIGH para esta rodada; a unidade é declarada COMPLEX para preservar esse julgamento sem que o plano nomeie um modelo.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 6 blocker(s) registrados pelo Tech Lead na revisão da rodada 1, preservando o que já foi aceito.\nexecutor: opus (high), tier COMPLEX · 1 tentativa(s)\nArquivos alterados (29): apps/ai-orchestrator/.env.example, apps/ai-orchestrator/src/config/env.ts, apps/ai-orchestrator/src/modules/internal/routes.ts, apps/ai-orchestrator/src/modules/retention/inbox-retention.ts, apps/ai-orchestrator/tests/retention/inbox-retention.test.ts, apps/bff/.env.example, apps/bff/PUBLIC_API_V1.md, apps/bff/prisma/migrations/20260915180000_goal023_retention_sweep/migration.sql, apps/bff/prisma/schema.prisma, apps/bff/src/app.ts, apps/bff/src/clients/ai-orchestrator/index.ts, apps/bff/src/config/env.ts, apps/bff/src/modules/retention/RetentionSweepWorker.ts, apps/bff/src/modules/retention/index.ts, apps/bff/src/modules/retention/settings.ts\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: §6 (critérios 38 e 39) — retenção técnica do inbox durável da IA não existia; nenhuma deleção de ProcessedEvent no diff — Novo modules/retention/inbox-retention.ts deleta ProcessedEvent DONE/IGNORED/LEGACY com receivedAt < cutoff, preservando RECEIVED/PROCESSING/FAILED (crit. 38). Prazo de INBOX_RETENTION_DAYS (default 180); a consequência sobre o dedupe está no docblock imediatamente acima da constante (crit. 39). Chamado na rota interna de purga com teto próprio. 6 casos novos em tests/retention/inbox-retention.test.ts, executados no passo test:ai-orchestrator-content-purge (15 testes passaram).\n- OK: Blocker 2 resolvido: §6 violado no prazo de facts/detail — strictestCutoff derivado de RetentionSettings tornava prazo técnico configurável pela seção Conversas — strictestCutoff removido de RetentionCutoffs e de retentionCutoffs(). A porta scheduling não recebe mais cutoffs: recebe now e usa intentContentCutoff(), que lê env.RETENTION_INTENT_CONTENT_DAYS (default 90, declarado em config/env.ts e .env.example). Teste novo prova que o cutoff técnico não se move entre 365/365 e 30/30, e que schedulingCall.cutoffs é undefined.\n- OK: Blocker 3 resolvido: §7 — GET /v1/settings/retention devolvia só prazos e appliesFrom; faltavam opções permitidas, a invariante de Não classificadas e a última varredura concluída — RetentionState ganhou retentionDaysOptions, unclassifiedPurged:false e lastSweepCompletedAt (ISO ou null). Coluna RetentionSweepState.lastCompletedAt acrescentada à migration (CREATE TABLE + ADD COLUMN IF NOT EXISTS) e ao schema.prisma; settleTenant só a avança quando nenhuma fonte falhou. PATCH devolve a mesma forma. Dois casos novos em goal023-retention-settings.test.ts e um em goal023-retention-sweep.test.ts, executados no validate:integration.\n- OK: Blocker 4 resolvido: §3 — intervalo mínimo entre passadas do mesmo negócio não existia; dueTenants() filtrava só por lease vivo — RETENTION_SWEEP_MIN_TENANT_INTERVAL_SECONDS (default 3600) em config/env.ts e .env.example, propagada por app.ts e RetentionSweepWorker até RetentionSweepOptions. dueTenants() filtra por lastRunAt <= now() - make_interval(...), com exceção declarada para lastHasMore = true. Dois testes de integração cobrem o piso segurando quem completou e não segurando quem parou no teto.\n- OK: Blocker 5 resolvido: §8 e critério 42 — RetentionSection estava dentro de AccountSettings e não havia entrada Conversas navegável no hub — Cenário conversations em SettingsScenario, rota app/(platform)/configuracoes/conversas/page.tsx, componente ConversationsSettings com Page title='Conversas', e card 'Conversas' no SettingsHub apontando para /configuracoes/conversas. RetentionSection saiu de AccountSettings. ProductSettingsScreen não foi redecomposta. Provado por goal023-conversations-settings.test.tsx (3 casos) — 12 testes passaram no vitest do frontend.\n- OK: Blocker 6 resolvido: critério 53 — GAP_ANALYSIS afirmava G-29 fechado enquanto ProcessedEvent.rawPayload seguia sem prazo, e DATA_MIGRATION §12 chamava as cinco RETENTION_SWEEP_* de 'prazos técnicos' — GAP_ANALYSIS G-29 agora nomeia os três prazos técnicos com defaults e declara o fechamento do rawPayload do inbox durável (que o Blocker 1 entregou). DATA_MIGRATION §12: parágrafo renomeado para 'Parâmetros do laço de varredura' (seis variáveis, com a frase de que nenhuma decide até quando um dado vive), seguido de tabela nova com os três prazos técnicos de verdade, apps, defaults e motivos. CURRENT_STATE, VALIDATION_GATE e PUBLIC_API_V1.md alinhados.\n\n## O que mudou, por blocker\n\n**Blocker 1 — retenção técnica do inbox durável (§6, critérios 38 e 39).** Novo `apps/ai-orchestrator/src/modules/retention/inbox-retention.ts`: `purgeExpiredInboxEvents` apaga `ProcessedEvent` com status `DONE`/`IGNORED`/`LEGACY` e `receivedAt` anterior ao cutoff técnico, em lote, com teto e leitura de uma linha a mais para observar `hasMore`. `RECEIVED`, `PROCESSING` e `FAILED` nunca são tocados. O prazo vem de `INBOX_RETENTION_DAYS` (default **180 dias**), declarado em `apps/ai-orchestrator/src/config/env.ts` e `.env.example`; a consequência sobre o dedupe de entrada `(tenantId, provider, eventKey)` está escrita no docblock **imediatamente acima da constante** `DEFAULT_INBOX_RETENTION_DAYS`, com o motivo do default folgado. A rota interna `/internal/retention/conversation-content` passa a rodar as duas janelas na mesma passada, cada uma com o próprio teto: a de conteúdo com os cutoffs que chegam do BFF, a do inbox com o prazo técnico desta casa (o corpo da requisição não o carrega). `processedEvents` entrou no schema do cliente do BFF e na tabela de contagens do log da varredura.\n\n**Blocker 2 — prazo de `facts`/`detail` deixou de ser configurável pela seção Conversas.** `strictestCutoff` foi removido de `RetentionCutoffs` (que agora só tem `commercialCutoff`/`personalCutoff`). A porta `scheduling` não recebe mais `cutoffs`: recebe `now` e deriva `settledBefore` por `intentContentCutoff()`, que lê `RETENTION_INTENT_CONTENT_DAYS` (default **90 dias**), declarado em `apps/bff/src/config/env.ts` com o motivo por extenso e em `.env.example`.\n\n**Blocker 3 — §7 do contrato público.** `GET`/`PATCH /v1/settings/retention` passam a devolver, além dos dois prazos e de `appliesFrom`: `retentionDaysOptions` (a allowlist do servidor), `unclassifiedPurged: false` (U-01 no contrato, não só na tela) e `lastSweepCompletedAt`. O último exigiu a coluna `RetentionSweepState.lastCompletedAt` — acrescentada ao `CREATE TABLE` da migration ainda não implantada `20260915180000_goal023_retention_sweep`, mais um `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` para manter a retomabilidade — e avança em `settleTenant` **só quando nenhuma fonte falhou** (`lastRunAt` continua marcando toda passada terminada, inclusive a degradada). `loadRetentionState` foi separada de `loadRetentionDays`, para que a varredura não pague a leitura do próprio estado de varredura.\n\n**Blocker 4 — piso entre passadas do mesmo negócio.** Nova `RETENTION_SWEEP_MIN_TENANT_INTERVAL_SECONDS` (default **3600**), propagada por `app.ts` → `RetentionSweepWorker` → `RetentionSweepOptions`, aplicada em `dueTenants()` contra `now()` do banco. Exceção declarada e comentada: negócio com `lastHasMore = true` não espera o piso, porque sobra declarada é continuação, não repetição.\n\n**Blocker 5 — §8, critério 42.** `RetentionSection` saiu de `AccountSettings`. Novo cenário `conversations` em `SettingsScenario`, nova rota `apps/frontend/src/app/(platform)/configuracoes/conversas/page.tsx`, novo componente `ConversationsSettings` com `Page title=\"Conversas\"`, e card \"Conversas\" navegável no `SettingsHub`. `ProductSettingsScreen` **não** foi redecomposta. De quebra, o seletor passou a ler as opções de `settings.retentionDaysOptions` em vez de uma constante local.\n\n**Blocker 6 — critério 53.** `GAP_ANALYSIS` G-29: a linha agora nomeia a purga de `Message`/`AiRun`, os três prazos técnicos com defaults e, explicitamente, o fechamento do `rawPayload` do inbox durável. `DATA_MIGRATION §12`: o parágrafo que chamava as cinco `RETENTION_SWEEP_*` de \"prazos técnicos\" virou **\"Parâmetros do laço de varredura\"** (seis, com a nova), dizendo que nenhuma delas decide até quando um dado vive; em seguida entra uma tabela nova de **prazos técnicos de verdade** (`INBOX_RETENTION_DAYS` 180d, `RETENTION_INTENT_CONTENT_DAYS` 90d, `WEBHOOK_OUTBOX_RETENTION_HOURS` 30d) com app, default e motivo. `CURRENT_STATE`, `VALIDATION_GATE` e `PUBLIC_API_V1.md` foram alinhados ao que o diff agora entrega.\n\n#\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 0 · opus: 1\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "COMPLEX",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "opus",
+            "effort": "high",
+            "tier": "COMPLEX",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/ai-orchestrator/.env.example",
+              "apps/ai-orchestrator/src/config/env.ts",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/src/modules/retention/inbox-retention.ts",
+              "apps/ai-orchestrator/tests/retention/inbox-retention.test.ts",
+              "apps/bff/.env.example",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/prisma/migrations/20260915180000_goal023_retention_sweep/migration.sql",
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/src/app.ts",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/config/env.ts",
+              "apps/bff/src/modules/retention/RetentionSweepWorker.ts",
+              "apps/bff/src/modules/retention/index.ts",
+              "apps/bff/src/modules/retention/settings.ts",
+              "apps/bff/src/modules/retention/sweep.ts",
+              "apps/bff/tests/goal023-retention-settings.test.ts",
+              "apps/bff/tests/goal023-retention-sweep.test.ts",
+              "apps/frontend/src/app/(platform)/configuracoes/conversas/page.tsx",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/features/settings/RetentionSection.tsx",
+              "apps/frontend/src/features/settings/types.ts",
+              "apps/frontend/tests/goal023-conversations-settings.test.tsx",
+              "apps/frontend/tests/goal023-retention-settings.test.tsx",
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/DATA_MIGRATION.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/VALIDATION_GATE.md"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "COMPLEX": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 0,
+            "opus": 1,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 10549,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "023-r2-correction-e408cece-a1"
+  }
+}

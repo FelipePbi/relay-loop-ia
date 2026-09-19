@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T00:54:26.090Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "024-r1-unit-wu-01-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "024-r1-unit-wu-01",
+    "role": "work_unit",
+    "goal": "024",
+    "round": 1,
+    "workUnitId": "WU-01",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-024",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\024-configuracoes-completas-e-conhecimento-editavel.md",
+    "parentJobId": "024-r1-developer-9e106da3",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-16T01:11:29.637Z"
+}

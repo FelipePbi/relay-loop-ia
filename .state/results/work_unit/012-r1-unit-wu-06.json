@@ -1,0 +1,51 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T19:39:39.579Z",
+  "attemptId": "012-r1-unit-wu-06-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Rotas novas exigem tenant da sessão e CSRF e repassam ao internal da IA os contratos especificados no Goal",
+          "met": true,
+          "detail": "Todas usam { preHandler: requireTenantContext } (tenant pela sessão + CSRF via assertAllowedOrigin/assertCsrfToken). AiOrchestratorClient chama exatamente os caminhos do Goal seç. 7: /internal/knowledge/documents[...], /internal/knowledge/other-info, /internal/customers/:id/memory[...], /internal/customers/:id/summary, /internal/conversations/:id/suggestions. Provado em goal012-knowledge-memory-suggestions.integration.test.ts."
+        },
+        {
+          "criterion": "Erros próprios da IA chegam ao cliente com código próprio, nunca como 500 genérico",
+          "met": true,
+          "detail": "Reaproveita InternalHttpClient: statusCode original preservado (ou 502 p/ 5xx) e código original em error.details.upstreamCode. Documentado em PUBLIC_API_V1.md e provado em 3 testes (KNOWLEDGE_INDEX_UNAVAILABLE 502, CUSTOMER_NOT_LINKED 404, SUGGESTION_NO_HUMAN_HANDLING 409)."
+        },
+        {
+          "criterion": "PUBLIC_API_V1.md descreve os contratos, as origens e permissões da memória, a precedência do conhecimento e as recusas da sugestão",
+          "met": true,
+          "detail": "Seção nova cobre tipos/versionamento do documento, campo livre, precedência (serviço>FAQ>estruturado>campo livre), CustomerMemory (kind/origin/aiAllowed/idade/substituição), resumo (material autorizado, sources), sugestões (até 3, somente leitura, recusas) e o mecanismo de erro upstream."
+        },
+        {
+          "criterion": "Testes de integração do BFF cobrem cada rota nova e rodam dentro do validate:integration",
+          "met": true,
+          "detail": "11 casos em goal012-knowledge-memory-suggestions.integration.test.ts, mesmo padrão describe.skipIf(!RUN_INTEGRATION) das demais suítes, descoberto automaticamente por test:bff-integration. Rodei sem RUN_INTEGRATION: carrega e pula certo. Não rodei os 11 contra Postgres real nesta sessão (sem .env/credencial de banco descartável disponível no worktree; não tentei adivinhar senha de terceiro)."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/src/app.ts",
+        "apps/bff/src/clients/ai-orchestrator/index.ts",
+        "apps/bff/src/modules/conversations/routes.ts",
+        "apps/bff/src/modules/customers/routes.ts",
+        "apps/bff/src/modules/knowledge/routes.ts",
+        "apps/bff/tests/goal012-knowledge-memory-suggestions.integration.test.ts"
+      ],
+      "goal": "012",
+      "jobId": "012-r1-unit-wu-06",
+      "protocolVersion": 2,
+      "report": "Escopo: apps/bff, dependendo só de WU-01 (contratos internos vêm do texto do Goal, seção 7, e das rotas internas já implementadas em apps/ai-orchestrator/src/modules/internal/routes.ts, que li para fixar os DTOs).\n\nO que mudou e por quê:\n\n1. `apps/bff/src/clients/ai-orchestrator/index.ts` — adicionei schemas Zod (knowledgeDocumentSchema, customerMemorySchema, customerSummarySchema, conversationSuggestionsSchema) e 13 métodos novos no AiOrchestratorClient: listKnowledgeDocuments/createKnowledgeDocument/getKnowledgeDocument/editKnowledgeDocument/deactivateKnowledgeDocument/saveOtherInfo; listCustomerMemory/createCustomerMemory/setCustomerMemoryPermission/removeCustomerMemory; generateCustomerSummary; generateSuggestions. Cada um chama exatamente o caminho interno fixado no Goal (seção 7) e no código real de `apps/ai-orchestrator/src/modules/internal/routes.ts` (para conhecimento e memória, que já existem via WU-01). Para `/internal/conversations/:id/suggestions` (WU-04, ainda não implementada), segui só o texto do Goal (seção 4: \"até três sugestões\", \"AiRun.kind = SUGGESTION\") e modelei a resposta como `{ conversationId, suggestions: string[], aiRunId }` — decisão de escopo minha, documentada, porque o BFF é proxy fino e o contrato real de WU-04 pode ajustar o shape; não modela nenhuma regra de negócio da sugestão no BFF (isso é da IA).\n\n2. `apps/bff/src/modules/knowledge/routes.ts` (novo módulo) — GET/POST `/v1/knowledge/documents`, GET/PUT/DELETE `/v1/knowledge/documents/:id`, PUT `/v1/knowledge/other-info`. Registrado em `app.ts`.\n\n3. `apps/bff/src/modules/customers/routes.ts` — adicionei GET/POST `/v1/customers/:id/memory`, PATCH/DELETE `/v1/customers/:id/memory/:memoryId`, POST `/v1/customers/:id/summary`. A criação de memória nunca aceita `origin` no corpo (é sempre PROFESSIONAL do lado da IA) e `aiAllowed` nasce `false` por padrão, espelhando a regra das notas do cliente.\n\n4. `apps/bff/src/modules/conversations/routes.ts` — adicionei POST `/v1/conversations/:id/suggestions`. Não criei rota de envio nova: o envio continua sendo `POST /v1/conversations/:id/messages`, já existente e inalterado.\n\n5. `apps/bff/PUBLIC_API_V1.md` — atualizei a tabela \"Rotas registradas\" e acrescentei a seção \"Conhecimento, memória do cliente, resumo e sugestões (Goal012)\" com: tipos e ciclo de vida do documento, campo livre, precedência de recuperação (produto), vocabulário e regras de `CustomerMemory` (origem/permissão/substituição/idade), o que entra no resumo (`sources`), o contrato de sugestão (até 3, binding somente leitura, sem autoenvio, recusas) e uma subseção explícita sobre como erro próprio da IA chega (UPSTREAM_ERROR + `details.upstreamCode`, nunca 500 genérico).\n\n6. `apps/bff/tests/goal012-knowledge-memory-suggestions.integration.test.ts` (novo) — 11 casos com a IA como dublê de `fetch`, seguindo exatamente o padrão de `goal011-ai-conversation-style.integration.test.ts` e `customer-identity.integration.test.ts` (helpers `registerBusiness`/`browserMutation`/`browserRead`/`RUN_INTEGRATION`): CRUD de conhecimento (criar/listar/obter/editar/desativar), campo livre, propagação de `KNOWLEDGE_INDEX_UNAVAILABLE` (502) e recusa CSRF; CRUD de memória (criar sem `origin` no corpo/permissão negada por padrão, listar, alterar permissão, remover) e recusa CSRF; resumo (sucesso e propagação de `CUSTOMER_NOT_LINKED` 404); sugestões (sucesso com no máximo 3 itens e nenhuma chamada upstream extra, propagação de uma recusa própria 409, e recusa CSRF).\n\nComandos executados com resultado real:\n- `npm ci` em apps/bff (instalação limpa a partir do lockfile do worktree; nenhum node_modules pré-existia) — sucesso, com aviso de scripts pendentes (`@prisma/engines`, `esbuild`, `prisma`).\n- `npm approve-scripts \"@prisma/engines\" esbuild prisma` em apps/bff — necessário para os scripts de instalação rodarem; isso gravou temporariamente `allowScripts` em `apps/bff/package.json`, e eu revertive esse arquivo com `git checkout -- apps/bff/package.json` no final para não ampliar o diff desta WU com um artefato de tooling local.\n- `npm run typecheck` em apps/bff (prisma generate + tsc --noEmit) — verde, sem erros, depois de cada rodada de edição.\n- `npm run lint` em apps/bff (eslint --max-warnings=0) — verde, sem warnings.\n- `npx vitest run tests/goal012-knowledge-memory-suggestions.integration.test.ts` sem `BFF_RUN_INTEGRATION_TESTS` — arquivo carrega, 11 testes descobertos e pulados (comportamento esperado do `describe.skipIf`).\n\nLimite do que NÃO foi verificado: não rodei os 11 testes de ponta a ponta contra um PostgreSQL descartável real, porque este worktree não tem nenhum `.env` com `BFF_TEST_DATABASE_URL`/credencial de banco, e a tentativa de localizar a credencial do PostgreSQL local instalado na máquina (`psql -U postgres -h 127.0.0.1`) falhou por autenticação — não insisti tentando mais senhas, por não ser apropriado adivinhar credencial de banco de terceiro. Também não rodei `validate:integration` completo (ele toca todo o monorepo, incluindo evolution-go e scheduling-service, fora do escopo desta WU). O mecanismo de dublê de `fetch` usado aqui é o mesmo já comprovado passando nas suítes irmãs (`goal011-ai-conversation-style`, `customer-identity`, `session-csrf`), então a lacuna é de execução nesta sessão, não de desenho.\n\nNão toquei em `apps/bff/src/lib/errors.ts`: não precisei de nenhum `ErrorCode` novo porque o mecanismo genérico de `UPSTREAM_ERROR` + `details.upstreamCode` já existente cobre a propagação de erro próprio da IA para todas as rotas novas, como documentado em PUBLIC_API_V1.md.\n\nNão commitei, não fiz push, não mudei de branch, não toquei em `docs/migration/goals|reviews|MIGRATION_STATUS.md`, e não implementei nada de WU-04 (sugestões) do lado da IA nem reabri trabalho de WU-01.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "BFF: adicionadas rotas de conhecimento, memória do cliente, resumo e sugestões com tenant+CSRF e propagação de erro próprio da IA, cliente da IA estendido, PUBLIC_API_V1.md e testes de integração novos; typecheck e lint verdes, execução real contra Postgres não disponível nesta sessão.",
+      "workUnitId": "WU-06"
+    },
+    "attemptId": "012-r1-unit-wu-06-a1"
+  }
+}

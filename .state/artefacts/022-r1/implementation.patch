@@ -1,0 +1,1877 @@
+diff --git a/apps/ai-orchestrator/src/modules/handoff/HandoffService.ts b/apps/ai-orchestrator/src/modules/handoff/HandoffService.ts
+index 82165ac..05a2702 100644
+--- a/apps/ai-orchestrator/src/modules/handoff/HandoffService.ts
++++ b/apps/ai-orchestrator/src/modules/handoff/HandoffService.ts
+@@ -22,6 +22,86 @@ export interface HandoffTenantScope {
+   channelId: string;
+ }
+ 
++/** Motivo gravado pela rota de takeover do dono (`/internal/conversations/:id/takeover`). */
++export const OWNER_TAKEOVER_REASON = "OWNER_TAKEOVER";
++
++export interface ConversationAwaitingHuman {
++  conversationId: string;
++  contactName: string;
++  reason: string;
++  openedAt: Date;
++}
++
++/**
++ * Quem esta aguardando humano, por tenant (Goal022/WU-02).
++ *
++ * `pauseForHuman` cria uma linha `Handoff` OPEN sem checar se ja existe uma
++ * para a mesma conversa, entao pode haver mais de uma. Aqui elas colapsam em
++ * **uma** entrada por conversa, pela mais antiga: e o instante em que a
++ * conversa comecou a esperar, nao o da ultima tentativa. Handoff de takeover
++ * do dono (`OWNER_TAKEOVER`) nunca e a fonte da entrada, porque a profissional
++ * assumindo a conversa nao e cliente esperando por ela.
++ */
++export async function listConversationsAwaitingHuman(
++  prisma: PrismaClient,
++  tenantId: string,
++  limit: number,
++): Promise<ConversationAwaitingHuman[]> {
++  const handoffs = await prisma.handoff.findMany({
++    where: {
++      tenantId,
++      status: "OPEN",
++      conversationId: { not: null },
++      reason: { not: OWNER_TAKEOVER_REASON },
++    },
++    orderBy: { createdAt: "asc" },
++    include: {
++      conversation: { select: { customerName: true, externalContactId: true } },
++    },
++  });
++
++  const byConversation = new Map<string, ConversationAwaitingHuman>();
++  for (const handoff of handoffs) {
++    const conversationId = handoff.conversationId;
++    if (!conversationId || byConversation.has(conversationId)) continue;
++    byConversation.set(conversationId, {
++      conversationId,
++      contactName: contactIdentification(
++        handoff.conversation?.customerName ?? null,
++        handoff.conversation?.externalContactId ?? handoff.externalContactId,
++      ),
++      reason: handoff.reason,
++      openedAt: handoff.createdAt,
++    });
++  }
++
++  return [...byConversation.values()].slice(0, limit);
++}
++
++/**
++ * Mesmo padrao das telas de Conversas (`conversationLabel`/`formatPhone` do
++ * frontend): nome quando o contato ja tem um, telefone formatado quando nao —
++ * nunca o telefone cru.
++ */
++function contactIdentification(
++  customerName: string | null,
++  externalContactId: string,
++): string {
++  const trimmed = customerName?.trim();
++  return trimmed ? trimmed : formatPhone(externalContactId);
++}
++
++function formatPhone(value: string): string {
++  const digits = value.split("@")[0]?.replace(/\D/g, "") ?? "";
++  if (digits.length === 13 && digits.startsWith("55")) {
++    return `(${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
++  }
++  if (digits.length === 12 && digits.startsWith("55")) {
++    return `(${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
++  }
++  return digits || "Contato sem telefone";
++}
++
+ /**
+  * Leitura de sessao usada pela pausa.
+  *
+diff --git a/apps/ai-orchestrator/src/modules/internal/routes.ts b/apps/ai-orchestrator/src/modules/internal/routes.ts
+index 3f6458d..14d3d1d 100644
+--- a/apps/ai-orchestrator/src/modules/internal/routes.ts
++++ b/apps/ai-orchestrator/src/modules/internal/routes.ts
+@@ -31,6 +31,10 @@ import { AssistantService } from "../assistant/assistant.service.js";
+ import { EvolutionProvider } from "../channel/adapters/evolution/EvolutionProvider.js";
+ import { ChannelConnectionService } from "../channel/ChannelConnectionService.js";
+ import { PlatformWhatsAppSender } from "../channel/platform/PlatformWhatsAppSender.js";
++import {
++  type ConversationAwaitingHuman,
++  listConversationsAwaitingHuman,
++} from "../handoff/HandoffService.js";
+ import {
+   type InboxPort,
+   inboxRetryPolicyFromEnv,
+@@ -111,6 +115,10 @@ const conversationQuerySchema = z.object({
+   limit: z.coerce.number().int().min(1).max(100).default(50),
+ });
+ 
++const awaitingHumanQuerySchema = z.object({
++  limit: z.coerce.number().int().min(1).max(100).default(50),
++});
++
+ const categoryOverrideSchema = z.object({
+   category: z.enum(["COMMERCIAL", "UNCLASSIFIED", "PERSONAL"]).nullable(),
+ });
+@@ -517,6 +525,24 @@ export async function registerInternalRoutes(
+     return internalData(request, messages.map(messageDto));
+   });
+ 
++  /**
++   * Quem esta aguardando humano, por tenant (Goal022/WU-02).
++   *
++   * Uma entrada por conversa, mesmo quando `pauseForHuman` grava mais de uma
++   * linha `Handoff` OPEN para ela. Takeover do dono nunca aparece: a exclusao
++   * acontece aqui, na leitura da IA, e nao no consumidor.
++   */
++  app.get("/internal/handoffs/awaiting-human", async (request) => {
++    const { tenantId } = trustedTenantContext(request);
++    const query = parseOrThrow(awaitingHumanQuerySchema, request.query);
++    const entries = await listConversationsAwaitingHuman(
++      prisma,
++      tenantId,
++      query.limit,
++    );
++    return internalData(request, entries.map(awaitingHumanDto));
++  });
++
+   /**
+    * Bytes de mídia sob demanda (Goal013/WU-05).
+    *
+@@ -1450,6 +1476,15 @@ function messageDto(message: {
+   };
+ }
+ 
++function awaitingHumanDto(entry: ConversationAwaitingHuman) {
++  return {
++    conversationId: entry.conversationId,
++    contactName: entry.contactName,
++    reason: entry.reason,
++    openedAt: entry.openedAt.toISOString(),
++  };
++}
++
+ function knowledgeDocumentDto(document: KnowledgeDocumentRecord) {
+   return {
+     id: document.id,
+@@ -1586,6 +1621,11 @@ export function requiredScope(request: FastifyRequest): InternalScope {
+   if (/^\/internal\/customers\/[^/]+\/memory(\/[^/]+)?$/u.test(path)) {
+     return method === "GET" ? "customer-memory:read" : "customer-memory:write";
+   }
++  // Mesma decisao de leitura de conversas: quem esta aguardando humano e uma
++  // projecao delas, nao uma decisao de escrita.
++  if (path === "/internal/handoffs/awaiting-human" && method === "GET") {
++    return "conversations:read";
++  }
+   if (path.startsWith("/internal/conversations")) {
+     if (method === "GET") return "conversations:read";
+     if (path.endsWith("/messages") && method === "POST") {
+diff --git a/apps/bff/PUBLIC_API_V1.md b/apps/bff/PUBLIC_API_V1.md
+index fb3a52c..dd03907 100644
+--- a/apps/bff/PUBLIC_API_V1.md
++++ b/apps/bff/PUBLIC_API_V1.md
+@@ -27,6 +27,7 @@ Para comportamento vigente, prevalece [`../../docs/product-vault/00-HOME.md`](..
+ | Configurações | `GET /v1/settings`; `PATCH /v1/settings/business`; `PATCH /v1/settings/ai`; `PATCH /v1/settings/availability`; `GET /v1/settings/reminders`; `PATCH /v1/settings/reminders` (Goal021) |
+ | WhatsApp | `GET /v1/whatsapp`; `POST /v1/whatsapp/connect`; `POST /v1/whatsapp/reconnect`; `DELETE /v1/whatsapp` |
+ | Teste real de ativação (Goal019/WU-05) | `GET /v1/activation-test`; `POST /v1/activation-test`; `POST /v1/activation-test/restart` |
++| Central de notificações (Goal022/WU-04) | `GET /v1/notifications`; `GET /v1/notifications/summary`; `POST /v1/notifications/read`; `GET/PATCH /v1/notifications/preferences` |
+ 
+ As rotas autenticadas resolvem o negócio a partir da sessão; `tenantId` enviado isoladamente pelo browser não concede autorização.
+ 
+@@ -684,3 +685,66 @@ A resposta **não** traz os fatos compostos para a entrega (nome e telefone do c
+ | `true` | pedido explícito de aviso: se a mutação de fato mudou algo que o cliente precisaria saber (horário, serviços ou estado), nasce um aviso de alteração para ele |
+ 
+ Cancelar sempre cancela os lembretes pendentes do horário anterior, com `notifyCustomer` ou sem — as duas decisões são independentes. `notifyCustomer` só decide o aviso de alteração, nunca os lembretes em si, e só existe nestas duas rotas: a IA cancela e remarca a pedido do próprio cliente dentro da conversa, e avisá-lo do que ele acabou de pedir seria ruído — por isso ela nunca tem este campo em nenhum contrato dela, e a interface manda-o sempre, explicitamente, marcado por padrão. A recomputação de lembretes e o aviso em si são regra do Scheduling, provada nas suítes de lá; o que este contrato garante é só o transporte do pedido.
++
++## Central de notificações e alertas persistentes (Goal022/WU-04)
++
++Quatro rotas, todas sob `requireTenantContext` e escopadas pelo tenant da sessão; nenhuma aceita `tenantId` no corpo ou na query — um valor estranho ali é simplesmente ignorado, o escopo vem sempre da sessão. A reconciliação das espécies que dependem dos donos (`CUSTOMER_WAITING_HUMAN`, `REMINDER_FAILED`, `IMPORT_COMPLETED`, `AI_APPOINTMENT_CREATED`, `SETUP_INCOMPLETE`) roda dentro de `GET /v1/notifications` e `GET /v1/notifications/summary`, sob o throttle persistido do motor (`NOTIFICATIONS_RECONCILE_MIN_INTERVAL_SECONDS`); as condições de canal (`WHATSAPP_DISCONNECTED`, `AI_UNAVAILABLE`) reconciliam dentro de `GET /v1/status` (Goal022/WU-03). Fonte indisponível nunca vira `500`: a leitura responde `200` com o que está gravado.
++
++| Rota | O que faz |
++| --- | --- |
++| `GET /v1/notifications` | lista paginada, com filtro por `level`, `unread` e `resolved` |
++| `GET /v1/notifications/summary` | contadores baratos para o chrome: não lidas por nível e condições abertas |
++| `POST /v1/notifications/read` | marca uma notificação (`{ id }`) ou todas as não lidas (`{ all: true }`) como lidas |
++| `GET /v1/notifications/preferences` | lê a preferência da central |
++| `PATCH /v1/notifications/preferences` | grava a preferência da central |
++
++### `GET /v1/notifications`
++
++Query opcional: `level` (`INFO`, `ATTENTION`, `CRITICAL`), `unread` (booleano), `resolved` (booleano — só notificações cuja `resolvedAt` está ou não preenchida; toda `EVENT` tem `resolvedAt` sempre nulo, então `resolved=false` inclui histórico e condição aberta), `limit` (1–100, default 20) e `offset` (default 0). A lista só enxerga os últimos 90 dias (`occurredAt`); não é retenção — é janela de leitura, a purga é do Goal023.
++
++```json
++{
++  "total": 3,
++  "limit": 20,
++  "offset": 0,
++  "items": [
++    {
++      "id": "…",
++      "kind": "CUSTOMER_WAITING_HUMAN",
++      "level": "ATTENTION",
++      "shape": "CONDITION",
++      "subjectId": "conversa-1",
++      "occurredAt": "2026-09-15T12:30:00.000Z",
++      "readAt": null,
++      "resolvedAt": null,
++      "payload": { "contactName": "Marina", "reason": "EXPLICIT_REQUEST" }
++    }
++  ]
++}
++```
++
++`kind` e `subjectId` são o alvo de navegação — quem lê decide para onde levar o negócio (a conversa, o agendamento, a sessão de importação); o BFF não embute URL de frontend no contrato. `payload` traz só o que a copy precisa, nunca telefone, credencial ou payload cru do dono (Goal022/WU-03).
++
++### `GET /v1/notifications/summary`
++
++```json
++{
++  "byLevel": { "INFO": 0, "ATTENTION": 1, "CRITICAL": 1 },
++  "unreadCount": 2,
++  "openConditionsCount": 1
++}
++```
++
++`byLevel` e `unreadCount` contam só não lidas; `openConditionsCount` conta condições abertas (`shape: CONDITION`, `resolvedAt: null`) independente do estado de leitura — é o alerta operacional, não o contador de caixa de entrada.
++
++### `POST /v1/notifications/read`
++
++Idempotente nos dois formatos. Marcar como lida um `id` que não existe, que já está lido, ou que pertence a outro tenant produz exatamente a mesma resposta — `{ "updated": 0 }` — porque a notificação de outro tenant nunca aparece no filtro para começar; não há distinção informativa entre "não existe" e "não é seu". `{ "all": true }` marca todas as não lidas do tenant como lidas nesta chamada; repetir devolve `updated: 0`.
++
++### Preferências
++
++```json
++{ "aiAppointmentCreated": false }
++```
++
++Único campo do contrato hoje, com **default desligado** (Goal022/WU-03 — "default silencioso"): negócio que nunca configurou não recebe `AI_APPOINTMENT_CREATED`. Não existe campo de canal de e-mail em nenhuma rota da central; um campo que nenhuma camada honra não entra no contrato.
+diff --git a/apps/bff/prisma/schema.prisma b/apps/bff/prisma/schema.prisma
+index 144aea7..fb0ddf9 100644
+--- a/apps/bff/prisma/schema.prisma
++++ b/apps/bff/prisma/schema.prisma
+@@ -108,6 +108,10 @@ model Tenant {
+   businessProfile  BusinessProfile?
+   aiSettings       AiSettings?
+   whatsappInstance WhatsAppInstance?
++
++  notifications          TenantNotification[]
++  notificationPreference NotificationPreference?
++  notificationSyncState  NotificationSyncState?
+ }
+ 
+ model TenantMember {
+@@ -218,3 +222,109 @@ model AiSettings {
+ 
+   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+ }
++
++/// Espécie da notificação da central (Goal022). Vocabulário fechado: cada
++/// espécie tem uma fonte, uma chave de dedupe e uma regra de resolução
++/// declaradas em `modules/notifications/species.ts`. Espécie nova é decisão de
++/// produto, não campo livre de chamador.
++enum NotificationKind {
++  CUSTOMER_WAITING_HUMAN
++  REMINDER_FAILED
++  IMPORT_COMPLETED
++  AI_APPOINTMENT_CREATED
++  WHATSAPP_DISCONNECTED
++  AI_UNAVAILABLE
++  SETUP_INCOMPLETE
++}
++
++/// Os tres niveis do produto. Derivado de `kind` por tabela fixa no codigo,
++/// nunca escolhido por quem materializa.
++enum NotificationLevel {
++  INFO
++  ATTENTION
++  CRITICAL
++}
++
++/// `EVENT` aconteceu e fica no historico; `CONDITION` esta aberta ou foi
++/// resolvida. So `CONDITION` recebe `resolvedAt`.
++enum NotificationShape {
++  EVENT
++  CONDITION
++}
++
++/// Registro duravel da central de notificacoes (Goal022).
++///
++/// `(tenantId, dedupeKey)` e `@@unique` **no banco**: e essa chave, e nao
++/// verificacao em codigo, que torna a materializacao idempotente —
++/// reconciliar dez vezes a mesma fonte produz uma linha. `dedupeKey` deriva
++/// da identidade do fato no dono (conversa, intencao, sessao de importacao,
++/// `sequence` do evento) ou do par tenant+especie para as condicoes; nunca de
++/// `now()`, de contador local ou do texto exibido.
++///
++/// `payload` guarda **apenas** o que a copy e o link precisam. Nunca telefone,
++/// credencial, `facts` de intencao, `leaseToken` nem payload cru: o que nao
++/// sai do dono nao passa a sair pelo BFF.
++model TenantNotification {
++  id         String            @id @default(cuid())
++  tenantId   String
++  kind       NotificationKind
++  level      NotificationLevel
++  shape      NotificationShape
++  dedupeKey  String
++  /// Identidade do alvo dentro da especie (conversa, compromisso, sessao).
++  /// Nulo nas condicoes de tenant, que nao tem alvo alem do proprio negocio.
++  subjectId  String?
++  /// Instante do fato no dono, nunca o da materializacao.
++  occurredAt DateTime
++  readAt     DateTime?
++  /// So `CONDITION`. Preenchido quando a fonte deixa de reportar a condicao;
++  /// a linha permanece no historico, nada e deletado.
++  resolvedAt DateTime?
++  payload    Json              @default("{}")
++  createdAt  DateTime          @default(now())
++  updatedAt  DateTime          @updatedAt
++
++  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
++
++  @@unique([tenantId, dedupeKey])
++  /// As tres leituras reais: nao lidas, condicoes abertas e historico recente.
++  @@index([tenantId, readAt])
++  @@index([tenantId, shape, resolvedAt])
++  @@index([tenantId, occurredAt(sort: Desc)])
++}
++
++/// Preferencia humana da central. Hoje so `AI_APPOINTMENT_CREATED`, com
++/// **default desligado** (vault: "default silencioso"). Sem canal de e-mail ou
++/// push: campo que nenhuma camada honra nao entra no contrato.
++model NotificationPreference {
++  id                   String   @id @default(cuid())
++  tenantId             String   @unique
++  aiAppointmentCreated Boolean  @default(false)
++  createdAt            DateTime @default(now())
++  updatedAt            DateTime @updatedAt
++
++  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
++}
++
++/// Throttle e cursores da reconciliacao, por negocio (Goal022). Persistido
++/// porque a materializacao roda dentro de requisicao que ja existe: sem estado
++/// no banco, cada requisicao releria tudo de novo.
++///
++/// `seededAt` e o instante da primeira reconciliacao do tenant e existe para
++/// uma regra de produto: **nenhum negocio ganha notificacao retroativa**.
++/// Evento anterior a ele avanca o cursor sem criar linha. Condicoes nao
++/// dependem disso — sao estado corrente e nascem refletindo o agora.
++model NotificationSyncState {
++  id                       String    @id @default(cuid())
++  tenantId                 String    @unique
++  seededAt                 DateTime  @default(now())
++  lastReconciledAt         DateTime?
++  /// Cursor opaco `(dueAt, id)` devolvido pela leitura de falhas do Scheduling.
++  reminderFailedCursor     String?
++  /// `sequence` do ultimo `AppointmentEvent` ja lido. Texto porque e BigInt.
++  aiAppointmentEventCursor String?
++  createdAt                DateTime  @default(now())
++  updatedAt                DateTime  @updatedAt
++
++  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
++}
+diff --git a/apps/bff/src/app.ts b/apps/bff/src/app.ts
+index c025f34..fe88f26 100644
+--- a/apps/bff/src/app.ts
++++ b/apps/bff/src/app.ts
+@@ -18,6 +18,7 @@ import { registerV1CustomerRoutes } from "./modules/customers/routes.js";
+ import { registerV1DashboardRoutes } from "./modules/dashboard/routes.js";
+ import { registerV1KnowledgeRoutes } from "./modules/knowledge/routes.js";
+ import { registerV1MigrationRoutes } from "./modules/migrations/routes.js";
++import { registerV1NotificationRoutes } from "./modules/notifications/routes.js";
+ import { registerV1OnboardingRoutes } from "./modules/onboarding/routes.js";
+ import { registerV1ServiceRoutes } from "./modules/services/routes.js";
+ import { registerV1SettingsRoutes } from "./modules/settings/routes.js";
+@@ -116,6 +117,7 @@ export async function buildApp() {
+   await registerV1KnowledgeRoutes(app);
+   await registerV1ServiceRoutes(app);
+   await registerV1SettingsRoutes(app);
++  await registerV1NotificationRoutes(app);
+   await registerV1WhatsAppRoutes(app);
+   await registerV1ActivationTestRoutes(app);
+ 
+diff --git a/apps/bff/src/clients/ai-orchestrator/index.ts b/apps/bff/src/clients/ai-orchestrator/index.ts
+index 3700304..fd95d48 100644
+--- a/apps/bff/src/clients/ai-orchestrator/index.ts
++++ b/apps/bff/src/clients/ai-orchestrator/index.ts
+@@ -94,6 +94,17 @@ const conversationSchema = z.object({
+     .optional(),
+ });
+ 
++// Central de notificacoes (Goal022): uma entrada por conversa que espera
++// atendimento humano. `contactName` ja vem identificado como as telas de
++// Conversas fazem — nome quando existe, telefone formatado quando nao —, e o
++// telefone cru nunca atravessa esta fronteira.
++const conversationAwaitingHumanSchema = z.object({
++  conversationId: z.string(),
++  contactName: z.string(),
++  reason: z.string(),
++  openedAt: z.string(),
++});
++
+ const envelope = <T extends z.ZodType>(schema: T) =>
+   z.object({ data: schema, requestId: z.string() });
+ 
+@@ -715,6 +726,28 @@ export class AiOrchestratorClient {
+     ).data;
+   }
+ 
++  /**
++   * Quem esta aguardando humano, por negocio (Goal022).
++   *
++   * Uma entrada por **conversa**, mesmo quando a IA gravou mais de uma linha
++   * `Handoff` OPEN para ela, e sem o takeover do dono: as duas regras moram na
++   * leitura da IA, nao aqui. A central so materializa o que veio.
++   */
++  async listConversationsAwaitingHuman(
++    context: InternalRequestContext,
++    query: { limit?: number } = {},
++  ) {
++    return (
++      await this.http.request({
++        method: "GET",
++        path: "/internal/handoffs/awaiting-human",
++        context,
++        query: { limit: query.limit },
++        schema: envelope(z.array(conversationAwaitingHumanSchema)),
++      })
++    ).data;
++  }
++
+   /**
+    * Execucao corrente do teste real (Goal019/WU-05). `null` e "nunca testou",
+    * nunca fabricado a partir de outro estado.
+diff --git a/apps/bff/src/clients/scheduling/index.ts b/apps/bff/src/clients/scheduling/index.ts
+index 7286d7f..842d947 100644
+--- a/apps/bff/src/clients/scheduling/index.ts
++++ b/apps/bff/src/clients/scheduling/index.ts
+@@ -567,6 +567,38 @@ const importStateSchema = z.object({
+   history: importHistoryResultSchema.nullable(),
+ });
+ 
++// --- Central de notificacoes (Goal022, WU-03) ------------------------------
++// As duas leituras por negocio que a central materializa. Nenhuma delas traz
++// `facts`, `leaseToken`, telefone ou payload cru — o recorte e o do dono, e o
++// BFF nao alarga o que ele decidiu nao expor.
++const failedNotificationIntentSchema = z.object({
++  id: z.string(),
++  appointmentId: z.string(),
++  kind: z.string(),
++  slot: z.string(),
++  appointmentVersion: z.number().int().nonnegative(),
++  reason: z.string().nullable(),
++  detail: z.string().nullable(),
++  attemptCount: z.number().int().nonnegative(),
++  dueAt: z.string(),
++  settledAt: z.string().nullable(),
++});
++const failedNotificationIntentsPageSchema = z.object({
++  items: z.array(failedNotificationIntentSchema),
++  nextCursor: z.string().nullable(),
++});
++const aiCreatedAppointmentEventSchema = z.object({
++  id: z.string(),
++  appointmentId: z.string(),
++  after: z.unknown().nullable(),
++  occurredAt: z.string(),
++  sequence: z.string(),
++});
++const aiCreatedAppointmentEventsPageSchema = z.object({
++  items: z.array(aiCreatedAppointmentEventSchema),
++  nextCursor: z.string().nullable(),
++});
++
+ const envelope = <T extends z.ZodType>(schema: T) =>
+   z.object({ data: schema, requestId: z.string() });
+ 
+@@ -1400,6 +1432,51 @@ export class SchedulingClient {
+     );
+   }
+ 
++  // --- Central de notificacoes (Goal022, WU-03) ---------------------------
++
++  /**
++   * Falhas de entrega do negocio (`state = FAILED`), por cursor estavel.
++   *
++   * O filtro por `FAILED` e do dono, e nao do BFF: `DISMISSED` e `CANCELLED`
++   * sao decisoes legitimas do dominio (antecedencia vencida, cliente sem
++   * telefone, versao superada) e nunca chegam aqui. Notificar funcionamento
++   * correto seria transformar decisao em alarme.
++   */
++  async listFailedNotificationIntents(
++    context: InternalRequestContext,
++    query: { cursor?: string | null; limit?: number } = {},
++  ) {
++    return this.get(
++      context,
++      "/internal/notification-intents/failed",
++      failedNotificationIntentsPageSchema,
++      {
++        cursor: query.cursor ?? undefined,
++        limit: query.limit,
++      },
++    );
++  }
++
++  /**
++   * Feed de compromissos criados pela IA, avancando por `sequence` — unico e
++   * monotonico, e por isso cursor confiavel onde `occurredAt` nao e (eventos
++   * da mesma transacao compartilham o instante).
++   */
++  async listAiCreatedAppointmentEvents(
++    context: InternalRequestContext,
++    query: { afterSequence?: string | null; limit?: number } = {},
++  ) {
++    return this.get(
++      context,
++      "/internal/appointment-events/ai-created",
++      aiCreatedAppointmentEventsPageSchema,
++      {
++        afterSequence: query.afterSequence ?? undefined,
++        limit: query.limit,
++      },
++    );
++  }
++
+   async dashboard(context: InternalRequestContext) {
+     return this.get(
+       context,
+diff --git a/apps/bff/src/config/env.ts b/apps/bff/src/config/env.ts
+index aaea7d6..98eacf8 100644
+--- a/apps/bff/src/config/env.ts
++++ b/apps/bff/src/config/env.ts
+@@ -71,6 +71,12 @@ const envSchema = z.object({
+   // Evolution acontece dentro daquele prazo antes da IA responder ao BFF, e
+   // INTERNAL_HTTP_TIMEOUT_MS (rotas JSON) e curto demais para esperar por ele.
+   INTERNAL_HTTP_MEDIA_TIMEOUT_MS: intEnv(90_000),
++  // Janela minima entre duas reconciliacoes da central de notificacoes do
++  // mesmo negocio (Goal022). A materializacao roda dentro de requisicao que ja
++  // existe, entao o throttle e o que impede uma tela aberta de transformar
++  // cada poll em uma rodada de leituras nos donos. Configuravel de proposito:
++  // nao e constante magica espalhada pelo codigo.
++  NOTIFICATIONS_RECONCILE_MIN_INTERVAL_SECONDS: intEnv(60),
+   PASSWORD_RESET_TOKEN_TTL_MINUTES: intEnv(30),
+   PASSWORD_RESET_PUBLIC_URL: stringEnv("http://localhost:3001/nova-senha"),
+   PASSWORD_RESET_DELIVERY_URL: stringEnv(),
+diff --git a/apps/bff/src/modules/onboarding/routes.ts b/apps/bff/src/modules/onboarding/routes.ts
+index bae305c..26fb7b9 100644
+--- a/apps/bff/src/modules/onboarding/routes.ts
++++ b/apps/bff/src/modules/onboarding/routes.ts
+@@ -6,18 +6,20 @@ import { SchedulingClient } from "../../clients/scheduling/index.js";
+ import {
+   type AiConversationStyle,
+   aiConversationStyleSchema,
+-  normalizeStoredAiConversationStyle,
+   parseBodyWithAiConversationStyle,
+ } from "../../lib/ai-conversation-style.js";
+ import {
+   businessAddressSchema,
+   businessContextPayload,
+-  businessContextProjectionState,
+   businessModalitySchema,
+   resolveBusinessProfileFields,
+ } from "../../lib/business-profile.js";
+ import { AppError } from "../../lib/errors.js";
+ import { dataResponse } from "../../lib/http.js";
++import {
++  onboardingIssues,
++  onboardingState,
++} from "../../lib/onboarding-state.js";
+ import { getPrisma } from "../../lib/prisma.js";
+ import {
+   currentTenantContext,
+@@ -176,44 +178,13 @@ export async function registerV1OnboardingRoutes(
+     { preHandler: requireTenantContext },
+     async (request) => {
+       const tenant = currentTenantContext(request);
+-      const context = internalContext(request);
+       const prisma = getPrisma();
+-      const [profile, settings, calendar] = await Promise.all([
+-        prisma.businessProfile.findUnique({
+-          where: { tenantId: tenant.tenantId },
+-        }),
+-        prisma.aiSettings.findUnique({ where: { tenantId: tenant.tenantId } }),
+-        scheduling.calendar(context),
+-      ]);
+-      const issues: string[] = [];
+-      if (!profile?.businessName.trim() || !profile.category?.trim()) {
+-        issues.push("BUSINESS_PROFILE_INCOMPLETE");
+-      }
+-      if (!profile?.modalities.length) {
+-        issues.push("BUSINESS_MODALITY_NOT_SELECTED");
+-      }
+-      if (profile?.modalities.includes("ON_SITE") && !profile.address?.trim()) {
+-        issues.push("BUSINESS_ADDRESS_REQUIRED");
+-      }
+-      if (!calendar.source) issues.push("CALENDAR_NOT_SELECTED");
+-      if (!normalizeStoredAiConversationStyle(settings?.tone)) {
+-        issues.push("AI_TONE_NOT_SELECTED");
+-      }
+-
+-      if (calendar.source) {
+-        const services = await scheduling.listServices(context);
+-        if (!services.some((service) => service.active)) {
+-          issues.push("ACTIVE_SERVICE_REQUIRED");
+-        }
+-        if (calendar.source === "ATENDLY") {
+-          const availability = await scheduling.availabilitySettings(context);
+-          if (!availability.rules.some((rule) => rule.active)) {
+-            issues.push("AVAILABILITY_REQUIRED");
+-          }
+-        } else if (calendar.integration?.status !== "CONNECTED") {
+-          issues.push("CALENDAR_INTEGRATION_NOT_CONNECTED");
+-        }
+-      }
++      // A conclusao usa exatamente a mesma definicao de configuracao
++      // essencial que a central de notificacoes le para SETUP_INCOMPLETE. Uma
++      // definicao so: duas poderiam divergir e deixar o negocio concluir o
++      // onboarding com uma condicao aberta, ou o contrario.
++      const state = await onboardingState(request, scheduling);
++      const issues = onboardingIssues(state);
+ 
+       if (issues.length > 0) {
+         throw new AppError(
+@@ -227,7 +198,9 @@ export async function registerV1OnboardingRoutes(
+       await prisma.businessProfile.update({
+         where: { tenantId: tenant.tenantId },
+         data: {
+-          onboardingCompletedAt: profile?.onboardingCompletedAt ?? new Date(),
++          onboardingCompletedAt: state.completedAt
++            ? new Date(state.completedAt)
++            : new Date(),
+         },
+       });
+       return dataResponse(request, await onboardingState(request, scheduling));
+@@ -235,61 +208,6 @@ export async function registerV1OnboardingRoutes(
+   );
+ }
+ 
+-async function onboardingState(
+-  request: FastifyRequest,
+-  scheduling: SchedulingClient,
+-) {
+-  const tenant = currentTenantContext(request);
+-  const context = internalContext(request);
+-  const [profile, settings, instance, calendar] = await Promise.all([
+-    getPrisma().businessProfile.findUnique({
+-      where: { tenantId: tenant.tenantId },
+-    }),
+-    getPrisma().aiSettings.findUnique({
+-      where: { tenantId: tenant.tenantId },
+-    }),
+-    getPrisma().whatsAppInstance.findUnique({
+-      where: { userId: tenant.userId },
+-    }),
+-    scheduling.calendar(context),
+-  ]);
+-  const [services, availability] = await Promise.all([
+-    calendar.source ? scheduling.listServices(context) : Promise.resolve([]),
+-    calendar.source === "ATENDLY"
+-      ? scheduling.availabilitySettings(context)
+-      : Promise.resolve(null),
+-  ]);
+-  return {
+-    business: profile
+-      ? {
+-          name: profile.businessName,
+-          category: profile.category,
+-          timezone: profile.timezone,
+-          modalities: profile.modalities,
+-          address: profile.address,
+-          contextVersion: profile.businessContextVersion,
+-          contextProjectedVersion: profile.businessContextProjectedVersion,
+-          contextProjectionStatus: businessContextProjectionState(profile),
+-        }
+-      : null,
+-    calendar: {
+-      source: publicSource(calendar.source),
+-      timezone: calendar.timezone,
+-      integration: calendar.integration,
+-    },
+-    ai: {
+-      tone: normalizeStoredAiConversationStyle(settings?.tone),
+-    },
+-    service: services.find((service) => service.active) ?? null,
+-    availability,
+-    whatsapp: instance
+-      ? { status: instance.status, phoneNumber: instance.phoneNumber }
+-      : null,
+-    completed: Boolean(profile?.onboardingCompletedAt),
+-    completedAt: profile?.onboardingCompletedAt?.toISOString() ?? null,
+-  };
+-}
+-
+ /**
+  * Falha de projecao nunca vira erro da requisicao: o dado do negocio ja foi
+  * gravado antes desta chamada, e o estado projetado/pendente exposto em
+@@ -340,11 +258,6 @@ function internalSource(source: "ATENDLY" | "EXTERNAL") {
+     : ("MINHA_AGENDA" as const);
+ }
+ 
+-function publicSource(source: "ATENDLY" | "MINHA_AGENDA" | null) {
+-  if (source === null) return null;
+-  return source === "ATENDLY" ? ("ATENDLY" as const) : ("EXTERNAL" as const);
+-}
+-
+ function assertTimezone(value: string): void {
+   try {
+     new Intl.DateTimeFormat("pt-BR", { timeZone: value }).format();
+diff --git a/apps/bff/src/modules/status/routes.ts b/apps/bff/src/modules/status/routes.ts
+index 43debd6..bb3cfda 100644
+--- a/apps/bff/src/modules/status/routes.ts
++++ b/apps/bff/src/modules/status/routes.ts
+@@ -11,6 +11,7 @@ import {
+   requireTenantContext,
+ } from "../../lib/tenant-context.js";
+ import { settled, whatsappSummary } from "../dashboard/routes.js";
++import { reconcileStatusConditions } from "../notifications/reconcile.js";
+ import { internalContext } from "../tenant/context.js";
+ 
+ type WhatsAppStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
+@@ -88,6 +89,15 @@ export async function registerV1StatusRoutes(
+         reconciled,
+       };
+ 
++      // Goal022 §6: as condições de canal da central reconciliam **aqui**,
++      // reusando os valores que esta requisição já computou — zero chamada
++      // remota a mais. A escrita é local, nunca lança e não muda a forma da
++      // resposta: consumidor de status não passa a depender da central.
++      await reconcileStatusConditions(request, {
++        whatsapp: whatsapp.status,
++        ai: ai_.state,
++      });
++
+       return dataResponse(request, {
+         whatsapp,
+         ai: ai_,
+diff --git a/apps/frontend/src/app/globals.css b/apps/frontend/src/app/globals.css
+index de217d0..770de0c 100644
+--- a/apps/frontend/src/app/globals.css
++++ b/apps/frontend/src/app/globals.css
+@@ -6,6 +6,7 @@
+ @import "../shared/styles/atendly-services.css";
+ @import "../shared/styles/atendly-settings.css";
+ @import "../shared/styles/atendly-imports.css";
++@import "../shared/styles/atendly-notifications.css";
+ @import "../shared/styles/atendly-system.css";
+ 
+ .onboarding-shell {
+diff --git a/apps/frontend/src/data/index.ts b/apps/frontend/src/data/index.ts
+index 3d43bc1..703d6b1 100644
+--- a/apps/frontend/src/data/index.ts
++++ b/apps/frontend/src/data/index.ts
+@@ -7,6 +7,7 @@ export * from "./services/BffConversationService";
+ export * from "./services/BffCustomerService";
+ export * from "./services/BffDashboardService";
+ export * from "./services/BffMigrationService";
++export * from "./services/BffNotificationService";
+ export * from "./services/BffOnboardingService";
+ export * from "./services/BffServiceCatalogService";
+ export * from "./services/BffSettingsService";
+diff --git a/apps/frontend/src/data/mappers/publicApiSchemas.ts b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+index ed35eee..4351e4a 100644
+--- a/apps/frontend/src/data/mappers/publicApiSchemas.ts
++++ b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+@@ -898,6 +898,74 @@ export type WhatsAppStatusValue = z.infer<typeof whatsappStatusValueSchema>;
+ export type AiStateValue = z.infer<typeof aiStateValueSchema>;
+ export type SystemStatus = z.infer<typeof systemStatusSchema>;
+ 
++// --- Central de notificacoes e alertas persistentes (Goal022/WU-04) --------
++// `kind`, `level` e `shape` sao vocabulario fechado do dono (BFF): recusar um
++// valor desconhecido em vez de deixá-lo passar como texto livre é o mesmo
++// princípio já aplicado ao estado de envio de lembretes
++// (`appointmentNotificationKindSchema` etc.) — a tela nunca renderiza espécie
++// que o produto não reconhece em silêncio.
++export const notificationKindSchema = z.enum([
++  "CUSTOMER_WAITING_HUMAN",
++  "REMINDER_FAILED",
++  "IMPORT_COMPLETED",
++  "AI_APPOINTMENT_CREATED",
++  "WHATSAPP_DISCONNECTED",
++  "AI_UNAVAILABLE",
++  "SETUP_INCOMPLETE",
++]);
++export const notificationLevelSchema = z.enum(["INFO", "ATTENTION", "CRITICAL"]);
++export const notificationShapeSchema = z.enum(["EVENT", "CONDITION"]);
++
++export const notificationSchema = z.object({
++  id: z.string().min(1),
++  kind: notificationKindSchema,
++  level: notificationLevelSchema,
++  shape: notificationShapeSchema,
++  subjectId: z.string().nullable(),
++  occurredAt: z.string(),
++  readAt: z.string().nullable(),
++  resolvedAt: z.string().nullable(),
++  // Copy pronta por espécie; nunca telefone, credencial ou payload cru do
++  // dono (PUBLIC_API_V1.md) — a forma exata varia por `kind`, então aqui é
++  // só o que sobrevive à validação do dono.
++  payload: z.unknown(),
++});
++
++export const notificationListSchema = z.object({
++  total: z.number().int().nonnegative(),
++  limit: z.number().int().positive(),
++  offset: z.number().int().nonnegative(),
++  items: z.array(notificationSchema),
++});
++
++export const notificationSummarySchema = z.object({
++  byLevel: z.object({
++    INFO: z.number().int().nonnegative(),
++    ATTENTION: z.number().int().nonnegative(),
++    CRITICAL: z.number().int().nonnegative(),
++  }),
++  unreadCount: z.number().int().nonnegative(),
++  openConditionsCount: z.number().int().nonnegative(),
++});
++
++export const notificationMarkReadResultSchema = z.object({
++  updated: z.number().int().nonnegative(),
++});
++
++export const notificationPreferencesSchema = z.object({
++  aiAppointmentCreated: z.boolean(),
++});
++
++export type NotificationKind = z.infer<typeof notificationKindSchema>;
++export type NotificationLevel = z.infer<typeof notificationLevelSchema>;
++export type NotificationShape = z.infer<typeof notificationShapeSchema>;
++export type Notification = z.infer<typeof notificationSchema>;
++export type NotificationList = z.infer<typeof notificationListSchema>;
++export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
++export type NotificationPreferences = z.infer<
++  typeof notificationPreferencesSchema
++>;
++
+ // --- Conhecimento, memoria do cliente, resumo e sugestoes (Goal012) --------
+ // Sem tela: a experiencia e dos Goals 015, 017 e 023. Aqui e so o contrato
+ // que a camada de dados precisa entender, incluindo a recusa de vocabulario
+diff --git a/apps/frontend/src/data/services/registry.ts b/apps/frontend/src/data/services/registry.ts
+index 2cce7c6..881032e 100644
+--- a/apps/frontend/src/data/services/registry.ts
++++ b/apps/frontend/src/data/services/registry.ts
+@@ -10,6 +10,7 @@ import { BffCustomerService } from "./BffCustomerService";
+ import { BffDashboardService } from "./BffDashboardService";
+ import { BffKnowledgeService } from "./BffKnowledgeService";
+ import { BffMigrationService } from "./BffMigrationService";
++import { BffNotificationService } from "./BffNotificationService";
+ import { BffOnboardingService } from "./BffOnboardingService";
+ import { BffServiceCatalogService } from "./BffServiceCatalogService";
+ import { BffSettingsService } from "./BffSettingsService";
+@@ -25,6 +26,7 @@ export interface BffServiceRegistry {
+   dashboard: BffDashboardService;
+   knowledge: BffKnowledgeService;
+   migration: BffMigrationService;
++  notifications: BffNotificationService;
+   onboarding: BffOnboardingService;
+   serviceCatalog: BffServiceCatalogService;
+   settings: BffSettingsService;
+@@ -56,6 +58,7 @@ export function createBffServiceRegistry(
+     dashboard: new BffDashboardService(http),
+     knowledge: new BffKnowledgeService(http),
+     migration: new BffMigrationService(http),
++    notifications: new BffNotificationService(http),
+     onboarding: new BffOnboardingService(http),
+     serviceCatalog: new BffServiceCatalogService(http),
+     settings: new BffSettingsService(http),
+diff --git a/apps/frontend/src/shared/layout/AppShell.tsx b/apps/frontend/src/shared/layout/AppShell.tsx
+index 41ab93c..2772d18 100644
+--- a/apps/frontend/src/shared/layout/AppShell.tsx
++++ b/apps/frontend/src/shared/layout/AppShell.tsx
+@@ -23,6 +23,8 @@ import {
+   isMobileTab,
+   isMoreActive,
+   MORE_DESTINATIONS,
++  NOTIFICATIONS_DESTINATION,
++  notificationsBadgeLabel,
+   SIDEBAR_DESTINATIONS,
+ } from "./navigation";
+ import type { ShellConfig } from "./ShellConfig";
+@@ -93,6 +95,12 @@ function AppShellChrome({
+     session?.tenant.name ??
+     "Seu negócio";
+   const userLabel = session?.user.email ?? "Conta principal";
++  const notificationsBadge = notificationsBadgeLabel(
++    status.notificationsSummary?.unreadCount ?? 0,
++  );
++  const whatsappDisconnected = status.whatsappView === "off";
++  const aiUnavailable =
++    status.aiView === "pending" || status.aiView === "unknown";
+ 
+   useEffect(() => {
+     document.title = title ? `${title} — Atendly` : "Atendly";
+@@ -173,6 +181,20 @@ function AppShellChrome({
+           </nav>
+           <div className="sidebar-bottom">
+             <nav className="nav">
++              <Link
++                className={clsx(
++                  "nav-item",
++                  active === "notificacoes" && "is-active",
++                )}
++                href={NOTIFICATIONS_DESTINATION.href}
++                aria-current={active === "notificacoes" ? "page" : undefined}
++              >
++                <Icon name={NOTIFICATIONS_DESTINATION.icon} />
++                <span>{NOTIFICATIONS_DESTINATION.label}</span>
++                {notificationsBadge && (
++                  <span className="badge-count">{notificationsBadge}</span>
++                )}
++              </Link>
+               <Link
+                 className={clsx(
+                   "nav-item",
+@@ -254,6 +276,22 @@ function AppShellChrome({
+               </span>
+             </header>
+           )}
++          {whatsappDisconnected && (
++            <PersistentStatusBanner
++              text="Reconecte o WhatsApp para a IA voltar a responder."
++              title="Atendimento automático parado"
++              href="/configuracoes/whatsapp"
++              linkLabel="Reconectar WhatsApp"
++            />
++          )}
++          {aiUnavailable && (
++            <PersistentStatusBanner
++              text="A IA não está respondendo. As conversas seguem para atendimento humano."
++              title="IA indisponível"
++              href="/configuracoes/ia"
++              linkLabel="Ver configurações da IA"
++            />
++          )}
+           {children}
+         </main>
+         {showBottomNav && action && (
+@@ -312,6 +350,9 @@ function AppShellChrome({
+             <Link className="menu-item" href={item.href} key={item.section}>
+               <Icon name={item.icon} />
+               {item.label}
++              {item.section === "notificacoes" && notificationsBadge && (
++                <span className="badge-count">{notificationsBadge}</span>
++              )}
+             </Link>
+           ))}
+           <span className="menu-item" aria-disabled="true">
+@@ -333,6 +374,38 @@ function AppShellChrome({
+   );
+ }
+ 
++/**
++ * Deriva de `/v1/status` (via `useSystemStatus`, mesmo tick do shell), não da
++ * central de notificações: o banner afirma a condição agora, a central guarda
++ * desde quando e até quando (Goal022/WU-08). A frase nunca repete a dos chips
++ * de estado da sidebar (`StatusLine`), que são "WhatsApp desconectado" /
++ * "IA desligada" / "IA em ativação" / etc.
++ */
++function PersistentStatusBanner({
++  href,
++  linkLabel,
++  text,
++  title,
++}: {
++  href: string;
++  linkLabel: string;
++  text: string;
++  title: string;
++}) {
++  return (
++    <div className="alert alert-error shell-status-banner" role="alert">
++      <Icon name="alert" />
++      <div>
++        <p className="alert-title">{title}</p>
++        <p className="alert-text">{text}</p>
++      </div>
++      <Link className="btn btn-secondary" href={href}>
++        {linkLabel}
++      </Link>
++    </div>
++  );
++}
++
+ function StatusLine({
+   activeCopy,
+   label,
+diff --git a/apps/frontend/src/shared/layout/navigation.ts b/apps/frontend/src/shared/layout/navigation.ts
+index d340efa..cc40d1a 100644
+--- a/apps/frontend/src/shared/layout/navigation.ts
++++ b/apps/frontend/src/shared/layout/navigation.ts
+@@ -11,6 +11,7 @@ export type PlatformSection =
+   | "importacao"
+   | "inicio"
+   | "negocio"
++  | "notificacoes"
+   | "servicos"
+   | "whatsapp";
+ 
+@@ -57,10 +58,23 @@ export const MOBILE_TAB_SECTIONS: PlatformSection[] = [
+ ];
+ 
+ /**
+- * Destinos que só aparecem dentro do "Mais" no mobile: Serviços e o que a
+- * Especificação das Telas lista sob "Mais / Configurações".
++ * Notificações (Goal022/WU-08): entrada de chrome, não um sexto destino
++ * primário — vive na sidebar (tablet/notebook/desktop) e dentro de "Mais" no
++ * mobile, nunca como quinta aba do bottom nav.
++ */
++export const NOTIFICATIONS_DESTINATION: NavDestination = {
++  href: "/notificacoes",
++  icon: "inbox",
++  label: "Notificações",
++  section: "notificacoes",
++};
++
++/**
++ * Destinos que só aparecem dentro do "Mais" no mobile: Notificações,
++ * Serviços e o que a Especificação das Telas lista sob "Mais / Configurações".
+  */
+ export const MORE_DESTINATIONS: NavDestination[] = [
++  NOTIFICATIONS_DESTINATION,
+   { href: "/servicos", icon: "briefcase", label: "Serviços", section: "servicos" },
+   { href: "/configuracoes/negocio", icon: "info", label: "Negócio", section: "negocio" },
+   {
+@@ -106,3 +120,16 @@ export type ShellContextualAction = {
+   icon: IconName;
+   label: string;
+ };
++
++const NOTIFICATIONS_BADGE_CAP = 9;
++
++/**
++ * Teto de exibição do contador de não lidas do chrome: acima do teto, mostra
++ * `"9+"` em vez do número exato — o contador é um sinal de atenção, não um
++ * substituto da central. `null` quando não há nada para destacar.
++ */
++export function notificationsBadgeLabel(unreadCount: number): string | null {
++  if (unreadCount <= 0) return null;
++  if (unreadCount > NOTIFICATIONS_BADGE_CAP) return `${NOTIFICATIONS_BADGE_CAP}+`;
++  return String(unreadCount);
++}
+diff --git a/apps/frontend/src/shared/runtime/systemStatus.tsx b/apps/frontend/src/shared/runtime/systemStatus.tsx
+index b0b43f8..2f1968a 100644
+--- a/apps/frontend/src/shared/runtime/systemStatus.tsx
++++ b/apps/frontend/src/shared/runtime/systemStatus.tsx
+@@ -8,7 +8,12 @@ import {
+   useState,
+ } from "react";
+ 
+-import type { AiStateValue, SystemStatus, WhatsAppStatusValue } from "@/data";
++import type {
++  AiStateValue,
++  NotificationSummary,
++  SystemStatus,
++  WhatsAppStatusValue,
++} from "@/data";
+ 
+ import { getProductServices } from "./ProductRuntime";
+ 
+@@ -58,20 +63,34 @@ export type UseSystemStatusResult = {
+   phase: StatusFetchPhase;
+   whatsapp: SystemStatus["whatsapp"] | null;
+   whatsappView: StatusView;
++  notificationsPhase: StatusFetchPhase;
++  notificationsSummary: NotificationSummary | null;
+ };
+ 
+-/** Carrega `GET /v1/status` uma vez por montagem, com revalidação por intervalo e foco. */
++/**
++ * Carrega `GET /v1/status` e o resumo da central de notificações
++ * (`GET /v1/notifications/summary`, Goal022/WU-06) sob o mesmo tick — uma
++ * montagem, um intervalo, um listener de foco. O resumo tem fase própria:
++ * uma falha nele nunca deve aparentar que WhatsApp ou IA caíram, e
++ * vice-versa.
++ */
+ function useSystemStatusPolling(): UseSystemStatusResult {
+   const [phase, setPhase] = useState<StatusFetchPhase>("loading");
+   const [data, setData] = useState<SystemStatus | null>(null);
++  const [notificationsPhase, setNotificationsPhase] =
++    useState<StatusFetchPhase>("loading");
++  const [notificationsSummary, setNotificationsSummary] =
++    useState<NotificationSummary | null>(null);
+ 
+   useEffect(() => {
+     let cancelled = false;
+     const controller = new AbortController();
+ 
+     function load() {
+-      getProductServices()
+-        .status.get(controller.signal)
++      const services = getProductServices();
++
++      services.status
++        .get(controller.signal)
+         .then((result) => {
+           if (cancelled) return;
+           setData(result);
+@@ -81,6 +100,18 @@ function useSystemStatusPolling(): UseSystemStatusResult {
+           if (cancelled || controller.signal.aborted) return;
+           setPhase("error");
+         });
++
++      services.notifications
++        .summary(controller.signal)
++        .then((result) => {
++          if (cancelled) return;
++          setNotificationsSummary(result);
++          setNotificationsPhase("loaded");
++        })
++        .catch(() => {
++          if (cancelled || controller.signal.aborted) return;
++          setNotificationsPhase("error");
++        });
+     }
+ 
+     load();
+@@ -100,6 +131,8 @@ function useSystemStatusPolling(): UseSystemStatusResult {
+     phase,
+     whatsapp: data?.whatsapp ?? null,
+     whatsappView: whatsappStatusView(phase, data?.whatsapp.status),
++    notificationsPhase,
++    notificationsSummary,
+   };
+ }
+ 
+diff --git a/apps/frontend/src/shared/styles/atendly.css b/apps/frontend/src/shared/styles/atendly.css
+index 9968691..b98d63b 100644
+--- a/apps/frontend/src/shared/styles/atendly.css
++++ b/apps/frontend/src/shared/styles/atendly.css
+@@ -1443,6 +1443,19 @@ p {
+   border-radius: 50%;
+   background: currentColor;
+ }
++.badge-count {
++  margin-left: auto;
++  min-width: 18px;
++  height: 18px;
++  padding: 0 5px;
++  border-radius: 9px;
++  background: var(--danger);
++  color: var(--surface);
++  font-size: 11px;
++  font-weight: 700;
++  line-height: 18px;
++  text-align: center;
++}
+ .sidebar-bottom {
+   margin-top: auto;
+ }
+@@ -2680,6 +2693,9 @@ p {
+ .dashboard-banner {
+   margin-bottom: 16px;
+ }
++.shell-status-banner {
++  margin-bottom: 16px;
++}
+ .operational-strip {
+   margin-bottom: 16px;
+   padding: 14px 16px;
+diff --git a/apps/frontend/tests/goal014-shell.test.ts b/apps/frontend/tests/goal014-shell.test.ts
+index d0ba0c3..6b8784b 100644
+--- a/apps/frontend/tests/goal014-shell.test.ts
++++ b/apps/frontend/tests/goal014-shell.test.ts
+@@ -39,8 +39,9 @@ describe("modelo de navegação", () => {
+     ]);
+   });
+ 
+-  test("'Mais' lista Serviços e os destinos de Configurações da Especificação das Telas", () => {
++  test("'Mais' lista Notificações, Serviços e os destinos de Configurações da Especificação das Telas", () => {
+     expect(MORE_DESTINATIONS.map((item) => item.section)).toEqual([
++      "notificacoes",
+       "servicos",
+       "negocio",
+       "config-agenda",
+@@ -60,6 +61,7 @@ describe("modelo de navegação", () => {
+   );
+ 
+   test.each([
++    "notificacoes",
+     "servicos",
+     "negocio",
+     "config-agenda",
+diff --git a/apps/frontend/tests/goal018-dashboard-status.test.tsx b/apps/frontend/tests/goal018-dashboard-status.test.tsx
+index 55aaa1e..f4227c3 100644
+--- a/apps/frontend/tests/goal018-dashboard-status.test.tsx
++++ b/apps/frontend/tests/goal018-dashboard-status.test.tsx
+@@ -41,12 +41,14 @@ vi.mock("next/navigation", () => ({
+ 
+ const dashboardGet = vi.fn();
+ const statusGet = vi.fn();
++const notificationsSummary = vi.fn();
+ const logout = vi.fn();
+ 
+ vi.mock("@/shared/runtime/ProductRuntime", () => ({
+   getProductServices: () => ({
+     auth: { logout },
+     dashboard: { get: dashboardGet },
++    notifications: { summary: notificationsSummary },
+     status: { get: statusGet },
+   }),
+   useProductRuntime: () => ({
+@@ -135,6 +137,12 @@ function aiStatus(state: AiStateValue): SystemStatus {
+ beforeEach(() => {
+   dashboardGet.mockReset();
+   statusGet.mockReset();
++  notificationsSummary.mockReset();
++  notificationsSummary.mockResolvedValue({
++    byLevel: { INFO: 0, ATTENTION: 0, CRITICAL: 0 },
++    unreadCount: 0,
++    openConditionsCount: 0,
++  });
+   logout.mockReset();
+ });
+ 
+diff --git a/apps/scheduling-service/prisma/schema.prisma b/apps/scheduling-service/prisma/schema.prisma
+index 0c05a8e..f547b2f 100644
+--- a/apps/scheduling-service/prisma/schema.prisma
++++ b/apps/scheduling-service/prisma/schema.prisma
+@@ -756,6 +756,10 @@ model AppointmentEvent {
+ 
+   @@index([tenantId, appointmentId, occurredAt])
+   @@index([tenantId, appointmentId, sequence])
++  /// Central de notificacoes (Goal022, WU-01): feed de `type=CREATED,
++  /// source=AI` por negocio, avancando por `sequence` — atravessa
++  /// atendimentos, entao o par com `appointmentId` acima nao serve aqui.
++  @@index([tenantId, sequence])
+ }
+ 
+ /// Intencao de envio ao cliente (Goal021): trabalho duravel no banco do **dono
+diff --git a/apps/scheduling-service/src/modules/appointments/appointment-event-service.ts b/apps/scheduling-service/src/modules/appointments/appointment-event-service.ts
+index 134dfd8..b5a19e7 100644
+--- a/apps/scheduling-service/src/modules/appointments/appointment-event-service.ts
++++ b/apps/scheduling-service/src/modules/appointments/appointment-event-service.ts
+@@ -4,6 +4,7 @@ import type {
+   Prisma,
+   PrismaClient,
+ } from "../../generated/prisma/client.js";
++import { AppError } from "../../shared/errors/app-error.js";
+ 
+ /**
+  * Histórico operacional do atendimento (Goal008): um evento por mutação,
+@@ -91,3 +92,92 @@ export async function listAppointmentEvents(
+     sequence: row.sequence.toString(),
+   }));
+ }
++
++/** Teto padrão e máximo do feed da central de notificações (Goal022, WU-01). */
++export const AI_CREATED_APPOINTMENT_EVENTS_DEFAULT_LIMIT = 50;
++export const AI_CREATED_APPOINTMENT_EVENTS_MAX_LIMIT = 200;
++
++export interface AiCreatedAppointmentEventRecord {
++  id: string;
++  appointmentId: string;
++  after: unknown;
++  occurredAt: string;
++  sequence: string;
++}
++
++export interface ListAiCreatedAppointmentEventsInput {
++  /** `sequence` do último evento já visto; ausente lê do início do feed. */
++  afterSequence?: string | null;
++  limit?: number;
++}
++
++export interface ListAiCreatedAppointmentEventsResult {
++  items: AiCreatedAppointmentEventRecord[];
++  /** Presente somente quando a página veio cheia — pode haver mais. */
++  nextCursor: string | null;
++}
++
++/**
++ * Feed de compromissos criados pela IA, para a central de notificações
++ * (Goal022, WU-01): `type = CREATED` e `source = AI`, atravessando todos os
++ * atendimentos do negócio.
++ *
++ * Avança por `sequence`, nunca por `occurredAt`: eventos gravados na mesma
++ * transação compartilham `occurredAt` (ver o cabeçalho deste arquivo), e só
++ * `sequence` é `@unique` e estritamente crescente. `sequence` já é o cursor —
++ * não precisa de par de desempate como a leitura de falhas de entrega, que
++ * ordena por um campo não único.
++ */
++export async function listAiCreatedAppointmentEvents(
++  prisma: Pick<PrismaClient, "appointmentEvent">,
++  tenantId: string,
++  input: ListAiCreatedAppointmentEventsInput = {},
++): Promise<ListAiCreatedAppointmentEventsResult> {
++  const limit = Math.min(
++    Math.max(1, input.limit ?? AI_CREATED_APPOINTMENT_EVENTS_DEFAULT_LIMIT),
++    AI_CREATED_APPOINTMENT_EVENTS_MAX_LIMIT,
++  );
++  const afterSequence = parseSequenceCursor(input.afterSequence);
++
++  const rows = await prisma.appointmentEvent.findMany({
++    where: {
++      tenantId,
++      type: "CREATED",
++      source: "AI",
++      ...(afterSequence !== null
++        ? { sequence: { gt: afterSequence } }
++        : {}),
++    },
++    orderBy: [{ sequence: "asc" }],
++    take: limit,
++  });
++
++  const items = rows.map((row) => ({
++    id: row.id,
++    appointmentId: row.appointmentId,
++    after: row.after,
++    occurredAt: row.occurredAt.toISOString(),
++    sequence: row.sequence.toString(),
++  }));
++
++  const last = rows.at(-1);
++  const nextCursor =
++    rows.length === limit && last ? last.sequence.toString() : null;
++
++  return { items, nextCursor };
++}
++
++function parseSequenceCursor(value: string | null | undefined): bigint | null {
++  if (value === null || value === undefined) return null;
++  try {
++    const sequence = BigInt(value);
++    if (sequence < 0n) throw new Error("negative sequence");
++    return sequence;
++  } catch {
++    throw new AppError(
++      "INVALID_CURSOR",
++      "The cursor is not a valid page token for this listing.",
++      400,
++    );
++  }
++}
+diff --git a/apps/scheduling-service/src/modules/internal-api/routes.ts b/apps/scheduling-service/src/modules/internal-api/routes.ts
+index a04683e..274d880 100644
+--- a/apps/scheduling-service/src/modules/internal-api/routes.ts
++++ b/apps/scheduling-service/src/modules/internal-api/routes.ts
+@@ -22,6 +22,10 @@ import {
+   timeFromMinutes,
+ } from "../../shared/date-time/calendar-date-time.js";
+ import { AppError } from "../../shared/errors/app-error.js";
++import {
++  AI_CREATED_APPOINTMENT_EVENTS_MAX_LIMIT,
++  listAiCreatedAppointmentEvents,
++} from "../appointments/appointment-event-service.js";
+ import { runAutoCompleteSweep } from "../appointments/auto-complete-loop.js";
+ import {
+   createExtraAvailability,
+@@ -70,6 +74,10 @@ import {
+   claimDueNotificationIntents,
+   settleNotificationIntent,
+ } from "../reminders/notification-dispatch-service.js";
++import {
++  FAILED_NOTIFICATION_INTENTS_MAX_LIMIT,
++  listFailedNotificationIntents,
++} from "../reminders/notification-read-service.js";
+ import {
+   MAX_REMINDER_LEAD_MINUTES,
+   ReminderService,
+@@ -157,6 +165,33 @@ const notificationSettleBodySchema = z.object({
+   correlationId: z.string().trim().min(1).max(200).optional(),
+ });
+ 
++// --- Central de notificacoes e alertas persistentes (Goal022, WU-01) ------
++const failedNotificationIntentsQuerySchema = z.object({
++  cursor: z.string().trim().min(1).max(500).optional(),
++  limit: z.coerce
++    .number()
++    .int()
++    .min(1)
++    .max(FAILED_NOTIFICATION_INTENTS_MAX_LIMIT)
++    .optional(),
++});
++const aiCreatedAppointmentEventsQuerySchema = z.object({
++  // BigInt de `AppointmentEvent.sequence`, sempre nao negativo; a validacao
++  // de forma so aceita digitos e a validacao de valor fica no service, que e
++  // quem sabe converter para `BigInt` com seguranca.
++  afterSequence: z
++    .string()
++    .trim()
++    .regex(/^\d+$/)
++    .optional(),
++  limit: z.coerce
++    .number()
++    .int()
++    .min(1)
++    .max(AI_CREATED_APPOINTMENT_EVENTS_MAX_LIMIT)
++    .optional(),
++});
++
+ const serviceColorTokenSchema = z.enum([
+   "ROSE",
+   "AMBER",
+@@ -915,6 +950,42 @@ export async function registerManagementRoutes(
+     },
+   );
+ 
++  // --- Central de notificacoes e alertas persistentes (Goal022, WU-01) ----
++  // So o BFF (pessoa humana): estas duas leituras alimentam a central que o
++  // negocio ve, no mesmo padrao de disponibilidade e lembrete acima. Sempre
++  // por negocio — tenantId vem so do cabecalho autenticado, nunca do corpo
++  // ou da query.
++
++  app.get(
++    "/internal/notification-intents/failed",
++    internalOnly,
++    async (request) => {
++      const context = currentInternalContext(request);
++      requireHumanCaller(context);
++      await requireCalendar(prisma, context.tenantId);
++      const query = parse(failedNotificationIntentsQuerySchema, request.query ?? {});
++      return data(
++        request,
++        await listFailedNotificationIntents(prisma, context.tenantId, query),
++      );
++    },
++  );
++
++  app.get(
++    "/internal/appointment-events/ai-created",
++    internalOnly,
++    async (request) => {
++      const context = currentInternalContext(request);
++      requireHumanCaller(context);
++      await requireCalendar(prisma, context.tenantId);
++      const query = parse(aiCreatedAppointmentEventsQuerySchema, request.query ?? {});
++      return data(
++        request,
++        await listAiCreatedAppointmentEvents(prisma, context.tenantId, query),
++      );
++    },
++  );
++
+   // --- Excecoes de disponibilidade (Goal009) ------------------------------
+   // Nunca alteram atendimento existente; so mudam o que o motor oferece dali
+   // em diante. So humano (BFF): a IA nunca cria excecao.
+diff --git a/apps/scheduling-service/src/modules/reminders/notification-read-service.ts b/apps/scheduling-service/src/modules/reminders/notification-read-service.ts
+index e7062bb..62691da 100644
+--- a/apps/scheduling-service/src/modules/reminders/notification-read-service.ts
++++ b/apps/scheduling-service/src/modules/reminders/notification-read-service.ts
+@@ -5,6 +5,7 @@ import type {
+   AppointmentNotificationSlot,
+   AppointmentNotificationState,
+ } from "../../generated/prisma/enums.js";
++import { AppError } from "../../shared/errors/app-error.js";
+ 
+ /**
+  * Leitura das intencoes de envio **de um compromisso** (Goal021, item 8).
+@@ -61,3 +62,146 @@ export async function listAppointmentNotifications(
+     settledAt: row.settledAt ? row.settledAt.toISOString() : null,
+   }));
+ }
++
++/** Teto padrão e máximo do lote da central de notificações (Goal022, WU-01). */
++export const FAILED_NOTIFICATION_INTENTS_DEFAULT_LIMIT = 50;
++export const FAILED_NOTIFICATION_INTENTS_MAX_LIMIT = 200;
++
++/**
++ * Falha entregável à central: o mesmo recorte de {@link
++ * AppointmentNotificationRecord}, mais `appointmentId` porque esta leitura
++ * atravessa todos os atendimentos do negócio. Nunca `facts` nem `leaseToken`
++ * — o primeiro carrega telefone e conteúdo formatado do cliente, o segundo é
++ * credencial de reivindicação; nenhum dos dois é assunto da central.
++ */
++export interface FailedNotificationIntentRecord {
++  id: string;
++  appointmentId: string;
++  kind: AppointmentNotificationKind;
++  slot: AppointmentNotificationSlot;
++  appointmentVersion: number;
++  reason: AppointmentNotificationReason | null;
++  detail: string | null;
++  attemptCount: number;
++  dueAt: string;
++  settledAt: string | null;
++}
++
++export interface ListFailedNotificationIntentsInput {
++  /** Cursor opaco devolvido por uma página anterior; ausente lê do início. */
++  cursor?: string | null;
++  /** Aplicado ao teto máximo antes de ir ao banco. */
++  limit?: number;
++}
++
++export interface ListFailedNotificationIntentsResult {
++  items: FailedNotificationIntentRecord[];
++  /** Presente somente quando a página veio cheia — pode haver mais. */
++  nextCursor: string | null;
++}
++
++interface FailedNotificationCursor {
++  dueAt: Date;
++  id: string;
++}
++
++/** Cursor opaco em `(dueAt, id)`: o par que a ordenação usa para desempate. */
++function encodeFailedNotificationCursor(row: FailedNotificationCursor): string {
++  return Buffer.from(
++    JSON.stringify({ dueAt: row.dueAt.toISOString(), id: row.id }),
++  ).toString("base64url");
++}
++
++function decodeFailedNotificationCursor(
++  cursor: string,
++): FailedNotificationCursor {
++  try {
++    const parsed: unknown = JSON.parse(
++      Buffer.from(cursor, "base64url").toString("utf8"),
++    );
++    if (
++      typeof parsed !== "object" ||
++      parsed === null ||
++      typeof (parsed as Record<string, unknown>).dueAt !== "string" ||
++      typeof (parsed as Record<string, unknown>).id !== "string"
++    ) {
++      throw new Error("malformed cursor");
++    }
++    const { dueAt: dueAtRaw, id } = parsed as { dueAt: string; id: string };
++    const dueAt = new Date(dueAtRaw);
++    if (id.length === 0 || Number.isNaN(dueAt.getTime())) {
++      throw new Error("malformed cursor");
++    }
++    return { dueAt, id };
++  } catch {
++    throw new AppError(
++      "INVALID_CURSOR",
++      "The cursor is not a valid page token for this listing.",
++      400,
++    );
++  }
++}
++
++/**
++ * Falhas de entrega do negócio, para a central de notificações (Goal022,
++ * WU-01): só `state = FAILED`, nunca `PENDING`, `CLAIMED`, `SENT`,
++ * `DISMISSED` ou `CANCELLED` — a central mostra o que precisa de atenção
++ * humana, não o funil inteiro.
++ *
++ * Cursor **estável** em `(dueAt, id)`, não `offset`: uma falha nova que
++ * chega entre duas páginas não desloca o que a central já mostrou. O
++ * desempate por `id` existe pelo mesmo motivo de {@link
++ * listAppointmentNotifications} — duas intenções podem vencer no mesmo
++ * instante.
++ */
++export async function listFailedNotificationIntents(
++  prisma: Pick<PrismaClient, "appointmentNotificationIntent">,
++  tenantId: string,
++  input: ListFailedNotificationIntentsInput = {},
++): Promise<ListFailedNotificationIntentsResult> {
++  const limit = Math.min(
++    Math.max(1, input.limit ?? FAILED_NOTIFICATION_INTENTS_DEFAULT_LIMIT),
++    FAILED_NOTIFICATION_INTENTS_MAX_LIMIT,
++  );
++  const after = input.cursor
++    ? decodeFailedNotificationCursor(input.cursor)
++    : null;
++
++  const rows = await prisma.appointmentNotificationIntent.findMany({
++    where: {
++      tenantId,
++      state: "FAILED",
++      ...(after
++        ? {
++            OR: [
++              { dueAt: { gt: after.dueAt } },
++              { dueAt: after.dueAt, id: { gt: after.id } },
++            ],
++          }
++        : {}),
++    },
++    orderBy: [{ dueAt: "asc" }, { id: "asc" }],
++    take: limit,
++  });
++
++  const items = rows.map((row) => ({
++    id: row.id,
++    appointmentId: row.appointmentId,
++    kind: row.kind,
++    slot: row.slot,
++    appointmentVersion: row.appointmentVersion,
++    reason: row.reason,
++    detail: row.detail,
++    attemptCount: row.attemptCount,
++    dueAt: row.dueAt.toISOString(),
++    settledAt: row.settledAt ? row.settledAt.toISOString() : null,
++  }));
++
++  const last = rows.at(-1);
++  const nextCursor =
++    rows.length === limit && last
++      ? encodeFailedNotificationCursor(last)
++      : null;
++
++  return { items, nextCursor };
++}
+diff --git a/apps/scheduling-service/tests/unit/support/database-double.ts b/apps/scheduling-service/tests/unit/support/database-double.ts
+index adcc685..f98e268 100644
+--- a/apps/scheduling-service/tests/unit/support/database-double.ts
++++ b/apps/scheduling-service/tests/unit/support/database-double.ts
+@@ -274,12 +274,19 @@ class Table {
+   }
+ 
+   async findMany(
+-    args: { where?: Record<string, unknown>; orderBy?: unknown } = {},
++    args: {
++      where?: Record<string, unknown>;
++      orderBy?: unknown;
++      take?: number;
++    } = {},
+   ) {
+     const found: Row[] = this.rows
+       .filter((row) => matches(row, args.where ?? {}))
+       .map((row) => this.withDefaults(row));
+-    return args.orderBy ? sortBy(found, args.orderBy) : found;
++    const ordered = args.orderBy ? sortBy(found, args.orderBy) : found;
++    return typeof args.take === "number"
++      ? ordered.slice(0, args.take)
++      : ordered;
+   }
+ 
+   /**
+diff --git a/docs/migration/CURRENT_STATE.md b/docs/migration/CURRENT_STATE.md
+index 98cfd56..b2c6a84 100644
+--- a/docs/migration/CURRENT_STATE.md
++++ b/docs/migration/CURRENT_STATE.md
+@@ -1896,3 +1896,96 @@ abaixo.
+   partir de `GET /v1/appointments/:id/notifications`. `TRANSPORT_UNKNOWN`
+   aparece nesse detalhe como envio sem confirmação, nunca como "não
+   enviado": a tela não afirma mais do que a liquidação sabe.
++
++## Delta implementado — Goal022, 2026-09-15 (em execução)
++
++A fotografia acima permanece como registro. Os fatos abaixo descrevem o que o
++diff do Goal022 entrega para G-28 ("central/alertas"): a central de
++notificações persistida e suas condições de canal. O FATO de "Dados
++pertencentes ao BFF" que dizia não haver entidades para central de
++notificações está superado pelos fatos abaixo.
++
++- **FATO atual:** `apps/bff/prisma/schema.prisma` ganhou `TenantNotification`
++  (`kind`/`level`/`shape`/`dedupeKey`/`subjectId`/`occurredAt`/`readAt`/
++  `resolvedAt`/`payload`, único por `(tenantId, dedupeKey)`), `NotificationPreference`
++  (hoje só `aiAppointmentCreated`, default `false`) e `NotificationSyncState`
++  (throttle e cursores por negócio), na migration única e aditiva
++  `20260915140000_goal022_notification_center`. Sete espécies em vocabulário
++  fechado (`apps/bff/src/modules/notifications/species.ts`), com nível e forma
++  derivados do `kind` por tabela fixa no código, nunca escolha de quem
++  materializa: `CUSTOMER_WAITING_HUMAN` (atenção, condição),
++  `REMINDER_FAILED` (atenção, evento), `IMPORT_COMPLETED` (informativo,
++  evento), `AI_APPOINTMENT_CREATED` (informativo, evento),
++  `WHATSAPP_DISCONNECTED` (crítico, condição), `AI_UNAVAILABLE` (crítico,
++  condição) e `SETUP_INCOMPLETE` (atenção, condição).
++- **FATO atual:** não há worker, cron nem fila. A reconciliação roda dentro de
++  requisições que já existiam, sob throttle persistido em
++  `NotificationSyncState` (`NOTIFICATIONS_RECONCILE_MIN_INTERVAL_SECONDS`,
++  default 60s). As condições de canal (`WHATSAPP_DISCONNECTED`,
++  `AI_UNAVAILABLE`) reconciliam dentro de `GET /v1/status`
++  (`status/routes.ts` chama `reconcileStatusConditions` com os valores que a
++  própria requisição já computou, sem chamada remota extra); as demais
++  espécies reconciliam dentro de `GET /v1/notifications` e
++  `GET /v1/notifications/summary`. Fonte indisponível deixa o `kind` dela
++  intocado (nem materializa, nem resolve) e nunca vira `500`.
++- **FATO atual:** os donos ganharam leitura própria para a central, sem
++  segunda cópia dos dados: `GET /internal/handoffs/awaiting-human` na IA
++  (`HandoffService.listConversationsAwaitingHuman`, uma entrada por conversa
++  mesmo com mais de um `Handoff` OPEN) alimenta `CUSTOMER_WAITING_HUMAN`;
++  `GET /internal/notification-intents/failed` e
++  `GET /internal/appointment-events/ai-created` no Scheduling (cursor
++  estável, o segundo por `sequence` por ser monotônico) alimentam
++  `REMINDER_FAILED` e `AI_APPOINTMENT_CREATED`; `IMPORT_COMPLETED` reusa a
++  leitura de `importState` já existente da importação (Goal010/Goal020); e
++  `SETUP_INCOMPLETE` reusa `onboardingIssues` sobre o mesmo `onboardingState`
++  que `POST /v1/onboarding/complete` usa para recusar conclusão — extraído
++  para `apps/bff/src/lib/onboarding-state.ts` neste diff para que as duas
++  rotas dependam de uma única definição de "configuração essencial".
++  Nenhuma dessas leituras devolve telefone, credencial, `facts` de intenção
++  ou `leaseToken`; `payload` da notificação carrega só o que a copy e a
++  navegação precisam.
++- **FATO atual:** quatro rotas públicas sob `requireTenantContext`, sem
++  aceitar `tenantId` do chamador: `GET /v1/notifications` (paginada, filtros
++  `level`/`unread`/`resolved`, janela de leitura de 90 dias — não é
++  retenção), `GET /v1/notifications/summary` (`byLevel`, `unreadCount`,
++  `openConditionsCount`), `POST /v1/notifications/read` (por `id` ou
++  `{ all: true }`, idempotente nos dois formatos) e
++  `GET`/`PATCH /v1/notifications/preferences`
++  ([PUBLIC_API_V1](../../apps/bff/PUBLIC_API_V1.md#central-de-notificações-e-alertas-persistentes-goal022wu-04)).
++- **FATO atual:** o frontend ganhou a entrada `/notificacoes`
++  (`features/notifications/NotificationsScreen.tsx`) com os três níveis, não
++  lida destacada, marcar uma ou todas como lidas, condição resolvida
++  identificada, estado vazio explicado, e a seção de preferência
++  (`NotificationPreferenceSection.tsx`) para `AI_APPOINTMENT_CREATED`, que
++  nasce desligada. No chrome (`AppShell.tsx`, `navigation.ts`), Notificações
++  entrou como destino de sidebar/"Mais" — nunca como sexta aba do bottom nav
++  —, com contador de não lidas com teto de exibição `9+`
++  (`notificationsBadgeLabel`) lido do mesmo polling que já buscava
++  `GET /v1/status` (`useSystemStatusPolling` ganhou uma segunda fase para
++  `GET /v1/notifications/summary`, sem novo intervalo nem novo listener), e
++  dois banners persistentes — WhatsApp desconectado e IA indisponível —
++  derivados de `whatsappView`/`aiView` da mesma leitura de status, com copy
++  distinta dos chips já existentes na sidebar.
++- **FATO atual:** o gate `validate:integration` ganhou o passo
++  `rehearse:goal022-notification-center-migration`
++  (`scripts/goal022-notification-center-migration-rehearsal.mjs`), de 25 para
++  26 passos ([VALIDATION_GATE](VALIDATION_GATE.md)).
++- **LIMITE (divergência de padrão, declarada pelo próprio ensaio):**
++  diferente de toda outra migration deste repositório desde o Goal009,
++  `20260915140000_goal022_notification_center` não guarda `CREATE
++  TYPE`/`CREATE TABLE` contra reexecução (sem `IF NOT EXISTS` nem bloco
++  `duplicate_object`); reaplicá-la sobre um banco já migrado falha. Detalhe
++  em [DATA_MIGRATION §9](DATA_MIGRATION.md#9-migração-bff-ia-e-transporte).
++- **LIMITE (G-28 aberto na parte de alerta externo):** a central é
++  inteiramente in-app — não há e-mail crítico, push nem aplicativo nativo.
++  E-mail crítico depende de uma decisão de capacidade/custo ainda não tomada
++  (**U-03**, isolada em
++  [GAP_ANALYSIS §Incertezas isoladas](GAP_ANALYSIS.md#incertezas-isoladas-e-decisões-necessárias):
++  "capacidade contínua do deploy e email crítico" exige ambiente/custo/contas
++  efetivos antes de comprometer um provedor ou assumir capacidade sempre
++  ativa) e continua fora deste diff.
++- **LIMITE:** nenhuma mensagem real de nenhuma fonte foi exercitada por este
++  trabalho documental — mesma classe de gate operacional já declarada nos
++  Goals 010/019/021. Retenção/purga de `TenantNotification` além da janela de
++  leitura de 90 dias não tem prazo definido, no mesmo estado que
++  `AppointmentNotificationIntent.facts` desde o Goal021.
+diff --git a/docs/migration/DATA_MIGRATION.md b/docs/migration/DATA_MIGRATION.md
+index 32489d1..ef47616 100644
+--- a/docs/migration/DATA_MIGRATION.md
++++ b/docs/migration/DATA_MIGRATION.md
+@@ -262,7 +262,7 @@ Inventário factual completo desses schemas em [CURRENT_STATE](CURRENT_STATE.md)
+ | AiRun/AiToolCall/Conversation.state | Auditável e sujeito à mesma política de conteúdo sensível | Sanitizar arguments/results/raw; operation-id referencia efeito Scheduling/outbox. Retenção inclui texto e não só Message | Restauração não pode executar novamente tools já efetivadas; consultar ledger do dono |
+ | KnowledgeDocument/Chunk e langgraph | Conhecimento versionado, memória permitida e checkpoints de sessão | Inventariar todas as tabelas do schema langgraph, relacionar thread_id ao tenant/conversa; reindexar somente conteúdo permitido; vetor antigo não é prova de consentimento | Remover contexto/vetores derivados de ignorados/revogação; sem reconstruir silenciosamente de backup expirado |
+ | Go instâncias/whatsmeow/messages/eventos | Transporte com autorização de alvo, envelope sanitizado e outbox | Preservar IDs de instância/JIDs/sessão do dispositivo; conferir armazenamento opcional de mensagens e eventual mídia. Não migrar regra de produto para Go | Substituir payload que carrega token somente após IA resolver credencial confiável; compatibilidade curta sanitiza antes de armazenar |
+-| Notificações/lembretes/retention inexistentes | BFF central/prefs, Scheduling regra/job de lembrete, IA entrega/conteúdo | Criar estado novo com defaults do vault; não gerar retroativamente lembretes/eventos comerciais sobre todo histórico | Job ligado à versão do appointment; pausar/cancelar sem apagar histórico de tentativas |
++| Lembrete/aviso de alteração — **executado no Goal021** (Scheduling regra/job) e BFF central/preferências — **executado no Goal022** | BFF central/prefs, Scheduling regra/job de lembrete, IA entrega/conteúdo | Criar estado novo com defaults do vault; não gerar retroativamente lembretes/eventos comerciais sobre todo histórico | Job ligado à versão do appointment; pausar/cancelar sem apagar histórico de tentativas. Central sem TTL de retenção definido (ver atualização do Goal022 abaixo) |
+ 
+ IDs de negócio são os do BFF; demais bancos preservam referência e só aceitam contexto autorizado. IDs externos sempre incluem provider/instância ou conta de origem e tenant no mapa. Não alterar telefone e usar esse novo valor como se fosse ID antigo do cliente.
+ 
+@@ -287,6 +287,16 @@ IDs de negócio são os do BFF; demais bancos preservam referência e só aceita
+ 
+ Ensaio (`scripts/goal021-reminder-migration-rehearsal.mjs`, passo `rehearse:goal021-reminder-migration` de `validate:integration`) reconstrói o schema do Scheduling ao fim do Goal020 reduzido a `Customer`, `Appointment` e `AppointmentEvent`, semeia dois negócios com atendimento futuro confirmado, passado concluído e cancelado, aplica a migration real e prova em PostgreSQL de verdade: aditividade coluna a coluna (tipo, nulabilidade e default de `Appointment`) e linha a linha; ausência de backfill (as três tabelas nascem vazias, toda versão é 1); o terceiro lembrete recusado por CHECK e a posição repetida recusada pela chave primária; antecedência zero, negativa e acima do teto recusadas pelo banco, com o teto exato aceito; "desligou" distinguível de "nunca configurou", e apagar a configuração levando as regras junto; o *dedupe* provado por **inserção duplicada**, inclusive do aviso de alteração; posição nula impossível; espécie e posição amarradas; estado e motivo fora do vocabulário recusados; motivo obrigatório e motivo proibido nos estados certos; `CLAIMED` sem lease e `SENT` sem instante recusados; isolamento por tenant; o caminho de remoção do Goal019 continuando a funcionar sem afrouxar o `RESTRICT` do histórico; e repetição da migration sem mudar uma única linha. O ensaio foi exercitado por **mutação da própria migration**: afrouxar `ReminderRule_slot_check` para admitir `CHANGE_NOTICE` o faz falhar no terceiro lembrete, e tornar `slot` anulável o faz falhar na posição nula — nos dois casos com saída diferente de zero. Limite declarado: este ensaio prova esquema, não comportamento — agendamento, revalidação por versão, lease e liquidação são das unidades seguintes e da suíte de integração do Scheduling.
+ 
++**Atualização do Goal022 (em execução, WU-03/WU-05):** a linha "Lembrete/aviso de alteração ... e BFF central/preferências" da tabela desta seção foi executada na parte do **BFF**, em `20260915140000_goal022_notification_center`, migration única e estritamente aditiva: três tabelas novas (`TenantNotification`, `NotificationPreference`, `NotificationSyncState`) e três enums (`NotificationKind`, `NotificationLevel`, `NotificationShape`). **Não há nenhum `UPDATE`**: nenhuma coluna existente de `Tenant` muda de tipo, default ou significado — as três relações novas são opcionais/de coleção, e um negócio sem nenhuma notificação, preferência ou estado de sincronização é exatamente "nunca reconciliou", nunca "falhou". `NotificationPreference.aiAppointmentCreated` nasce com default `false` (vault: "default silencioso"), e `NotificationSyncState.seededAt` nasce em `now()` por linha — não há backfill retroativo: evento do dono anterior a `seededAt` avança o cursor sem criar notificação, e nenhum negócio ganha histórico fabricado de uma reconciliação que nunca rodou.
++
++**Dois invariantes são do banco, não do código.** (a) O dedupe é o índice único `(tenantId, dedupeKey)` de `TenantNotification` — a mesma classe de invariante do `AppointmentNotificationIntent_identity_key` do Goal021: reconciliar a mesma fonte dez vezes com `createMany({ skipDuplicates })` produz uma linha, nunca dez. (b) `NotificationPreference` e `NotificationSyncState` são `@unique` por `tenantId`, então "mais de uma preferência" ou "mais de um cursor" por negócio é irrepresentável no schema, não uma invariante de aplicação a violar por bug. Vocabulário de `kind`/`level`/`shape` é fechado por enum do banco: sete espécies, com nível e forma **derivados no código** (`species.ts`) a partir do `kind`, nunca uma coluna livre que um chamador poderia preencher fora da tabela.
++
++Ensaio (`scripts/goal022-notification-center-migration-rehearsal.mjs`, passo `rehearse:goal022-notification-center-migration` de `validate:integration`) reconstrói o schema do BFF ao fim do Goal021 reduzido a `Tenant`, semeia estoque legado de negócios sem nenhuma das três tabelas novas, aplica a migration real e prova em PostgreSQL de verdade: aditividade coluna a coluna e linha a linha sobre `Tenant`; ausência de backfill (nenhum negócio pré-existente ganha notificação, preferência ou cursor); o dedupe por `(tenantId, dedupeKey)` provado por **inserção duplicada**, na mesma chave que `createMany({ skipDuplicates: true })` usa em produção; a preferência e o cursor únicos por tenant recusados na segunda linha; vocabulário fora do enum de `kind`/`level`/`shape` recusado pelo banco; cascata de `Tenant` removido levando as três tabelas junto. Limite declarado pelo próprio ensaio: reconciliação, throttle e leitura pelas rotas são das suítes de integração do BFF (`goal022-notification-center.integration.test.ts`, `goal022-notification-engine.test.ts`, `goal022-notification-routes.integration.test.ts`), não deste ensaio.
++
++**Divergência do padrão de retomada, declarada pelo próprio ensaio:** ao contrário de toda outra migration deste repositório desde o Goal009 (`IF NOT EXISTS`/bloco `duplicate_object`, por exemplo `20260915120000_goal021_reminder_schedule`), `20260915140000_goal022_notification_center` **não guarda `CREATE TYPE`/`CREATE TABLE` contra reexecução** — reaplicá-la sobre um banco já migrado falha com "type already exists". O ensaio não tenta provar retomada por isso, e o próprio arquivo nomeia o reparo como pertencente à autoria da migration (WU-03), fora do escopo de quem escreveu o ensaio (WU-05). Este documento registra a divergência; corrigi-la é trabalho de código, não desta Work Unit de documentação.
++
++**Limite de reversão:** um binário anterior ao Goal022 ignora as três tabelas e os três enums novos — nunca lê nem grava `TenantNotification`, `NotificationPreference` ou `NotificationSyncState` —, então reverter o binário não perde nenhuma linha existente; só deixa de reconciliar e de servir a central até o binário novo voltar. Nenhuma coluna pré-existente é alterada e nenhum dado de outro domínio é tocado.
++
+ ## 10. Privacidade, histórico e descarte
+ 
+ - Retenção de conversa: opções 30/90/180/365 dias, default comercial90/pessoal30; confirmar redução conforme vault. Categoria Não classificadas não tem default explícito localizado: decisão de produto pendente em DECISIONS, sem purge automático inventado para esse grupo.
+diff --git a/docs/migration/GAP_ANALYSIS.md b/docs/migration/GAP_ANALYSIS.md
+index 9815ef8..3840b0e 100644
+--- a/docs/migration/GAP_ANALYSIS.md
++++ b/docs/migration/GAP_ANALYSIS.md
+@@ -54,11 +54,11 @@ Estas são as fontes dos requisitos confrontados abaixo. Os fatos de implementa
+ | G-24 P2 — conhecimento/sugestões — **FECHADO no diff012** | FAQ e conhecimento editáveis, sugestões no atendimento humano | Conhecimento criado, editado, listado e desativado por rota (IA `/internal/knowledge/...`, BFF `/v1/knowledge/...`), com versão nova e inativação da anterior na mesma transação, embedding calculado antes da transação (`KNOWLEDGE_INDEX_UNAVAILABLE` sem tocar o banco), `checksum` igual sem reindexar, FAQ por serviço (`KnowledgeDocument.serviceId`) com precedência no prompt e campo livre único por negócio; `CustomerMemory` com origem, permissão por linha, substituição sem apagar, idade e inferência só a partir de atendimento confirmado no ledger de tools; resumo só do material autorizado e sempre com `AiRun kind = SUMMARY`; sugestões de resposta fora do grafo, com binding somente leitura, `AiRun kind = SUGGESTION`, cinco recusas próprias e nenhum efeito, rascunho ou envio; seed rebaixado a ferramenta de desenvolvimento | Persistência de `KnowledgeChunk` com embedding continua sem prova contra banco: o PostgreSQL dos gates não tem a extensão `vector` e o ensaio pula essa parte com skip nomeado. Memória `AI_INFERRED` entra no prompt já na primeira confirmação, então `PREFERRED_DAY`/`PREFERRED_PERIOD` se comportam como "último dia marcado"; `RECURRING_SERVICE` só nasce de série confirmada porque não há porta de histórico de atendimentos na IA. O modo sugestão recupera conhecimento sem serviço em foco | [Review012](reviews/012-review.md). Base de conhecimento por arquivo/PDF segue fora do MVP; mídia é G-23 (Goal013); telas de cliente e de conversa fechadas nos Goals 015 e 017, com a de conhecimento ainda no Goal018; retenção no Goal022 |
+ | G-25 P1 — onboarding/ativação — **FECHADO no diff019**, com o envio real declarado como gate operacional | Pode concluir sem WA; teste real ativa; mínimos operacionais | `POST /v1/onboarding/complete` não exige mais WhatsApp (Goal018): a checagem de `WhatsAppInstance`/status do Evolution foi removida da rota, que agora recusa só por mínimos de negócio (nome, categoria, modalidade, endereço quando `ON_SITE`), agenda, tom e catálogo. O Goal019 acrescentou o teste real como entidade persistida na IA (`ActivationTestRun`/`ActivationTestMilestone`), com estados terminais e não terminais distintos, os seis marcos do vault derivados de fato gravado, pausa por interferência humana, retentativa limitada declarada em código e remoção dos dados de teste pelos IDs que a execução gravou. O teste **exercita a IA de verdade**: cada fala do cliente simulado entra por `AssistantService.handleIncomingText`, e os marcos de IA derivam do que ela registrou — a chamada de catálogo, a consulta de agenda e o agendamento criado pela ferramenta dela. Sucesso, e só sucesso, liga a IA, sempre pela regra vigente de serviço operacional, com a execução que autorizou gravada em `AiSettings.activatedByRunId` (idempotência) | Bloqueio de entrada por WhatsApp deixou de existir. A ativação passou a ter prova de aptidão, mas ela é prova **contra dublê**: nenhum WhatsApp real, nenhum número da plataforma real e nenhum modelo real foram exercitados — o envio real continua sendo gate operacional, na mesma classe do M4 do Goal010 | Onboarding completion separado de activation eligibility/test, demo simulada claramente distinta do teste real. Resíduo declarado do Goal019: a demonstração da IA e as telas do teste existem e são alcançáveis pelo fluxo, mas fidelidade visual à referência aprovada continua sendo conferência humana |
+ | G-26 P2 — negócio — **fechado no diff018 na parte de dado e projeção versionada; reconciliação da IA fechada no diff019; timezone replicado segue aberto** | Dados/modalidades/horários/instruções consistentes | `BusinessProfile` ganhou `modalities` (seleção múltipla), `address` (nulável, exigido só com `ON_SITE`) e um contador de versão do contexto (`businessContextVersion`), com a última versão efetivamente confirmada pela IA (`businessContextProjectedVersion`) exposta em `/v1/settings` e `/v1/onboarding` (Goal018); horários (disponibilidade) e instruções (conhecimento) continuam nos módulos que já existiam (Goal009, Goal012), fora do `BusinessProfile`; timezone continua replicado entre `BusinessProfile`, `CalendarSettings` e o contexto da IA, sem reconciliação automática entre as cópias. A reconciliação desired/effective da **IA** chegou no Goal019: `GET /v1/status` e `GET /v1/dashboard` tentam convergir antes de ler, em `apps/bff/src/lib/ai-activation.ts` — no máximo uma tentativa por requisição, idempotente, sem lançar para o consumidor e sem laço, com o que aconteceu legível em `ai.reconciled`. No mesmo Goal, `PATCH /v1/settings/ai` deixou de responder `contextProjectionStatus: PROJECTED` quando a projeção daquela requisição falhou (resíduo nominal do review018) | IA agora recebe modalidade e endereço; settings ainda sem horários/instruções consolidados no mesmo lugar. A reconciliação cobre `AiSettings.enabled` e o contexto de negócio; o timezone replicado entre os três lugares continua sem reconciliação | BFF dono do negócio; projeções versionadas para IA/Scheduling, falha visível e reconciliação. Nenhum job, cron ou agendador novo: a continuidade vem de reconciliação em requisição |
+-| G-27 P1 — notificações/jobs — **fechado no diff021** ([review021](reviews/021-review.md)) | Até2 lembretes, default1/24h, presença separada, notificar cliente por padrão em mudanças relevantes | `ReminderSettings`/`ReminderRule` no Scheduling garantem "até dois" por chave primária composta e CHECK (invariante de esquema, não validação de aplicação); ausência de linha vale como default do produto (um lembrete, 24h), linha com zero regras é desligar de propósito. `Appointment.notifiableVersion` sobe na mesma transação da mutação (write-policy) para data/horário/serviços/status, nunca para observação/valor final/presença/buffer; criar, remarcar, cancelar, concluir e marcar falta recomputam `AppointmentNotificationIntent` (dedupe por identidade, lease por `TIMESTAMPTZ`) na própria transação. Entrega e revalidação por versão vivem em `notification-dispatch-service.ts`, atrás de `requireDeliveryCaller`; a IA reivindica, entrega (`NotificationDeliveryWorker`, sem chamada de LLM no texto) e liquida. Aviso de alteração nasce só com `notifyCustomer` explícito na mutação (default é silêncio), exposto em `PATCH/POST` de remarcar/cancelar do BFF e marcado por padrão no frontend (`CancelFlow`/`RescheduleFlow`); cancelar sempre cancela as pendentes, independente do aviso. Confirmação de presença pela resposta ao lembrete é gate do negócio (`ReminderSettings.confirmationEnabled`) mais tool própria (`confirm_appointment_presence`, só o id), com o evento passando a registrar a origem real (IA via lembrete, ou profissional na tela) em vez de `"USER"` fixo | Gate operacional declarado: nenhum WhatsApp real foi exercitado (mesma classe do M4/Goal010/Goal019). Janela de duplicata declarada, não escondida: entrega é no mínimo uma vez — `correlationId` é defesa, não eliminação do risco —, e a janela aberta é o processo morto entre o transporte aceitar o envio e a gravação do resultado, sem heartbeat de lease (a mesma classe de janela do outbox do Goal004; `UNKNOWN` é terminal, não motivo de reenvio) | Central/alertas de falha de lembrete e e-mail crítico continuam no G-28 (Goal022); retenção de `facts`/`detail` da intenção segue sem prazo (Goal022). Ver o delta Goal021 em [CURRENT_STATE](CURRENT_STATE.md) e [DATA_MIGRATION §9](DATA_MIGRATION.md#9-migração-bff-ia-e-transporte) |
+-| G-28 P2 — central/alertas | Níveis informativo/atenção/crítico, handoff, falha lembrete, email crítico | Dashboard health/logs não são central de produto | Profissional não percebe falha/cliente esperando | Central persistida no BFF, eventos por dono, email crítico configurável; não novo app nativo/push |
++| G-27 P1 — notificações/jobs — **fechado no diff021** ([review021](reviews/021-review.md)) | Até2 lembretes, default1/24h, presença separada, notificar cliente por padrão em mudanças relevantes | `ReminderSettings`/`ReminderRule` no Scheduling garantem "até dois" por chave primária composta e CHECK (invariante de esquema, não validação de aplicação); ausência de linha vale como default do produto (um lembrete, 24h), linha com zero regras é desligar de propósito. `Appointment.notifiableVersion` sobe na mesma transação da mutação (write-policy) para data/horário/serviços/status, nunca para observação/valor final/presença/buffer; criar, remarcar, cancelar, concluir e marcar falta recomputam `AppointmentNotificationIntent` (dedupe por identidade, lease por `TIMESTAMPTZ`) na própria transação. Entrega e revalidação por versão vivem em `notification-dispatch-service.ts`, atrás de `requireDeliveryCaller`; a IA reivindica, entrega (`NotificationDeliveryWorker`, sem chamada de LLM no texto) e liquida. Aviso de alteração nasce só com `notifyCustomer` explícito na mutação (default é silêncio), exposto em `PATCH/POST` de remarcar/cancelar do BFF e marcado por padrão no frontend (`CancelFlow`/`RescheduleFlow`); cancelar sempre cancela as pendentes, independente do aviso. Confirmação de presença pela resposta ao lembrete é gate do negócio (`ReminderSettings.confirmationEnabled`) mais tool própria (`confirm_appointment_presence`, só o id), com o evento passando a registrar a origem real (IA via lembrete, ou profissional na tela) em vez de `"USER"` fixo | Gate operacional declarado: nenhum WhatsApp real foi exercitado (mesma classe do M4/Goal010/Goal019). Janela de duplicata declarada, não escondida: entrega é no mínimo uma vez — `correlationId` é defesa, não eliminação do risco —, e a janela aberta é o processo morto entre o transporte aceitar o envio e a gravação do resultado, sem heartbeat de lease (a mesma classe de janela do outbox do Goal004; `UNKNOWN` é terminal, não motivo de reenvio) | Falha de lembrete já aparece na central de notificações (`REMINDER_FAILED`, G-28, diff022); e-mail crítico continua aberto em G-28, e retenção de `facts`/`detail` da intenção segue sem prazo. Ver o delta Goal021 em [CURRENT_STATE](CURRENT_STATE.md) e [DATA_MIGRATION §9](DATA_MIGRATION.md#9-migração-bff-ia-e-transporte) |
++| G-28 P2 — central/alertas — **fechado na parte de central, níveis, banner e preferências no diff022; aberto na parte de alerta externo** | Níveis informativo/atenção/crítico, handoff, falha lembrete, email crítico | `TenantNotification`/`NotificationPreference`/`NotificationSyncState` persistidos no BFF (`apps/bff/prisma/schema.prisma`, migration `20260915140000_goal022_notification_center`); sete espécies em vocabulário fechado com nível/forma derivados por tabela fixa, reconciliadas sem worker dentro de `GET /v1/status` (condições de canal) e de `GET /v1/notifications`/`summary` (demais espécies), lendo cada dono pela própria fonte (`GET /internal/handoffs/awaiting-human` na IA; `GET /internal/notification-intents/failed` e `GET /internal/appointment-events/ai-created` no Scheduling; `importState` e `onboardingState` reusados). `GET /v1/notifications`, `/summary`, `POST .../read` e `GET`/`PATCH .../preferences` expostos ao frontend; `/notificacoes` mostra os três níveis, não lida destacada, marcar uma/todas como lidas e condição resolvida identificada; chrome ganhou entrada de sidebar/"Mais" com contador `9+` e dois banners persistentes (WhatsApp desconectado, IA indisponível) derivados de `/v1/status` | Profissional já percebe falha/cliente esperando dentro do produto; e-mail crítico continua inexistente — nenhum provedor, nenhuma rota, nenhum campo de canal no contrato | [CURRENT_STATE §Delta Goal022](CURRENT_STATE.md). E-mail crítico depende de **U-03** (capacidade/custo do deploy contínuo, ver "Incertezas isoladas" abaixo) e segue aberto; não há app nativo/push neste nem em Goal futuro decidido |
+ | G-29 P1 — retenção/conta | 30/90/180/365, comercial90/pessoal30; reduzir confirma; exclusão recuperável7dias | Sem ciclo cross-store ou conta pendente | Retenção indefinida/cópias esquecidas; automações após exclusão | Jobs de purge de conteúdo/copias; suspender conta/WA, restore exige novo teste. Metadados mínimos e histórico operacional separados |
+ | G-30 P1 — status honesto — **fechado na parte de read model e shell no diff014** | IA/WA mostram estado real | `GET /v1/status` no BFF verifica Evolution e IA na própria requisição e devolve `whatsapp` (`CONNECTED`, `DISCONNECTED` ou `UNKNOWN`, com `phoneNumber` e `checkedAt`), `ai` com `desiredEnabled` do BFF, `effectiveEnabled` lido da IA por `GET /internal/ai-tenant-config` (escopo próprio `tenant-config:read`) ou `null`, e `state` derivado `ACTIVE`/`OFF`/`PENDING`/`UNKNOWN`, mais `degraded`; dependência indisponível vira `UNKNOWN` com `200`, nunca `500`. No frontend, `systemStatus.ts` distingue carregando, desconhecido, ativo e desligado, e o default `connected` do `AppShell` deixou de existir no código | A reconciliação desired/effective e a autoativação continuam ausentes — aqui só se **lê**. `PENDING` existe no contrato mas a UI ainda o apresenta com a copy de desligado, e `PUBLIC_API_V1.md` descreve `OFF` como independente do que a IA relate enquanto o código devolve `UNKNOWN` quando a dependência cai, mesmo com o desejado desligado | [Review014](reviews/014-review.md). Reconciliação, autoativação, copy de `PENDING` e alinhamento da tabela no Goal018 |
+-| G-31 P2 — navegação/visual — **fechado na parte de fundação no diff014; Clientes e Serviços no diff015; Agenda no diff016; Conversas no diff017; onboarding e o bloco de negócio no diff018; Importação no diff020** | Mobile→tablet→notebook→desktop; Clientes principal; Recepção | `tokens.css` centraliza cor, tipografia, espaço, raio, sombra, foco, z-index e movimento da direção Recepção, com Literata e Hanken Grotesk servidas localmente sob OFL e Inter/IBM Plex Mono fora da base; `AppShell` substituído com cinco destinos no mobile (Clientes deixou de estar escondido), `+` contextual e “Mais” como lista de destinos, sidebar em tablet/notebook/desktop; `app/(platform)/layout.tsx` monta o shell uma vez e as telas declaram só destino, título e ação por `useShellConfig`; rotas de preview e `personas-ui` removidas; primitivas acessíveis em `shared/ui/`. O diff015 entregou as duas primeiras telas de módulo: `ProductDirectoryScreen` (1318 linhas servindo sete rotas com cinco chamadas de `useShellConfig`) foi decomposto em `features/customers/` e `features/services/`, cada tela declarando a configuração de shell uma única vez, com `Field`, `ListItem`, `Spinner` e `Toast` ganhando consumidor real. O diff016 fez o mesmo com a Agenda: `features/calendar/ProductAgendaScreen.tsx` saiu e deu lugar a 24 módulos em `features/agenda/`, com nove cenários despachados por nove rotas e apenas dois call sites de `useShellConfig`, provados por render. O diff017 fez o mesmo com Conversas: `features/conversations/ProductConversationsScreen.tsx` deixou de ser o monolito de 964 linhas servindo duas rotas e virou um despachante de 28 linhas sobre módulos de inbox e chat, com um call site de `useShellConfig` por cenário. O diff018 fez o mesmo com a última superfície de entrada: `features/onboarding/` deixou de ser 2 437 linhas com protótipo embutido e virou 1 376 linhas em dez módulos — despachante, casca, runtime, mapa de blocos, registry e os quatro blocos Seu negócio/Sua agenda/Sua IA/WhatsApp —, com `PrototypeOnboardingScreen`, a prop `preview` e `types.ts` removidos, `scenarios.ts` de 34 para 15 entradas todas alcançáveis pelo fluxo do produto, progresso apresentado por bloco em vez de contagem de telas, e o bloco de negócio também na seção de negócio de `configuracoes`. O onboarding continua com casca própria, sem sidebar nem bottom navigation, como o vault manda. O diff020 redesenhou Importação: `ProductMigrationScreen` saiu e `features/imports/` entrega a jornada (`ConnectSourceScreen`, `ImportPreviewScreen`, `ImportConflictsScreen`, `ImportRunScreen`, `ImportHistoryCard`) com um único `useShellConfig` por árvore em `ImportsScreen`, CSS de módulo (`atendly-imports.css`) herdando os tokens, e a entrada do menu Mais atualizada para `/importacao` | Configurações ainda não foi redesenhada — continua funcional dentro do shell novo, com o CSS de módulo herdando os tokens —; o bloco de negócio foi redesenhado no diff018 no onboarding e reescrito dentro de `ProductSettingsScreen` como ela está, sem redecompor a tela; o diff020 acrescentou `ImportSettingsSection` a essa mesma tela ainda não decomposta. A Home ganhou o checklist pós-onboarding no diff018, com central e métricas ainda no Goal023. O gate renderizado continua cobrindo só rotas públicas nas cinco larguras: sidebar, bottom nav, “Mais”, a linha de status e as telas novas de Clientes, Serviços, Agenda e Conversas nunca foram exercitados em browser, e em ≤1099px o rail fica sem indicador de status por regra legada de CSS | [Review014](reviews/014-review.md), [review015](reviews/015-review.md), [review016](reviews/016-review.md), [review017](reviews/017-review.md), [review018](reviews/018-review.md) e [review020](reviews/020-review.md). Telas restantes no Goal023; o resíduo de tela autenticada renderizada foi assumido pelo 015 na parte que não exige sessão — `goal015-shell-invariant.test.tsx` monta `ShellConfigProvider` mais as telas reais em jsdom e falha em `Maximum update depth` —, enquanto estender o Playwright a rota autenticada segue como decisão de escopo própria, não tomada |
++| G-31 P2 — navegação/visual — **fechado na parte de fundação no diff014; Clientes e Serviços no diff015; Agenda no diff016; Conversas no diff017; onboarding e o bloco de negócio no diff018; Importação no diff020** | Mobile→tablet→notebook→desktop; Clientes principal; Recepção | `tokens.css` centraliza cor, tipografia, espaço, raio, sombra, foco, z-index e movimento da direção Recepção, com Literata e Hanken Grotesk servidas localmente sob OFL e Inter/IBM Plex Mono fora da base; `AppShell` substituído com cinco destinos no mobile (Clientes deixou de estar escondido), `+` contextual e “Mais” como lista de destinos, sidebar em tablet/notebook/desktop; `app/(platform)/layout.tsx` monta o shell uma vez e as telas declaram só destino, título e ação por `useShellConfig`; rotas de preview e `personas-ui` removidas; primitivas acessíveis em `shared/ui/`. O diff015 entregou as duas primeiras telas de módulo: `ProductDirectoryScreen` (1318 linhas servindo sete rotas com cinco chamadas de `useShellConfig`) foi decomposto em `features/customers/` e `features/services/`, cada tela declarando a configuração de shell uma única vez, com `Field`, `ListItem`, `Spinner` e `Toast` ganhando consumidor real. O diff016 fez o mesmo com a Agenda: `features/calendar/ProductAgendaScreen.tsx` saiu e deu lugar a 24 módulos em `features/agenda/`, com nove cenários despachados por nove rotas e apenas dois call sites de `useShellConfig`, provados por render. O diff017 fez o mesmo com Conversas: `features/conversations/ProductConversationsScreen.tsx` deixou de ser o monolito de 964 linhas servindo duas rotas e virou um despachante de 28 linhas sobre módulos de inbox e chat, com um call site de `useShellConfig` por cenário. O diff018 fez o mesmo com a última superfície de entrada: `features/onboarding/` deixou de ser 2 437 linhas com protótipo embutido e virou 1 376 linhas em dez módulos — despachante, casca, runtime, mapa de blocos, registry e os quatro blocos Seu negócio/Sua agenda/Sua IA/WhatsApp —, com `PrototypeOnboardingScreen`, a prop `preview` e `types.ts` removidos, `scenarios.ts` de 34 para 15 entradas todas alcançáveis pelo fluxo do produto, progresso apresentado por bloco em vez de contagem de telas, e o bloco de negócio também na seção de negócio de `configuracoes`. O onboarding continua com casca própria, sem sidebar nem bottom navigation, como o vault manda. O diff020 redesenhou Importação: `ProductMigrationScreen` saiu e `features/imports/` entrega a jornada (`ConnectSourceScreen`, `ImportPreviewScreen`, `ImportConflictsScreen`, `ImportRunScreen`, `ImportHistoryCard`) com um único `useShellConfig` por árvore em `ImportsScreen`, CSS de módulo (`atendly-imports.css`) herdando os tokens, e a entrada do menu Mais atualizada para `/importacao` | Configurações ainda não foi redesenhada — continua funcional dentro do shell novo, com o CSS de módulo herdando os tokens —; o bloco de negócio foi redesenhado no diff018 no onboarding e reescrito dentro de `ProductSettingsScreen` como ela está, sem redecompor a tela; o diff020 acrescentou `ImportSettingsSection` a essa mesma tela ainda não decomposta. A Home ganhou o checklist pós-onboarding no diff018; a central de notificações chegou no diff022 como rota própria (`/notificacoes`), fora da Home, e métricas adicionais do negócio continuam sem Goal atribuído. O gate renderizado continua cobrindo só rotas públicas nas cinco larguras: sidebar, bottom nav, “Mais”, a linha de status e as telas novas de Clientes, Serviços, Agenda e Conversas nunca foram exercitados em browser, e em ≤1099px o rail fica sem indicador de status por regra legada de CSS | [Review014](reviews/014-review.md), [review015](reviews/015-review.md), [review016](reviews/016-review.md), [review017](reviews/017-review.md), [review018](reviews/018-review.md) e [review020](reviews/020-review.md). Telas restantes no Goal023; o resíduo de tela autenticada renderizada foi assumido pelo 015 na parte que não exige sessão — `goal015-shell-invariant.test.tsx` monta `ShellConfigProvider` mais as telas reais em jsdom e falha em `Maximum update depth` —, enquanto estender o Playwright a rota autenticada segue como decisão de escopo própria, não tomada |
+ | G-32 P2 — contratos | Frontend/backend alinhados | Pacote domínios vazio, schemas locais duplicados e enums antigos | Mudança parcial quebra parser silenciosamente | Contratos por operação e testes producer/consumer; preservar replay e janela explícita |
+ | G-33 P1 — validação/deploy | Cada Goal repositório validável | Baseline: build-all omite Scheduling; BFF integration obsoleto; IA1fail; migrations no build; sem CI localizado. **Parcialmente fechado pelo Goal002** ([ACCEPTED na rodada 3](reviews/002-review.md#rodada-3)): Scheduling no build, integração BFF real em banco descartável com alvo verificado e client Prisma gerado pelo gate, asserção de `requestId` da IA corrigida, `validate:core`/`validate:integration` e CI versionada | Migração prossegue sem rede de segurança | Restante: migrate como etapa controlada no deploy, ensaio de restore, execução hospedada de CI e suites por risco nos demais domínios |
+ | G-34 P2 — escopo senha — **fechado na parte de UX no diff014** | Recuperação somente visual no MVP | `features/auth/recoveryMachine.ts` é máquina pura de quatro passos (e-mail, código, nova senha, sucesso), sem chamada de rede e sem nenhuma copy que afirme envio de e-mail; evento fora de ordem é ignorado e voltar não apaga o e-mail já informado | O backend do Goal003 (`POST /v1/auth/forgot-password`, `POST /v1/auth/reset-password`, `/nova-senha`, `/link-expirado` e o delivery opcional) continua existindo e funcional, agora **sem entrada pela UI** — resíduo declarado, e o serviço não foi ampliado | [Review014](reviews/014-review.md). Manter ou remover o fluxo por link quando o produto definir recuperação real |
+diff --git a/docs/migration/REUSE_ANALYSIS.md b/docs/migration/REUSE_ANALYSIS.md
+index a948ddb..ee79b5a 100644
+--- a/docs/migration/REUSE_ANALYSIS.md
++++ b/docs/migration/REUSE_ANALYSIS.md
+@@ -35,13 +35,13 @@ Os percentuais de reaproveitamento não foram estimados: quantidade de arquivos
+ | `data/http/BffHttpClient.ts:61–107` | Envelope, credentials include, request-id, AbortSignal e erro tipado | REFACTOR | Reusar transporte/injeção de fetch para testes; CSRF opcional hoje sem integração completa; contratos compartilhados por consumidor |
+ | `data/services/registry.ts` e Bff*Service | Única fronteira de dados da UI | REUSE | Evoluir métodos e parsers junto do backend. Browser não passa a chamar serviços internos |
+ | `data/mappers/publicApiSchemas.ts` | Parsers efetivos, enums e modelos antigos | REFACTOR | Migrar para contratos consumidos/versionados; não substituir null/erro por defaults positivos |
+-| `shared/layout/AppShell.tsx` | Substituído no Goal014: cinco destinos, status real e shell montado uma vez | REPLACE (feito) | O modelo de navegação virou dado testável em `shared/layout/navigation.ts` (sidebar com Início/Conversas/Agenda/Clientes/Serviços; bottom nav com as quatro abas mais “Mais” como **lista** de destinos: Serviços, Negócio, Agenda, IA, WhatsApp, Importação e Conta), com `+` contextual por módulo. O estado conectado presumido não existe mais: o shell lê `GET /v1/status` por `shared/runtime/systemStatus.ts`, que distingue carregando, desconhecido, ativo e desligado. `app/(platform)/layout.tsx` monta `ShellConfigProvider` + `AppShell` uma vez e as telas declaram destino, título e ação por `useShellConfig` — vale a invariante de **uma chamada por árvore renderizada** |
++| `shared/layout/AppShell.tsx` | Substituído no Goal014: cinco destinos, status real e shell montado uma vez | REPLACE (feito) | O modelo de navegação virou dado testável em `shared/layout/navigation.ts` (sidebar com Início/Conversas/Agenda/Clientes/Serviços; bottom nav com as quatro abas mais “Mais” como **lista** de destinos: Serviços, Negócio, Agenda, IA, WhatsApp, Importação e Conta), com `+` contextual por módulo. O estado conectado presumido não existe mais: o shell lê `GET /v1/status` por `shared/runtime/systemStatus.ts`, que distingue carregando, desconhecido, ativo e desligado. `app/(platform)/layout.tsx` monta `ShellConfigProvider` + `AppShell` uma vez e as telas declaram destino, título e ação por `useShellConfig` — vale a invariante de **uma chamada por árvore renderizada**. O diff022 acrescentou Notificações à lista de "Mais" e à sidebar sem criar sexto destino do bottom nav nem segundo polling: `shared/runtime/systemStatus.tsx` (`SystemStatusProvider`/`useSystemStatusPolling`) ganhou uma segunda fase que busca `GET /v1/notifications/summary` sob o mesmo tick de `GET /v1/status`, e o contador com teto `9+` e os dois banners persistentes (WhatsApp desconectado, IA indisponível) leem esse mesmo estado — nenhuma chamada nova, nenhum provider novo |
+ | `shared/styles/atendly*.css` | Base substituída no Goal014; CSS por módulo preservado e herdando tokens | REPLACE (feito na base) | `shared/styles/tokens.css` passou a ser a fonte única de cor, tipografia, espaço, raio, sombra, foco, z-index e movimento na direção Recepção, com Literata e Hanken Grotesk servidas de `public/fonts/` sob OFL e Inter/IBM Plex Mono removidas. Os `atendly-*.css` por módulo continuam valendo para as telas ainda não redesenhadas, mas herdam os tokens pelos nomes de variável que já usavam. O diff020 substituiu `atendly-migration.css` por `atendly-imports.css` para o módulo novo, no mesmo padrão de herança. Resíduo herdado: em ≤1099px a regra `.sidebar .wa-status span` esconde também o `.status-dot` |
+ | `shared/ui/Button`, CurrencyInput, Dialog, States, RouteAnnouncer | Reusadas e ampliadas no Goal014 | REFACTOR (feito) | A lógica acessível foi preservada e o visual passou a sair dos tokens. O conjunto ganhou `Badge`, `Field`, `ListItem`, `PageHeader`, `Spinner` e `Toast`, com `Dialog` cobrindo modal, sheet e drawer; estado nunca é comunicado só por cor e o skeleton fica fora da árvore acessível. `Field`, `ListItem`, `Toast` e `Spinner` ganharam consumidor real nas telas de Clientes e Serviços do Goal015 e nas telas de Agenda do Goal016 |
+ | `shared/icons`, Brand | Infraestrutura própria reutilizável; desenho anterior | REFACTOR | Adequar SVGs e traços ao design sem copiar todo export HTML |
+ | `features/auth/AuthScreen.tsx` | Refeita no visual aprovado no Goal014, com a integração do Goal003 intacta | REFACTOR (feito) | Login e cadastro seguem chamando `/v1/auth/login`, `/v1/auth/register` (com aceite de Termos e Política), `/v1/auth/session` e `/v1/auth/logout`, com erro do BFF junto ao campo certo e os demais valores preservados. A recuperação virou máquina de estados pura em `recoveryMachine.ts` — quatro passos, sem rede e sem copy de envio. O fluxo real por link do Goal003 segue funcional, apenas sem entrada pela UI (resíduo declarado de G-34) |
+ | ProductOnboardingScreen + OnboardingRuntime | **Substituído no Goal018.** `ProductOnboardingScreen`, a prop `preview`, o `PrototypeOnboardingScreen` e `features/onboarding/types.ts` não existem mais; `OnboardingRuntime` sobreviveu como estado/retomada e o fluxo passou a ser um despachante sobre `blocks/{business,schedule,ai,whatsapp}`, com progresso por bloco e sem WhatsApp obrigatório | REPLACE — feito | Quatro blocos percebidos e progressivo; contratos de importação, mínimos operacionais, demo, estilo e ativação independentes. O diff020 trocou, dentro do bloco `schedule`, a nota estática "a importação será habilitada no fluxo de migração" por uma escolha real (`draft.servicePopulation`: `SCRATCH`/`IMPORT`); a importação em si não roda no onboarding — escolher "Importar do Minha Agenda" só copy-orienta para Configurações → Agenda depois, e o onboarding continua exigindo cadastro de ao menos um serviço na hora |
+-| `features/dashboard/DashboardScreen.tsx` | Início mínimo entregue no Goal014 dentro do shell novo | REFACTOR (feito em parte) | A Home usa as primitivas e o read model: status de IA e WhatsApp com os quatro estados, pendências e próximos do `GET /v1/dashboard`, skeleton, erro recuperável que preserva a estrutura e empty states. O checklist pós-onboarding ganhou o quarto item no Goal019 — "Concluir o teste da IA", derivado de `calendar.capabilities.activationTestCompleted`, que só é `true` com execução do teste em `SUCCEEDED` e ainda válida para o WhatsApp de hoje. Central de alertas e métricas adicionais ficam para o Goal023; distinguir IA pausada de instável passou a depender de `ai.reconciled`, entregue no Goal019 |
++| `features/dashboard/DashboardScreen.tsx` | Início mínimo entregue no Goal014 dentro do shell novo | REFACTOR (feito em parte) | A Home usa as primitivas e o read model: status de IA e WhatsApp com os quatro estados, pendências e próximos do `GET /v1/dashboard`, skeleton, erro recuperável que preserva a estrutura e empty states. O checklist pós-onboarding ganhou o quarto item no Goal019 — "Concluir o teste da IA", derivado de `calendar.capabilities.activationTestCompleted`, que só é `true` com execução do teste em `SUCCEEDED` e ainda válida para o WhatsApp de hoje. A central de notificações em si chegou no diff022 como entrada de chrome própria (`/notificacoes`), não como bloco desta tela — a Home não lista notificações nem foi alterada por este diff; métricas adicionais do negócio continuam fora, sem Goal atribuído; distinguir IA pausada de instável passou a depender de `ai.reconciled`, entregue no Goal019 |
+ | `features/conversations/ProductConversationsScreen.tsx` | Decomposta em `features/conversations/` no diff017; o monolito de 964 linhas servindo duas rotas saiu do repositório | REFACTOR (feito) | O arquivo tem 28 linhas e só despacha inbox e chat, cada um declarando a configuração de shell uma única vez. Os filtros locais inventados (`ai`/`waiting`/`paused`/`unread`) deram lugar ao vocabulário do produto: três abas servidas pelo backend por `category`, entrada própria de ignorados por `ignored` com marcar e desmarcar reversíveis pela mesma operação, busca por `search` viajando com a aba, prioridade de quem aguarda atendimento humano, override manual de categoria, assumir ao enviar, sugestões de resposta com as cinco recusas, mídia sob demanda pelo proxy (player de áudio, imagem, documento e vídeo), transcrição nos quatro estados e estado de entrega nos quatro valores mais a ausência. Envio de mídia pela profissional fica declarado fora, por falta de contrato |
+ | `features/calendar/ProductAgendaScreen.tsx` | Decomposta em `features/agenda/` no Goal016; o arquivo único que servia seis rotas saiu do repositório | REFACTOR (feito) | 24 módulos com um despachante de nove cenários, nove rotas e apenas dois call sites de `useShellConfig`. O domínio dos Goals 008 e 009 ficou visível: Dia, Semana e Mês mobile-first sobre a mesma janela, com atendimento, bloqueio operacional, compromisso pessoal, exceção e ocupação por buffer distinguíveis por texto e forma; criação por `customerId` com múltiplos serviços e total obedecendo `totalPriceType`; hold reservado, consumido, liberado ao abandonar e expirado com mensagem própria; sobreposição só com motivo; séries de bloqueio e de atendimento com ocorrência separada da série; ciclo de vida com estado, presença e valor final distintos, histórico por evento e exceções por data. `GET /v1/time-blocks` nasceu neste Goal, porque não havia leitura de bloco em camada alguma. `Notificar cliente` chegou no Goal021: `CancelFlow.tsx` e `RescheduleFlow.tsx` marcam o campo por padrão (omitir é não notificar) e `LifecycleActions.tsx` mostra o estado de lembrete **daquele** agendamento (lido de `GET /v1/appointments/:id/notifications`, nunca da configuração do negócio) e a confirmação de presença, ambos sem escrever nada |
+ | ProductDirectoryScreen área customers | Decomposta em `features/customers/` no Goal015; o monolito de 1318 linhas saiu do repositório | REFACTOR (feito) | `ProductCustomersScreen` despacha lista, criação e perfil, cada um declarando a configuração de shell uma única vez. A pessoa do Goal006 ficou visível: nome e telefone nuláveis com ausência explícita, responsável principal com proveniência e as ações propor/confirmar/remover, observações, tags e memória com origem, permissão e idade (todas nascendo **não autorizadas** para a IA), resumo sob demanda e agenda/histórico por `customerId`, nunca por telefone. Criar cliente com número já usado apresenta os candidatos e exige escolha. Métricas do cliente e último/próximo atendimento na lista continuam fora por falta de read model |
+@@ -49,7 +49,7 @@ Os percentuais de reaproveitamento não foram estimados: quantidade de arquivos
+ | ProductSettingsScreen | Negócio/IA/disponibilidade/integração antigas | REFACTOR | Seções progressivas, negócio/modalidades, agenda, estilos/FAQ, retenção, notificações e conta; APIs hoje ausentes |
+ | WhatsAppConnectionPanel | QR/pairing/reconnect e polling reais | REFACTOR | Preservar transporte; consentimento/número misto/ignorados, status exato e teste de ativação; não considerar QR emitido como conectado |
+ | ProductMigrationScreen / `features/migration/` | Decomposto em `features/imports/` no diff020, aceito no [review020](reviews/020-review.md); `ProductMigrationScreen`, `MigrationScreen`, `features/migration/types.ts`, as rotas `app/(platform)/migracao/[step]` e `migracao/layout.tsx` e `shared/styles/atendly-migration.css` (628 linhas) saíram do repositório | REPLACE (feito) | A entrada única `/importacao` (`ImportsScreen`) decide a tela pelo estado lido em `GET /v1/calendar/imports` (direito/sessão/histórico), nunca por uma tentativa de abrir sessão: conexão da origem, retomar sessão viva (preview ou execução), ou só o histórico quando concluída — nunca oferecendo nova importação depois de concluída. `ConnectSourceScreen`, `ImportPreviewScreen`, `ImportConflictsScreen`, `ImportRunScreen` e `ImportHistoryCard` substituem o diagnóstico/status/source-target antigo; `ImportSettingsSection` é o ponto de entrada dentro de Configurações → Agenda, e o item "Importação" do menu Mais passou a apontar para `/importacao` (antes `/migracao/para-atendly`). Nenhum consumidor de frontend do protocolo pré-Goal010 (`/v1/calendar/migrations/*`) restou depois deste diff. `features/migration/types.ts` — que declarava `MigrationService`, `ImportStage` e `ImportSessionService` sem implementador — não foi transportado: `features/imports/types.ts` reexporta apenas os onze tipos do contrato que as telas de fato consomem, sem redescrever a porta, cujo implementador real é `BffMigrationService` |
+-| Notificações, retenção e exclusão recuperável | Não localizadas como capacidades integradas | CREATE | Endpoints + estados persistidos + telas; não confundir frames do design com implementação |
++| Central de notificações (`apps/bff/src/modules/notifications/`, `features/notifications/`) | **Criada no diff022** para a parte de central/níveis/banner/preferências (G-28); e-mail crítico continua fora | CREATE (feito em parte) | `TenantNotification`/`NotificationPreference`/`NotificationSyncState` são estado novo — nenhuma tabela existente foi reaproveitada como central —, mas o motor de reconciliação não criou mecanismo paralelo: reusa o que cada dono já lia. `GET /v1/status` (Goal014/030) ganhou a chamada de `reconcileStatusConditions` dentro da própria requisição para as condições de canal, sem cliente novo; `apps/bff/src/lib/onboarding-state.ts` extrai `onboardingState`/`onboardingIssues` de `modules/onboarding/routes.ts` para que `SETUP_INCOMPLETE` e `POST /v1/onboarding/complete` decidam "configuração essencial" a partir da mesma função, em vez de duas definições divergentes; `IMPORT_COMPLETED` lê o mesmo `importState` que `GET /v1/calendar/imports` (Goal010/Goal020) já projetava para a tela de importação, sem segunda leitura da sessão. No frontend, `shared/runtime/systemStatus.tsx` (`SystemStatusProvider`) é o mesmo hook do Goal014 estendido com uma segunda fase, não substituído. Retenção/exclusão de conta e e-mail crítico continuam CREATE, não tocados por este diff |
+ | `features/preview`, mocks e telas sem prefixo Product | Removidos no Goal014, exceto o resíduo de auth | REMOVE (feito em parte) | Saíram do repositório `src/app/%5Fpreview/`, `features/preview/PreviewScreen.tsx`, as telas de demonstração sem prefixo `Product` (`AgendaScreen`, `ConversationsScreen`, `DirectoryScreen`) e a pasta `public/personas-ui/` inteira, junto com o desvio que o `ProductRuntime` mantinha para não aplicar o gate de sessão em rota de preview. `src/mocks/data/directory.ts` saiu no Goal015 com a decomposição do diretório. **Correção da linha anterior, que dizia `mocks/services` removido:** `src/mocks/services/MockAuthService.ts`, seu export em `src/mocks/index.ts` e o branch `preview` de `features/auth/AuthScreen.tsx` continuam existindo — nenhuma rota passa `preview=true`, então o caminho está morto, mas não foi removido. Divergência verificada no [review015](reviews/015-review.md); a remoção cabe a um Goal que possa tocar auth |
+ | Testes frontend | Suíte existente e crescendo; tela autenticada coberta em jsdom desde o Goal015, em browser ainda não | CREATE (feito em parte) | Há vitest de contrato e de lógica (`goal014-shell.test.ts` para navegação e mapeamento de status, `goal014-auth.test.tsx` para a recuperação visual e os erros de login/cadastro), testes de componente em jsdom para as primitivas e o gate renderizado `validate:ui` (Playwright em 360, 390, 768, 1024 e 1440, com overflow, alvo de toque, contraste, foco e reduced-motion). O Goal016 acrescentou dez suítes `goal016-*` no frontend — invariante de shell, alcance das rotas, visualizações, criação, séries, exceções e fonte, ciclo de vida e histórico, schema aditivo e axe —, mais integração do BFF contra PostgreSQL descartável e unidade do módulo de blocos do Scheduling. O Goal015 acrescentou `goal015-shell-invariant.test.tsx`, `goal015-customers.test.tsx` e `goal015-services.test.tsx`, que montam as telas autenticadas reais em jsdom com `ShellConfigProvider` — invariante de `useShellConfig`, autorização de IA negada por padrão, requisição por `customerId`, semânticas de preço e axe. O diff020 acrescentou nove suítes `goal020-*` para o módulo de importação: `goal020-imports-entry`, `goal020-import-preview`, `goal020-import-conflicts`, `goal020-import-run` e `goal020-import-settings-section` montam as telas reais em jsdom cobrindo entrada decidida pelo estado (conexão/retomada/histórico), "importar tudo" versus escolher categoria, as cinco decisões de conflito, `previewVersion` obrigatória na execução, `PARTIAL` como estado legítimo e a conclusão definitiva com confirmação; `goal020-reachability` prova que `/importacao` e o bloco de Configurações → Agenda montam conteúdo real pela própria rota; `goal020-shell-invariant` e `goal020-a11y` repetem a invariante de uma chamada de `useShellConfig` por árvore e a ausência de violação de axe nos mesmos cenários; `goal020-schema.test.ts` prova o contrato de `ImportState`/seleção de categoria em `node`, sem DOM. Duas provas dessa suíte nasceram das recusas da rodada 1 e são sensíveis a reversão: desmarcar categoria, voltar ao resumo e executar tem de importar só o escolhido (o resumo lê `session.categories[].selected`, não reapresenta tudo), e concluir com `acceptPending` depois de `IMPORT_PENDING_ACCEPTANCE_REQUIRED` tem de usar `Idempotency-Key` nova, porque o domínio inclui `acceptPending` no hash da idempotência e reusar a chave seria recusado pelo backend real. O gate **de browser** continua cobrindo apenas rotas públicas: nenhuma tela de dentro do shell é exercitada em largura, contraste ou foco reais, e nenhum snapshot de frame foi adotado. Nenhum gate cobre `apps/frontend/tests/`: `npm run lint` é `eslint src`, e nem `validate-core.mjs` nem o workflow de CI têm passo de lint sobre os testes |
+ 
+diff --git a/docs/migration/VALIDATION_GATE.md b/docs/migration/VALIDATION_GATE.md
+index 5ee8add..df7ece5 100644
+--- a/docs/migration/VALIDATION_GATE.md
++++ b/docs/migration/VALIDATION_GATE.md
+@@ -17,7 +17,7 @@ git diff --check
+ | Comando | Cobre | Não cobre |
+ | --- | --- | --- |
+ | `validate:core` | Builds de contracts, Scheduling, IA, BFF e frontend; `npm run check` do health-worker; suíte da IA; suíte do adapter HTTP do frontend; `go build`/`go vet`/`go test` do Evolution Go; testes dos próprios scripts de gate; auditoria estática | Qualquer escrita em banco. Nenhum passo abre conexão de banco |
+-| `validate:integration` | 25 passos contra um PostgreSQL descartável: geração de client Prisma, migrations, a suíte de integração do BFF, a suíte de integração do Scheduling, a persistência da IA, o outbox do Evolution Go e um ensaio por migration de Goal — o último deles `rehearse:goal021-reminder-migration` | Qualquer camada acima do dado: nenhuma jornada de interface, nenhum envio real por WhatsApp e nenhuma origem real do Minha Agenda |
++| `validate:integration` | 26 passos contra um PostgreSQL descartável: geração de client Prisma, migrations, a suíte de integração do BFF, a suíte de integração do Scheduling, a persistência da IA, o outbox do Evolution Go e um ensaio por migration de Goal — o último deles `rehearse:goal022-notification-center-migration` | Qualquer camada acima do dado: nenhuma jornada de interface, nenhum envio real por WhatsApp e nenhuma origem real do Minha Agenda |
+ | `git diff --check` | Espaço em branco/conflito no diff | Correção do diff |
+ 
+ Comandos auxiliares: `npm run test:gate` (só os testes dos scripts de gate) e
+@@ -125,9 +125,9 @@ npm ci --prefix apps/bff
+ BFF_TEST_DATABASE_URL="postgresql://pgtest@127.0.0.1:55432/atendly_bff_test" npm run validate:integration
+ ```
+ 
+-São 25 passos. A lista abaixo enumera o núcleo, na ordem em que roda — o item
++São 26 passos. A lista abaixo enumera o núcleo, na ordem em que roda — o item
+ 5 agrupa o par do Evolution Go. Entre os itens 6 e 7 rodam, nesta ordem, os demais
+-ensaios de migration por Goal (005 a 013, 019 e 021) e o trio do Scheduling
++ensaios de migration por Goal (005 a 013, 019, 021 e 022) e o trio do Scheduling
+ (`generate:scheduling-prisma-client`, `provision:scheduling-test-database`,
+ `test:scheduling-integration`). A lista autoritativa é
+ `scripts/validate-integration.mjs`:
+diff --git a/scripts/tests/validate-integration.test.mjs b/scripts/tests/validate-integration.test.mjs
+index efe2a3f..32d514c 100644
+--- a/scripts/tests/validate-integration.test.mjs
++++ b/scripts/tests/validate-integration.test.mjs
+@@ -92,6 +92,7 @@ test("points the subprocess at the declared test database with synthetic secrets
+       "rehearse:goal013-media-migration",
+       "rehearse:goal019-activation-test-migration",
+       "rehearse:goal021-reminder-migration",
++      "rehearse:goal022-notification-center-migration",
+       "generate:scheduling-prisma-client",
+       "provision:scheduling-test-database",
+       "test:scheduling-integration",
+diff --git a/scripts/validate-integration.mjs b/scripts/validate-integration.mjs
+index efc4901..d253c98 100644
+--- a/scripts/validate-integration.mjs
++++ b/scripts/validate-integration.mjs
+@@ -435,6 +435,22 @@ export function integrationSteps(target) {
+       args: ["scripts/goal021-reminder-migration-rehearsal.mjs"],
+       env,
+     },
++    // Gate M0/M1 do Goal022: ensaio da migration da central de notificacoes
++    // no BFF (`TenantNotification`, `NotificationPreference`,
++    // `NotificationSyncState`) contra estoque legado de negocios, em banco
++    // próprio e descartável, passo único aditivo. Prova aditividade coluna a
++    // coluna, ausência de backfill, o dedupe por (tenantId, dedupeKey) por
++    // inserção duplicada — a mesma chave que `createMany({ skipDuplicates })`
++    // usa em produção —, vocabulário fechado de kind/level/shape, no máximo
++    // uma preferência e um cursor por negócio, cascata de negócio removido
++    // e repetição sem mudança.
++    {
++      name: "rehearse:goal022-notification-center-migration",
++      cwd: ".",
++      command: "node",
++      args: ["scripts/goal022-notification-center-migration-rehearsal.mjs"],
++      env,
++    },
+     // Identidade de cliente contra PostgreSQL real: telefone compartilhado,
+     // cliente sem telefone, criação só na confirmação e isolamento por tenant.
+     // Não pertence ao core porque exige banco.

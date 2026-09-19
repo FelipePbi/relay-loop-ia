@@ -1,0 +1,12 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T01:07:14.895Z",
+  "attemptId": "009-r2-tech_lead-ee6afa61-a2",
+  "result": {
+    "ok": false,
+    "code": "UNKNOWN_FATAL",
+    "message": "Unrecoverable failure; a human must look at it.",
+    "escalation": "HUMAN_REQUIRED",
+    "attemptId": "009-r2-tech_lead-ee6afa61-a2"
+  }
+}

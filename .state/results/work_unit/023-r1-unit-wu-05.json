@@ -1,0 +1,78 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T21:06:05.825Z",
+  "attemptId": "023-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-05",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Varredura de retenção implementada no processo do BFF com RetentionSweepState por negócio (lease TIMESTAMPTZ + fencing), três portas de purga isoladas por fonte, laço desligado por default e 15 testes verdes contra PostgreSQL real.",
+      "changedFiles": [
+        "apps/bff/prisma/schema.prisma",
+        "apps/bff/prisma/migrations/20260915180000_goal023_retention_sweep/migration.sql",
+        "apps/bff/src/modules/retention/sweep.ts",
+        "apps/bff/src/modules/retention/RetentionSweepWorker.ts",
+        "apps/bff/src/modules/retention/index.ts",
+        "apps/bff/src/config/env.ts",
+        "apps/bff/src/app.ts",
+        "apps/bff/src/clients/scheduling/index.ts",
+        "apps/bff/.env.example",
+        "apps/bff/tests/goal023-retention-sweep.test.ts"
+      ],
+      "report": "## O que mudou e por quê\n\n**Estado durável (`schema.prisma` + `migrations/20260915180000_goal023_retention_sweep/migration.sql`)**\n`RetentionSweepState` por negócio: `leaseOwner`, `leaseToken`, `leaseAcquiredAt`, `leaseExpiresAt`, `lastRunAt` (todos `TIMESTAMPTZ(3)`, pela lição do Goal021 — toda comparação é contra `now()` do servidor), `lastError`, `lastAiRows`/`lastSchedulingRows`/`lastNotificationRows` e `lastHasMore`. Índices em `leaseExpiresAt` e `lastRunAt`, FK com cascade. A migration é aditiva e **retomável**: tabela, índices e constraint usam `IF NOT EXISTS`/`DO $$ ... IF NOT EXISTS`, nenhum UPDATE em linha existente, nenhuma linha fabricada — \"sem linha\" vale como \"nunca varrido\", resolvido em código.\n\n**`src/modules/retention/sweep.ts`**\n- `claimTenant`: uma única instrução atômica `INSERT ... ON CONFLICT (\"tenantId\") DO UPDATE SET ... WHERE leaseExpiresAt IS NULL OR leaseExpiresAt <= now() RETURNING leaseToken, now()`. A perdedora de uma corrida reencontra lease vivo e não recebe linha.\n- `settleTenant`: `UPDATE ... WHERE tenantId = $1 AND leaseToken = $2` — o fencing. Quem perdeu o lease por vencimento não sobrescreve quem assumiu.\n- `retentionCutoffs`: deriva `commercialCutoff`/`personalCutoff` de `RetentionSettings` (com o default 90/30 resolvido pelo `loadRetentionState` da WU-01) e elege `strictestCutoff` = o prazo mais curto, que governa o conteúdo sem categoria própria (os `facts` de intenção carregam telefone sem dizer a categoria da conversa).\n- `RetentionPurgePorts`: três portas injetáveis (`ai`, `scheduling`, `notifications`); `defaultRetentionPorts` liga as duas remotas ao HTTP interno e a central ao `purgeExpiredNotifications` da WU-04. Os cutoffs vão sempre calculados daqui.\n- `runSource`: cada fonte dentro do próprio `try`; falha vira log + nome da fonte em `lastError`, nunca exceção. `runRetentionSweep` e `sweepTenant` nunca lançam.\n- `dueTenants`: `LEFT JOIN` de `Tenant` com o estado, filtrando lease vivo, `ORDER BY lastRunAt ASC NULLS FIRST`.\n\n**`src/modules/retention/RetentionSweepWorker.ts`**\nMesmo formato do `NotificationDeliveryWorker` (Goal021): `start`/`stop`/`runOnce`/`schedule`, `timer.unref()`, `stop()` cancela o próximo tick e espera só o ciclo em voo. Reagenda imediato quando `hasMore`.\n\n**`src/config/env.ts` + `.env.example`**\n`RETENTION_SWEEP_ENABLED` (**false** por default — purga é destrutiva e ligar por omissão apagaria conteúdo sem pedido), `RETENTION_SWEEP_INTERVAL_SECONDS=900`, `RETENTION_SWEEP_LEASE_TTL_SECONDS=300`, `RETENTION_SWEEP_TENANT_BATCH=20`, `RETENTION_SWEEP_MAX_ROWS_PER_STORE=500`.\n\n**`src/app.ts`**\nO worker só é instanciado quando `RETENTION_SWEEP_ENABLED` está ligado; o `onClose` existente passou a parar o laço antes de `disconnectPrisma()`, nessa ordem de propósito.\n\n**`src/clients/scheduling/index.ts`**\nAdicionado `purgeNotificationIntentContent`. A WU-03 entregou a rota `/internal/notification-intents/content-retention` no dono, mas não havia caminho do BFF até ela; sem este método a porta do Scheduling não existiria. Nada da WU-03 foi alterado.\n\n## Comandos executados e resultado\n\nProvisionamento para exercitar o banco real (o `assertDisposableTarget` do repo rejeita Postgres em container porque `inet_server_addr()` devolve o IP do container, não loopback — então usei um cluster temporário como as rodadas anteriores fizeram):\n- `docker compose up -d ai-orchestrator-postgres` → iniciado\n- `initdb -D %TEMP%/atendly-goal023-wu05/data -U postgres --auth=trust` + `pg_ctl -o \"-p 5440 -h 127.0.0.1\" start` → `inet_server_port()=5440`, `host(inet_server_addr())=127.0.0.1`\n- `CREATE DATABASE atendly_bff_test`\n\nVerificação:\n- `npx prisma migrate deploy` (banco limpo) → **All migrations have been successfully applied**\n- `psql -v ON_ERROR_STOP=1 -f .../20260915180000_goal023_retention_sweep/migration.sql` sobre o banco já migrado → `NOTICE: ... already exists, skipping` em tabela e nos dois índices, `DO` no bloco da FK, **sem erro** (retomabilidade provada)\n- `npx vitest run tests/goal023-retention-sweep.test.ts` com `BFF_RUN_INTEGRATION_TESTS=true` → **15 passed (15)**\n- `npx vitest run --silent` (suíte BFF inteira, integração ligada) → **29 test files passed, 236 tests passed**\n- `npx vitest run --silent` **sem** banco → **5 passed | 24 skipped**, 43 tests passed — as suítes não sobem o laço nem exigem o banco para carregar\n- `npm run typecheck` → **TypeScript: No errors found**\n- `npm run lint` → limpo (rodei `eslint --fix` para ordenação de imports e `prettier --write` nos arquivos novos)\n- `npx prisma validate` → **schema is valid**\n\nLimpeza: `pg_ctl stop`, `rm -rf` do cluster temporário, `DROP DATABASE atendly_bff_test_goal023wu05` e `docker compose stop ai-orchestrator-postgres` (o container já estava parado antes; voltou ao estado em que estava).\n\n## Uma decisão registrada\n\n`prisma format` reescreveria o arquivo inteiro de CRLF para LF e realinharia modelos de outras unidades (90 inserções / 23 deleções). Revertí e alinhei só o bloco `RetentionSweepState` à mão; o diff do schema ficou em 67 inserções, 0 deleções.",
+      "acceptance": [
+        {
+          "criterion": "RetentionSweepState existe por negócio com lease em TIMESTAMPTZ e fencing; duas instâncias não varrem o mesmo negócio ao mesmo tempo",
+          "met": true,
+          "detail": "Modelo e migration com leaseOwner/leaseToken/leaseAcquiredAt/leaseExpiresAt em TIMESTAMPTZ(3); claim condicional atômico e settle com WHERE leaseToken. Testes 'duas instâncias não varrem o mesmo negócio ao mesmo tempo' (rival.calls vazio, claimed:false) e 'quem perdeu o lease não sobrescreve o resultado de quem assumiu' (lastAiRows=22 do vencedor, não 11 do perdedor)."
+        },
+        {
+          "criterion": "Laço ligado, desligado e ajustado por variável de ambiente, com defaults declarados no diff",
+          "met": true,
+          "detail": "Cinco variáveis em src/config/env.ts e .env.example: RETENTION_SWEEP_ENABLED=false, INTERVAL_SECONDS=900, LEASE_TTL_SECONDS=300, TENANT_BATCH=20, MAX_ROWS_PER_STORE=500. Teste 'nasce desligado e com os tetos conservadores do diff' assere os cinco."
+        },
+        {
+          "criterion": "Com o laço desligado, todo o resto do produto continua funcionando",
+          "met": true,
+          "detail": "Suíte BFF inteira (29 arquivos, 236 testes) passa com RETENTION_SWEEP_ENABLED ausente/false; o worker nem é instanciado em buildApp. Teste 'o servidor sobe sem o laço e fecha sem ficar preso nele' responde 200 em /health."
+        },
+        {
+          "criterion": "Toda passada respeita o teto de linhas por store e sinaliza se restou trabalho",
+          "met": true,
+          "detail": "maxRowsPerStore é repassado a cada porta e hasMore propaga para o resultado e para lastHasMore. Teste 'respeita o teto por store e sinaliza que restou trabalho': todas as chamadas receberam maxRows=25, result.hasMore=true e state.lastHasMore=true."
+        },
+        {
+          "criterion": "Interromper a passada no meio não deixa estado inconsistente e a seguinte continua",
+          "met": true,
+          "detail": "Teste 'passada interrompida no meio não deixa estado inconsistente e a seguinte continua': linha plantada com lease vencido e sem liquidação tem lastRunAt null, contagens 0 e lastError null; a passada seguinte reivindica, chama as 3 portas e liquida com lastSchedulingRows=5."
+        },
+        {
+          "criterion": "Store indisponível degrada só ele: o erro é registrado, os outros seguem e nada é lançado para fora",
+          "met": true,
+          "detail": "runSource isola cada fonte em try/catch. Teste 'store indisponível degrada só ela': porta ai lança, sweepTenant não lança, as 3 fontes são chamadas, result.failed=['ai'], lastError='ai', lastSchedulingRows=3 e lastNotificationRows=2."
+        },
+        {
+          "criterion": "As suítes não sobem o laço e o desligamento do servidor não fica preso por causa dele",
+          "met": true,
+          "detail": "O worker só é criado quando env.RETENTION_SWEEP_ENABLED; as suítes chamam sweepTenant/runRetentionSweep diretamente. Teste 'o servidor sobe sem o laço e fecha sem ficar preso nele' mede close() < 5s; teste do worker parado mede stop() < 1s sem chamar porta nenhuma. timer.unref() no schedule."
+        },
+        {
+          "criterion": "Nenhuma rota pública, leitura reconciliada ou tela dispara purga",
+          "met": true,
+          "detail": "Nenhum módulo de rota importa sweep.ts; app.ts só registra o worker. Teste 'nenhuma rota pública, leitura reconciliada ou tela dispara purga': após GET /v1/notifications, /v1/notifications/summary, /v1/settings/retention e PATCH de redução, a notificação fora da janela continua no banco e RetentionSweepState não tem linha para o tenant."
+        },
+        {
+          "criterion": "Log de purga informa quantas linhas, de qual tabela e de qual negócio, nunca o conteúdo",
+          "met": true,
+          "detail": "runSource loga { tenantId, source, rows, tables } só quando rows > 0. Teste 'o log diz linhas, tabela e negócio — e nada mais': as chaves do payload são exatamente ['rows','source','tables','tenantId'], tables={Message:2, AiRun:1}, e fonte sem linha apagada não gera log."
+        }
+      ]
+    },
+    "attemptId": "023-r1-unit-wu-05-a1"
+  }
+}

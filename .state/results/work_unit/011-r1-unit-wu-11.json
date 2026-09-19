@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T07:47:11.350Z",
+  "attemptId": "011-r1-unit-wu-11-a1",
+  "result": {
+    "ok": false,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "011-r1-unit-wu-11",
+      "goal": "011",
+      "round": 1,
+      "workUnitId": "WU-11",
+      "status": "BLOCKED",
+      "executor": "native",
+      "action": "typecheck",
+      "argv": [
+        "npx",
+        "tsc",
+        "--noEmit"
+      ],
+      "exitCode": null,
+      "signal": null,
+      "durationMs": 3,
+      "summary": "TypeScript typecheck falhou (SPAWN_FAILED: spawn npx ENOENT).",
+      "report": "(sem saída)",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": "SPAWN_FAILED: spawn npx ENOENT",
+      "failurePaths": []
+    },
+    "attemptId": "011-r1-unit-wu-11-a1"
+  }
+}

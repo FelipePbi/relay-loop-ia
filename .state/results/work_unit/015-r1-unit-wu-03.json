@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T09:11:34.131Z",
+  "attemptId": "015-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-wu-03",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Rebuilt the Clientes list and creation flow on the Goal014 design system (Field/ListItem/Skeleton/StatePanel/Spinner), with local search, explicit empty states, a recoverable retry, and an explicit candidate-selection flow for phone conflicts.",
+      "report": "O que mudou e por quê:\n\n- `ProductCustomersScreen.tsx` virou um roteador fino (`detail`/`new`/`list`) mais `CustomerDetail` (inalterado no comportamento, só manteve os helpers que ainda usa: `DirectorySourceStrip`, `DirectoryLoading`, `DirectoryState`, `requestError`, `initials`, `formatDateTime`, `formatShortDate`, `statusLabel`, `todayIso`, `addDays`).\n- `CustomerList.tsx` (novo) — tela própria com fetch de `GET /v1/customers`, busca local por nome/telefone, skeleton (oculto de leitores de tela via `aria-hidden`, com um `role=\"status\"` sr-only separado anunciando \"Carregando clientes\"), empty state via `StatePanel`, e erro recuperável cujo retry limpa o erro antes de recarregar — preservando a estrutura da tela. Cada linha usa `ListItem` (hint da unidade), mostrando só nome/telefone (nunca \"Próximo agendamento\"/\"Agendamentos\"/\"Último atendimento\", que `GET /v1/customers` não devolve). Nome/telefone ausentes usam texto explícito (\"Cliente sem nome\"/\"Telefone não informado\"), nunca string vazia.\n- `CustomerForm.tsx` (novo) — telefone deixou de ser obrigatório (o contrato só recusa nome **e** telefone vazios ao mesmo tempo, confirmado em `apps/bff/PUBLIC_API_V1.md` e no teste de integração `customer-identity.integration.test.ts`). Ao submeter com telefone preenchido, chama `listCandidatesByPhone` antes de criar; se houver candidatos, a tela exige escolha explícita — abrir um cadastro existente (navegação por `customerId`, sem fusão automática) ou confirmar explicitamente \"Cadastrar como nova pessoa\". Usa `Field` para os campos e `Spinner` para o carregamento da agenda (hints da unidade). Descartei o `CUSTOMER_ALREADY_EXISTS` do mapeamento de erros herdado do protótipo: o contrato atual permite múltiplas pessoas com o mesmo número, então esse código não reflete mais o comportamento real da API.\n- `atendly-customers.css` (novo) + import em `globals.css` — estilos mínimos (busca, meta da lista, skeleton, formulário, erro inline), reaproveitando os tokens e classes genéricas já existentes (`.page`, `.list`, `.list-item`, `.field`, `.skeleton`) em vez de reintroduzir o CSS de protótipo `atendly-directory.css` (que permanece intacto para `ProductServicesScreen.tsx`, fora de escopo).\n- Usei `ListItem`, `Field` e `Spinner` como consumidores reais; decidi **não** forçar `Toast` (é `position: fixed`, pensado para notificação transiente) numa mensagem que precisa ficar visível enquanto a pessoa decide entre os candidatos — usar um toast ali contradiria a regra do AGENTS.md de não depender de toast para comunicar algo bloqueante.\n\nBug real encontrado e corrigido durante a verificação: o retry da lista nunca limpava o `error` após um novo carregamento bem-sucedido, então a tela ficava presa no estado de erro mesmo depois de o retry funcionar — violava o critério \"erro recuperável com retry\". Corrigido limpando o erro no próprio clique de retry (mesmo padrão já usado em `ProductConversationsScreen.tsx`), evitando também `setState` síncrono dentro de `useEffect` (barrado pelo eslint `react-hooks/set-state-in-effect`).\n\nComandos executados (todos dentro de `apps/frontend`, com resultado real observado):\n- `npx tsc --noEmit -p tsconfig.json` — sem erros.\n- `npm run lint` — sem erros/warnings (`--max-warnings=0`).\n- `npm test` (vitest) — 14 arquivos, 101 testes, todos passando (suíte existente, sem testes novos permanentes).\n- `npm run build` (`next build`) — build de produção concluído com sucesso, todas as 82 páginas geradas, incluindo `/clientes`, `/clientes/novo`, `/clientes/detalhes`.\n- Rodei também `npm run dev` momentaneamente, mas `/clientes` exige sessão BFF real (`getProductServices()` chama o BFF de verdade, sem modo mock/demo) — não há como validar visualmente no navegador sem subir BFF + scheduling-service + banco, o que está fora do escopo desta unidade. Isso é consistente com o próprio `AGENTS.md` do frontend, que documenta que rotas autenticadas não são cobertas pelo gate Playwright pelo mesmo motivo.\n- Como alternativa concreta, escrevi um teste temporário (`tests/tmp-wu03-smoke.test.tsx`, removido antes de terminar — não faz parte do diff) que renderizou `CustomerList` e `CustomerForm` de verdade via Testing Library com o `BffServiceRegistry` mockado, cobrindo os 5 critérios de aceite (skeleton oculto, apresentação explícita de nome/telefone ausentes e ausência das colunas proibidas, busca por nome e telefone, empty/error/retry, criação sem telefone, e o fluxo de candidatos por telefone com seleção explícita). Essa suíte encontrou e comprovou a correção do bug de retry acima; os 5 testes passaram após a correção.\n- `git status --porcelain` no fim: só os arquivos abaixo alterados; nenhum artefato de `graphify-out/`, `e2e-results/` ou alteração residual em `AGENTS.md` (revertido o bloco autogerado pelo `next dev`/`next build`).\n\nNão toquei em `apps/frontend/src/features/customers/types.ts` (tem tipos mortos `CustomerScenario`/`CustomerService` sem consumidor, herdados da WU-02) nem em `ProductServicesScreen.tsx`/`atendly-directory.css` — fora do escopo desta unidade.",
+      "changedFiles": [
+        "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+        "apps/frontend/src/features/customers/CustomerList.tsx",
+        "apps/frontend/src/features/customers/CustomerForm.tsx",
+        "apps/frontend/src/shared/styles/atendly-customers.css",
+        "apps/frontend/src/app/globals.css"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A busca filtra por nome e por telefone sobre a lista carregada e a interface não sugere paginação nem filtro de servidor que não existe",
+          "met": true,
+          "detail": "CustomerList.tsx: useMemo filtra localmente `result.items` (já carregado via GET /v1/customers) por `name`+`phone` normalizados; sem paginação, sem query params de busca. Coberto por teste temporário (removido) que digitou parte de um telefone e confirmou que só o cliente correspondente ficou visível."
+        },
+        {
+          "criterion": "Cliente sem nome e cliente sem telefone têm apresentação própria e explícita, nunca string vazia nem placeholder que finja um dado",
+          "met": true,
+          "detail": "CustomerList.tsx linhas 132/140 e CustomerForm.tsx linha 158: `customer.name || \"Cliente sem nome\"` e `customer.phone || \"Telefone não informado\"`. Teste temporário confirmou os dois textos renderizados para os casos `name: null` e `phone: null`."
+        },
+        {
+          "criterion": "Último atendimento, próximo atendimento e contagem não aparecem na lista, porque GET /v1/customers não os devolve",
+          "met": true,
+          "detail": "CustomerList.tsx renderiza cada linha só com nome/telefone via ListItem (title/copy/trailing); nenhuma menção a próximo/último atendimento ou contagem de agendamentos no arquivo. Teste temporário fez `queryByText` negativo para os três termos."
+        },
+        {
+          "criterion": "Carregando usa skeleton, vazio usa empty state e erro é recuperável com retry preservando a estrutura da tela",
+          "met": true,
+          "detail": "CustomerListSkeleton (aria-hidden + status sr-only) para loading; StatePanel tone=\"empty\"/\"error\" para os outros dois; onAction do erro limpa `error` e reincrementa `reload`, disparando novo fetch sem desmontar a estrutura da página. Bug de retry preso em erro foi encontrado e corrigido; teste temporário confirmou o cliente aparecendo após o retry e o heading de erro sumindo."
+        },
+        {
+          "criterion": "Criar cliente sem telefone funciona; número já pertencente a outras pessoas apresenta os candidatos e exige seleção explícita por customerId antes de prosseguir",
+          "met": true,
+          "detail": "CustomerForm.tsx: telefone sem `required`; submit sem telefone chama `create` direto. Com telefone, chama `listCandidatesByPhone` antes de criar; se houver candidatos, mostra-os em `ListItem` com `href` para `/clientes/detalhes?id=<customerId>` (seleção explícita) e exige um segundo clique explícito em \"Cadastrar ... como nova pessoa\" para prosseguir sem fusão automática. Teste temporário confirmou `create` não chamado até a confirmação explícita e navegação correta para o candidato existente."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-wu-03-a1"
+  }
+}

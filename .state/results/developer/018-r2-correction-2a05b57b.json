@@ -1,0 +1,75 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T21:37:28.071Z",
+  "attemptId": "018-r2-correction-2a05b57b-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r2-correction-2a05b57b",
+      "goal": "018",
+      "round": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 018, rodada 2\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 4 blocker(s) registrados pelo Tech Lead na revisão da rodada 1, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (7): apps/bff/PUBLIC_API_V1.md, apps/frontend/src/features/onboarding/OnboardingRuntime.tsx, apps/frontend/src/features/onboarding/blocks/business.tsx, apps/frontend/src/features/onboarding/blocks/shared.tsx, apps/frontend/src/features/settings/ProductSettingsScreen.tsx, apps/frontend/tests/goal018-business-block.test.tsx, apps/frontend/tests/goal018-onboarding-reachability.test.tsx\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: nextRequiredStep não conhece BUSINESS_MODALITY_NOT_SELECTED/BUSINESS_ADDRESS_REQUIRED — OnboardingRuntime.tsx:138-146 agora retorna 'dados-do-negocio' quando modalities está vazio ou ON_SITE sem address; testes de nextRequiredStep e reachability passam.\n- OK: Blocker 2 resolvido: onboardingError com copy falsa sobre WhatsApp e sem mencionar modalidade/endereço — blocks/shared.tsx:78-83 — copy atualizada para 'Revise negócio, agenda, serviço, disponibilidade e tom da IA.', sem WhatsApp.\n- OK: Blocker 3 resolvido: frontend apaga endereço ao desmarcar ON_SITE — business.tsx e ProductSettingsScreen.tsx só incluem a chave address no PATCH quando ON_SITE está marcado; teste goal018-business-block.test.tsx atualizado prova que a chave fica ausente ao desmarcar.\n- OK: Blocker 4 resolvido: PUBLIC_API_V1.md contradiz implementação sobre [] em modalities — Linha da tabela em PUBLIC_API_V1.md agora diz que [] significa 'ainda não escolheu', citando BUSINESS_MODALITY_NOT_SELECTED.\n\nBlocker 1 — `nextRequiredStep` (OnboardingRuntime.tsx) agora lê `state.business.modalities` e `state.business.address` e volta para `dados-do-negocio` quando `modalities` está vazio ou quando `ON_SITE` está presente sem `address`, além das condições já existentes de nome/categoria. Isso cobre o tenant pré-Goal018 (`modalities: []`) que antes pulava direto para o bloco WhatsApp.\n\nBlocker 2 — `onboardingError` (blocks/shared.tsx) trocou a copy fixa de 409 para \"Ainda há itens obrigatórios pendentes. Revise negócio, agenda, serviço, disponibilidade e tom da IA.\", removendo a menção a WhatsApp (que não bloqueia mais `complete` desde WU-04) e cobrindo negócio/modalidade/endereço, que passaram a bloquear.\n\nBlocker 3 — `persistBusinessStep` (blocks/business.tsx) e `BusinessSettings.save`/`persist` (ProductSettingsScreen.tsx) deixaram de enviar `address: null` quando `ON_SITE` não está selecionado; agora omitem a chave `address` do corpo nesse caso, o que — pelo contrato do BFF em `resolveBusinessProfileFields` (apps/bff/src/lib/business-profile.ts, já implementado) — preserva o endereço já gravado em vez de apagá-lo. Quando `ON_SITE` está selecionado, `address` continua sendo enviado com o valor `trim()`ado.\n\nBlocker 4 — PUBLIC_API_V1.md, linha da tabela de `modalities`: trocada \"`[]` é escolha válida, distinta de 'ainda não escolheu'\" por \"`[]` significa 'ainda não escolheu' — `POST /v1/onboarding/complete` recusa com `BUSINESS_MODALITY_NOT_SELECTED` enquanto isso for verdade\", alinhando com a migration (§1 do Goal) e com `apps/bff/src/modules/onboarding/routes.ts:190-192`.\n\nTestes ajustados para refletir o comportamento corrigido (não estavam no escopo dos 4 blockers como arquivo, mas encodavam o bug do blocker 3/1 e quebrariam com a correção):\n- `apps/frontend/tests/goal018-business-block.test.tsx`: o teste \"desmarcar ON_SITE... envia address: null\" foi renomeado e reescrito para esperar que a chave `address` fique ausente do payload (preserva o endereço gravado).\n- `apps/frontend/tests/goal018-onboarding-reachability.test.tsx`: removida a expectativa de `address: null` no payload de \"dados-do-negocio salva e leva a fonte-da-agenda\" (nunca havia ON_SITE selecionado, então a chave passa a ser omitida); fixture `businessDone` passou a incluir `modalities: [\"ONLINE\"]` e `address: null` para continuar representando um negócio de fato completo sob a nova regra de `nextRequiredStep`, evitando que os testes de `nextRequiredStep` (whatsapp / dias-de-atendimento / whatsapp-conectar) passassem a ficar presos em `dados-do-negocio` por causa da própria correção do Blocker 1.\n\nComandos executados e resultado:\n- `npx vitest run tests/goal018-business-block.test.tsx tests/goal018-onboarding-reachability.test.tsx tests/goal018-a11y.test.tsx tests/goal018-schema.test.ts tests/goal018-dashboard-status.test.tsx` — 5 arquivos, 75 testes, todos passaram.\n- `npx vitest run` (suite completa do frontend) — 42 arquivos, 411 testes, todos passaram.\n- `npx tsc --noEmit -p .` (apps/frontend) — sem erros.\n- `npx eslint` nos 6 arquivos alterados — sem erros.\n\nNenhuma alteração em código de backend foi necessária: `apps/bff/src/lib/business-profile.ts` já implementava a regra \"chave ausente preserva o endereço\" e o erro `BUSINESS_MODALITY_NOT_SELECTED`/`BUSINESS_ADDRESS_REQUIRED` corretamente; o blocker 4 era só a documentação desatualizada.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+              "apps/frontend/src/features/onboarding/blocks/business.tsx",
+              "apps/frontend/src/features/onboarding/blocks/shared.tsx",
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/tests/goal018-business-block.test.tsx",
+              "apps/frontend/tests/goal018-onboarding-reachability.test.tsx"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 12612,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "018-r2-correction-2a05b57b-a1"
+  }
+}

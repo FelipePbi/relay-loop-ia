@@ -1,0 +1,51 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T15:43:48.386Z",
+  "attemptId": "021-r1-unit-wu-014-a1",
+  "result": {
+    "ok": false,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "021-r1-unit-wu-014",
+      "goal": "021",
+      "round": 1,
+      "workUnitId": "WU-014",
+      "status": "BLOCKED",
+      "executor": "native",
+      "action": "validate-integration",
+      "argv": [
+        "npm",
+        "run",
+        "validate:integration"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "durationMs": 17938,
+      "summary": "Integration validation gate falhou (exit 1).",
+      "report": "[…56407 characters omitted…]\n 1; service maps: 1\nafter constraints — STARTING_AT accepted: true, NOT_INFORMED accepted: true, STARTING_AT without price rejected: true, NOT_INFORMED with price rejected: true\ngoal007:migration-rehearsal PASSED — expansion preserved every service and snapshot, the old price constraint held until the constraints step, the review lockstep held from expansion onward, and all four price types validate correctly after the cut.\n\n[validate:integration] rehearse:goal008-agenda-migration: node scripts/goal008-migration-rehearsal.mjs (.)\ngoal008:migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal008\nM0 inventory — appointments: 3 (SCHEDULED 2, CANCELLED 1); items: 3; idempotencies: 2 (COMPLETED 1, PENDING 1); time blocks: 1\ngoal008:migration-rehearsal PASSED — expansion preserved every appointment, item and idempotency, the guard rejected an unknown status in a rolled-back transaction, normalization mapped SCHEDULED->CONFIRMED while preserving the raw value, the new constraints held, COMPLETED idempotencies stayed decodable, and both steps proved resumable without changing state.\n\n[validate:integration] rehearse:goal009-occupancy-migration: node scripts/goal009-migration-rehearsal.mjs (.)\ngoal009:migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal009\nM0 inventory — settings: 2; appointments: 1; items: 1; blocks: 1; holds: 1\ngoal009:migration-rehearsal PASSED — every existing row preserved with safe defaults, the new offer-rules/buffer/series constraints held for both existing and probe data, and the migration proved resumable without changing state.\n\n[validate:integration] rehearse:goal010-import-session-migration: node scripts/goal010-migration-rehearsal.mjs (.)\ngoal010:migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal010\nM0 inventory — jobs: 6; conflicts: 1; entity maps: 2\ngoal010:migration-rehearsal PASSED — every legacy MigrationJob, MigrationConflict and ExternalEntityMap row preserved, legacy jobs classified conservatively without ever creating or consuming an import conclusion, and both the migration and the classification proved resumable without changing state.\n\n[validate:integration] rehearse:goal011-ai-style-migration: node scripts/goal011-ai-style-migration-rehearsal.mjs (.)\ngoal011:ai-style-migration-rehearsal (ai-orchestrator) target: 127.0.0.1:55500/ia_bff_test_goal011_ai\ngoal011:ai-style-migration-rehearsal (bff) target: 127.0.0.1:55500/ia_bff_test_goal011_bff\ndurability target expanded with the Goal011 AI style migrations: ia_bff_test_goal004\ngoal011:ai-style-migration-rehearsal PASSED — the IA and BFF style migrations are additive, the backfill moved every legacy row deterministically with nothing left behind, the new/absent default behaves as declared, legacy values stay readable, and both are resumable without changing state.\n\n[validate:integration] rehearse:goal012-knowledge-memory-migration: node scripts/goal012-knowledge-memory-migration-rehearsal.mjs (.)\ngoal012:knowledge-memory-migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal012\nskipping the pgvector extension and KnowledgeChunk on purpose — the Goal012 migration does not touch chunks, so proving KnowledgeDocument.serviceId, AiRun.kind and CustomerMemory does not require it\ndurability target has no knowledge tables — creating a minimal KnowledgeDocument without KnowledgeChunk (named skip: KnowledgeChunk requires the pgvector extension, which this disposable server never installs, and the Goal012 migration does not touch it)\ndurability target expanded with the Goal012 knowledge/memory migration: ia_bff_test_goal004\ngoal012:knowledge-memory-migration-rehearsal PASSED — KnowledgeDocument.serviceId, CustomerMemory and AiRun.kind are additive, legacy rows stay untouched with the declared defaults, legacy and new write shapes both stay readable, and the migration is resumable without changing state — no pgvector required.\n\n[validate:integration] rehearse:goal013-media-migration: node scripts/goal013-media-migration-rehearsal.mjs (.)\ngoal013:media-migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal013\ndurability target expanded with the Goal013 media migration: ia_bff_test_goal004\ngoal013:media-migration-rehearsal PASSED — Message.kind and MessageAttachment are additive, the base64 backfill purges only data.Message.base64 on concluded events while preserving every other field (including media proto keys), pending events stay untouched, legacy and new write shapes both stay readable, and the migration is resumable without changing state.\n\n[validate:integration] rehearse:goal019-activation-test-migration: node scripts/goal019-activation-test-migration-rehearsal.mjs (.)\ngoal019:activation-test-migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal019\ndurability target expanded with the Goal019 activation test migration: ia_bff_test_goal004\ngoal019:activation-test-migration-rehearsal PASSED — ActivationTestRun and ActivationTestMilestone are additive and backfill-free (a pre-existing tenant stays without any run), at most one live run per tenant is enforced by the partial unique index (a paused run still counts as live), a milestone cannot exist without the fact that supports it, and the migration is resumable without changing state.\n\n[validate:integration] rehearse:goal021-reminder-migration: node scripts/goal021-reminder-migration-rehearsal.mjs (.)\ngoal021:reminder-migration-rehearsal target: 127.0.0.1:55500/ia_bff_test_goal021\n\n=== validate:integration summary ===\npassed   generate:bff-prisma-client — exit code 0\npassed   migrate:bff-test-database — exit code 0\npassed   test:bff-integration — exit code 0\npassed   rehearse:goal003-link-migration — exit code 0\npassed   provision:evolution-test-database — exit code 0\npassed   test:evolution-go-ownership — exit code 0\npassed   rehearse:goal004-transport-migration — exit code 0\npassed   rehearse:goal005-contact-session-migration — exit code 0\npassed   rehearse:goal006-customer-identity-migration — exit code 0\npassed   rehearse:goal006-ai-migration — exit code 0\npassed   rehearse:goal007-catalog-migration — exit code 0\npassed   rehearse:goal008-agenda-migration — exit code 0\npassed   rehearse:goal009-occupancy-migration — exit code 0\npassed   rehearse:goal010-import-session-migration — exit code 0\npassed   rehearse:goal011-ai-style-migration — exit code 0\npassed   rehearse:goal012-knowledge-memory-migration — exit code 0\npassed   rehearse:goal013-media-migration — exit code 0\npassed   rehearse:goal019-activation-test-migration — exit code 0\nfailed   rehearse:goal021-reminder-migration — exit code 1\nnot_run  generate:scheduling-prisma-client — not executed after a previous failure\nnot_run  provision:scheduling-test-database — not executed after a previous failure\nnot_run  test:scheduling-integration — not executed after a previous failure\nnot_run  generate:ai-orchestrator-prisma-client — not executed after a previous failure\nnot_run  test:ai-orchestrator-transport-durability — not executed after a previous failure\nnot_run  test:evolution-go-webhook-outbox — not executed after a previous failure\n{\n  \"gate\": \"validate:integration\",\n  \"total\": 25,\n  \"passed\": 18,\n  \"failed\": 1,\n  \"skipped\": 0,\n  \"notRun\": 6,\n  \"failedSteps\": [\n    \"rehearse:goal021-reminder-migration\"\n  ],\n  \"skippedSteps\": [],\n  \"notRunSteps\": [\n    \"generate:scheduling-prisma-client\",\n    \"provision:scheduling-test-database\",\n    \"test:scheduling-integration\",\n    \"generate:ai-orchestrator-prisma-client\",\n    \"test:ai-orchestrator-transport-durability\",\n    \"test:evolution-go-webhook-outbox\"\n  ]\n}\n\nvalidate:integration FAILED — see the failed steps above.\n\nLoaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma\\schema.prisma.\nLoaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma\\schema.prisma.\ngoal021:reminder-migration-rehearsal FAILED — the bare delete must fail on the AppointmentEvent foreign key, got 23001\ngoal021:reminder-migration-rehearsal FAILED — see the assertions above.",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": "exit 1",
+      "failurePaths": [
+        "scripts/goal003-migration-rehearsal.mjs",
+        "scripts/provision-evolution-test-database.mjs",
+        "scripts/goal004-migration-rehearsal.mjs",
+        "scripts/goal005-migration-rehearsal.mjs",
+        "scripts/goal006-migration-rehearsal.mjs",
+        "scripts/goal006-ai-migration-rehearsal.mjs",
+        "scripts/goal007-migration-rehearsal.mjs",
+        "scripts/goal008-migration-rehearsal.mjs",
+        "scripts/goal009-migration-rehearsal.mjs",
+        "scripts/goal010-migration-rehearsal.mjs",
+        "scripts/goal011-ai-style-migration-rehearsal.mjs",
+        "scripts/goal012-knowledge-memory-migration-rehearsal.mjs",
+        "scripts/goal013-media-migration-rehearsal.mjs",
+        "scripts/goal019-activation-test-migration-rehearsal.mjs",
+        "scripts/goal021-reminder-migration-rehearsal.mjs"
+      ]
+    },
+    "attemptId": "021-r1-unit-wu-014-a1"
+  }
+}

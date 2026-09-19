@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T07:53:25.584Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "014-r1-unit-diag-002-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "014-r1-unit-diag-002",
+    "role": "work_unit",
+    "goal": "014",
+    "round": 1,
+    "workUnitId": "DIAG-002",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-014",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\014-fundacao-visual-shell-auth.md",
+    "parentJobId": "014-r1-developer-ca15771b",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T07:56:03.664Z"
+}

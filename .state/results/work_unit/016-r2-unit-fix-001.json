@@ -1,0 +1,64 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:36:33.736Z",
+  "attemptId": "016-r2-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r2-unit-fix-001",
+      "goal": "016",
+      "round": 2,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Os 5 blockers da revisão foram corrigidos: fluxos órfãos agora alcançáveis por rota, grade resiliente a fonte externa, rota/módulo novos do Scheduling cobertos por teste, gate de integração reexecutado verde e Dia posicionado cronologicamente.",
+      "report": "ver campo report",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/ProductAgendaScreen.tsx",
+        "apps/frontend/src/features/agenda/AgendaBoard.tsx",
+        "apps/frontend/src/features/agenda/AppointmentFlowShell.tsx",
+        "apps/frontend/src/features/agenda/AppointmentForm.tsx",
+        "apps/frontend/src/features/agenda/BlockForm.tsx",
+        "apps/frontend/src/features/agenda/DayView.tsx",
+        "apps/frontend/src/features/agenda/WeekView.tsx",
+        "apps/frontend/src/features/agenda/timeGrid.ts",
+        "apps/frontend/src/app/(platform)/agenda/bloquear/serie/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/serie/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/excecoes/page.tsx",
+        "apps/frontend/src/shared/styles/atendly-agenda.css",
+        "apps/frontend/tests/goal016-agenda-reachability.test.tsx",
+        "apps/frontend/tests/goal016-agenda-views.test.tsx",
+        "apps/frontend/tests/goal016-a11y.test.tsx",
+        "apps/scheduling-service/tests/unit/goal016-time-blocks.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: fluxos dos itens 5, 6 e 8 alcançáveis no produto",
+          "met": true,
+          "detail": "ProductAgendaScreen despacha BlockForm (não mais BlockTime) e ganhou cenários block-series/appointment-series/exceptions, servidos por três rotas novas declaradas: /agenda/bloquear/serie, /agenda/serie, /agenda/excecoes. OccurrenceActions abre a partir do bloqueio na grade do Dia via AgendaBoard. grep por importadores em apps/frontend/src devolve produção para os cinco componentes. Provas em tests/goal016-agenda-reachability.test.tsx (12 casos) e no manifesto do next build."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: AgendaBoard não quebra em calendário EXTERNAL nem sem fonte configurada",
+          "met": true,
+          "detail": "O efeito lê getCalendar antes e só pede listTimeBlocks/listAvailabilityExceptions quando source === ATENDLY; source null não lê nada e mostra o painel de configuração. Três testes afirmam as chamadas que NÃO são feitas e a tela que aparece em cada caso."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: rota e módulo novos do Scheduling cobertos por teste",
+          "met": true,
+          "detail": "apps/scheduling-service/tests/unit/goal016-time-blocks.test.ts, 10 casos: escopo por tenant, predicado startAt < rangeEnd && endAt > rangeStart (bloco que atravessa a borda incluído, toque exato excluído), endDate inclusivo (+24h), ordem, e a rota (200/409 OPERATION_MANAGED_EXTERNALLY/400 sem janela/401). Mutações no módulo derrubam 4 e 1 casos respectivamente."
+        },
+        {
+          "criterion": "Blocker 4 resolvido: gate validate:integration reexecutado com resultado verde",
+          "met": true,
+          "detail": "npm run validate:integration com cluster descartável provisionado por withTestDatabases: exit 0, 23/23 passos passed, alvo 127.0.0.1:55500/ia_bff_test (confirma o fix de databaseNameForEnv). git diff --check: exit 0. Cluster derrubado (registro CLEANED)."
+        },
+        {
+          "criterion": "Blocker 5 resolvido: visualização Dia posiciona o ocupado no lugar real do tempo",
+          "met": true,
+          "detail": "DayView passou a usar a mesma mecânica da Semana, extraída para timeGrid.ts (--start/--span, 72px/hora), com eixo de horas e divisão de largura por lane para sobreposições. WeekView foi migrada para a mesma função. Três testes em goal016-agenda-views afirmam as posições calculadas, o crescimento da janela e as lanes."
+        }
+      ]
+    },
+    "attemptId": "016-r2-unit-fix-001-a1"
+  }
+}

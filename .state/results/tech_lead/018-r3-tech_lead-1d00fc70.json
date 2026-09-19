@@ -1,0 +1,26 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T21:58:20.458Z",
+  "attemptId": "018-r3-tech_lead-1d00fc70-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r3-tech_lead-1d00fc70",
+      "goal": "018",
+      "summary": "Fechamento documental do Goal018 (ACCEPTED na rodada 3) registrado em docs/migration/, sem reabrir a decisão e sem tocar código, testes ou tooling. Criei reviews/018-review.md com a identidade do diff (51 arquivos, hash 437295964572…, base 4606f54), o histórico das três rodadas (4 blockers na r1, 3 na r2 — todos de prova ausente —, delta de dois arquivos de teste na r3), os gates reexecutados pelo reviewer (validate:core, validate:integration 23/23 contra PostgreSQL descartável real com a migration aplicada, validate:ui, vitest 416/416, tsc, lint, git diff --check), a verificação de integridade do worktree após o incidente de git checkout --, o que o diff entrega e os limites/resíduos, incluindo os quatro arquivos fora dos pontos de implementação nominais (prompts/system.ts, sourceGuard.ts, CustomerAgenda.tsx e tools/ia-loop/temporary-postgres.mjs, este último a correção de databaseNameForEnv que só vale para o harness depois de commitada em main). CURRENT_STATE ganhou a seção \"Delta implementado — Goal018\" no padrão das anteriores. GAP_ANALYSIS teve G-25 e G-26 rotulados pelo que de fato fechou (G-25 só na conclusão sem WhatsApp; G-26 sem reconciliação automática), G-31 atualizado com o onboarding e o resíduo corrigido, mais a linha de atualização no cabeçalho. REUSE_ANALYSIS teve corrigida uma afirmação que o diff final tornou falsa — a linha ainda dizia que OnboardingRuntime.tsx:139 bloqueava client-side por status !== CONNECTED, o que valia na rodada 1 mas não no diff aceito — e ProductOnboardingScreen foi marcado como substituído. DATA_MIGRATION ganhou o parágrafo da migration na §9 (linha BusinessProfile/AiSettings/AiTenantConfig), com o porquê de não haver backfill, as divergências em relação ao plano (sem outbox, sem appliedVersion do lado da IA) e o limite de reversão. DECISIONS ganhou D-034 com os contratos adotados, alternativas rejeitadas, consequências e gatilhos de revisão. TARGET_ARCHITECTURE teve o parágrafo da camada de interface estendido ao Goal018, reapontando reconciliação/autoativação/teste real para o Goal018B. MASTER_PLAN recebeu a entrada v34 registrando o ACCEPTED, explicitando que nada foi commitado ou integrado e que o replanejamento é etapa posterior. Não toquei MIGRATION_STATUS, não criei o próximo Goal, não marquei nada como READY e não registrei baseline nova. git diff --check limpo; nenhuma alteração fora de docs/migration/.",
+      "documentsUpdated": [
+        "docs/migration/reviews/018-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "O caminho candidato \"docs/migration/reviews/003-review.md\" descrito como \"o review desta execução\" parece derivado de finalRound=3: 003-review.md é o review do Goal003, já existente. Escrevi em docs/migration/reviews/018-review.md, seguindo a convenção <goal>-review.md usada de 001 a 017; sobrescrever 003-review.md teria destruído o review de outro Goal. Dois pontos factuais que valem para o próximo planejamento, ambos já registrados nos documentos: (1) a correção de tools/ia-loop/lib/temporary-postgres.mjs (databaseNameForEnv passou a produzir ia_<label>_test) é legítima e está no diff aceito, mas o orquestrador carrega tools/ia-loop do checkout principal, então ela só passa a valer para o harness depois de commitada em main; (2) PATCH /v1/settings/ai continua engolindo falha de projeção sem marcar contextProjectionStatus como PENDING — o estado só fica observável por GET /v1/status —, material para o Goal018B quando a reconciliação chegar. Contagem de cenários: o documento do Goal dizia 35 cenários declarados; a contagem real na baseline é 34 entradas, que passaram a 15. Usei os números medidos nos documentos."
+    },
+    "attemptId": "018-r3-tech_lead-1d00fc70-a1"
+  }
+}

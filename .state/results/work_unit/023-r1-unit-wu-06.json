@@ -1,0 +1,52 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T20:53:04.453Z",
+  "attemptId": "023-r1-unit-wu-06-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-06",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-06",
+      "status": "COMPLETED",
+      "summary": "Added self-contained technical retention sweep to the Go webhook transport, purging old terminal outbox deliveries in bounded batches, boot + periodic, env-configurable, with no new routes or cross-service calls.",
+      "report": "Implementação: `DeliveryStore.PruneTerminal(before, limit)` foi adicionada em `webhook_outbox.go`; a implementação gorm seleciona ids elegíveis (`status IN (done,failed) AND updated_at < before`, ordenado por `updated_at asc`, limitado ao teto) e apaga por id — evita `DELETE ... LIMIT`, que Postgres não suporta.\n\nEm `webhook_producer.go`: constantes `defaultRetentionMaxAge` (30 dias), `defaultRetentionSweep` (6h) e `defaultRetentionBatch` (500), com overrides por ambiente (`WEBHOOK_OUTBOX_RETENTION_HOURS`, `WEBHOOK_OUTBOX_RETENTION_SWEEP_MINUTES`, `WEBHOOK_OUTBOX_RETENTION_BATCH_SIZE`, todas com fallback para o default se ausentes/invalidas). `NewWebhookProducer`, quando há `store` configurado (mesmo guard que já protege `ResumePending`), chama `startRetentionSweep()`: roda uma varredura imediatamente (equivalente ao \"no boot\", já que é o mesmo construtor que `main.go` já invoca antes de chamar `ResumePending`, sem precisar tocar `main.go`) e depois a cada intervalo via `time.NewTicker`. `pruneTerminal()` só remove terminal (`done`/`failed`); pendente/reagendada nunca são candidatas porque nunca ficam nesses status. Adicionado `WithRetentionPolicy` (option, mesmo padrão de `WithRetryPolicy`) e `Close()` no produtor para os testes encerrarem a goroutine sem vazamento (não usado por `main.go`, que não precisou de alteração).\n\nConsequência necessária: a interface `DeliveryStore` ganhou um método novo, então o `fakeStore` existente em `webhook_durability_test.go` precisou de um `PruneTerminal` no-op para continuar compilando, e os três `t.Cleanup` desse arquivo passaram a chamar `producer.Close()` antes de esperar `inflight` (evita goroutine de varredura vazando entre testes).\n\nTeste novo `webhook_retention_test.go`: `retentionFakeStore` reproduz a semântica real (status + `updated_at`, batch, ordenação por mais antigo primeiro) sem banco. Três testes: remoção de terminal antiga (`TestPruneTerminalRemovesOldTerminalDeliveries`), preservação de pendente e de recente (`TestPruneTerminalPreservesPendingAndRecent`), e respeito ao teto de lote — 5 elegíveis, limite 2, sobra 3 após a varredura de boot (`TestPruneTerminalRespectsBatchLimit`).\n\nComandos executados, todos dentro da worktree:\n- `go build ./...` (apps/evolution-go) — sem erro.\n- `go test ./pkg/events/webhook/... -v` — 8 testes, todos PASS (1 SKIP esperado: `TestGormDeliveryStoreSurvivesRestart` exige `EVOLUTION_TEST_DATABASE_URL`, ausente localmente, comportamento preexistente e documentado no próprio teste).\n- `go vet ./pkg/events/webhook/...` e `go test -race ./pkg/events/webhook/...` — sem avisos, sem race.\n- `go build ./...` e `go vet ./...` no módulo inteiro — sem erro, confirmando que `main.go` e o resto do transporte continuam compilando sem alteração.\n- `git status --porcelain -- apps/evolution-go` e `git diff --stat` — confirmam que só os 3 arquivos esperados de código-fonte mais o teste novo foram tocados, dentro de `apps/evolution-go/pkg/events/webhook/`.\n\nNão toquei `main.go`, não criei rota, não fiz chamada cross-service, não mexi em outra Work Unit.",
+      "changedFiles": [
+        "apps/evolution-go/pkg/events/webhook/webhook_outbox.go",
+        "apps/evolution-go/pkg/events/webhook/webhook_producer.go",
+        "apps/evolution-go/pkg/events/webhook/webhook_retention_test.go",
+        "apps/evolution-go/pkg/events/webhook/webhook_durability_test.go"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Entrega terminal mais velha que o prazo é removida em lotes",
+          "met": true,
+          "detail": "gormDeliveryStore.PruneTerminal seleciona ids (status done/failed, updated_at < before) limitados ao teto e apaga por id; startRetentionSweep chama isso no boot e a cada ticker.retentionSweep. Coberto por TestPruneTerminalRemovesOldTerminalDeliveries."
+        },
+        {
+          "criterion": "Entrega pendente ou reagendada é preservada, independentemente da idade",
+          "met": true,
+          "detail": "PruneTerminal filtra por status IN (done, failed); pending/rescheduled nunca têm esse status. TestPruneTerminalPreservesPendingAndRecent prova old-pending sobrevive apesar de 48h de idade."
+        },
+        {
+          "criterion": "Prazo e intervalo vêm de ambiente, com defaults declarados no código",
+          "met": true,
+          "detail": "WEBHOOK_OUTBOX_RETENTION_HOURS, WEBHOOK_OUTBOX_RETENTION_SWEEP_MINUTES, WEBHOOK_OUTBOX_RETENTION_BATCH_SIZE lidos via positiveIntEnv, com fallback para defaultRetentionMaxAge (30d), defaultRetentionSweep (6h), defaultRetentionBatch (500) declarados junto das constantes em webhook_producer.go."
+        },
+        {
+          "criterion": "Nenhuma rota nova e nenhuma chamada cross-service foram criadas",
+          "met": true,
+          "detail": "Nenhum arquivo de rotas HTTP foi tocado; a varredura roda dentro do próprio processo do transporte, disparada pelo construtor já existente NewWebhookProducer, sem alteração em main.go nem chamada a outro serviço."
+        },
+        {
+          "criterion": "Teste cobre remoção da antiga, preservação da pendente e da recente e respeito ao lote",
+          "met": true,
+          "detail": "webhook_retention_test.go: TestPruneTerminalRemovesOldTerminalDeliveries, TestPruneTerminalPreservesPendingAndRecent (pendente e recente na mesma asserção) e TestPruneTerminalRespectsBatchLimit — todos PASS em `go test ./pkg/events/webhook/... -v`."
+        }
+      ]
+    },
+    "attemptId": "023-r1-unit-wu-06-a1"
+  }
+}

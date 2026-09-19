@@ -1,0 +1,24 @@
+{
+  "role": "tech_lead",
+  "repoRoot": "E:\\Projetos\\atendly-ia\\tools\\ia-loop",
+  "bootCodeVersion": "70c8fc46c954eea0",
+  "bootCodeFileCount": 104,
+  "startedAt": "2026-09-16T21:13:21.994Z",
+  "kind": "worker",
+  "key": "tech_lead",
+  "workerInstanceId": "24452-a53c6eab",
+  "hostname": "Borges",
+  "bootAt": "2026-09-16T18:21:44.359Z",
+  "pid": 24452,
+  "processStartedAt": "2026-09-16T21:13:21.928Z",
+  "status": "SUPERSEDED",
+  "version": 238,
+  "acquiredAt": "2026-09-16T21:13:21.999Z",
+  "heartbeatAt": "2026-09-16T21:52:54.900Z",
+  "expiresAt": "2026-09-16T21:54:24.900Z",
+  "supersededAt": "2026-09-19T22:13:26.079Z",
+  "supersededProof": {
+    "verdict": "STALE_AFTER_REBOOT",
+    "detail": "lease predates the current boot (2026-09-16T18:21:44.359Z)"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:39:26.140Z",
+  "attemptId": "018-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-04",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "POST /v1/onboarding/complete não exige mais WhatsApp para concluir, ganhou as duas pendências novas de negócio (modalidade e endereço), e um teste prova que concluir não liga a IA.",
+      "report": "Em apps/bff/src/modules/onboarding/routes.ts, no handler de POST /v1/onboarding/complete: removi a leitura de whatsAppInstance e a chamada a evolution.getStatus (que gerava WHATSAPP_NOT_CONFIGURED/WHATSAPP_NOT_CONNECTED), e removi o EvolutionClient inteiro do módulo por ter ficado sem uso — nada mais nele chamava Evolution. Acrescentei duas checagens novas ao mesmo conjunto de `issues` que já bloqueia com 409: BUSINESS_MODALITY_NOT_SELECTED (perfil sem nenhuma modalidade) e BUSINESS_ADDRESS_REQUIRED (ON_SITE presente sem endereço), reaproveitando o vocabulário já usado no erro próprio de PATCH. As demais pendências (BUSINESS_PROFILE_INCOMPLETE, CALENDAR_NOT_SELECTED, AI_TONE_NOT_SELECTED, ACTIVE_SERVICE_REQUIRED, AVAILABILITY_REQUIRED, CALENDAR_INTEGRATION_NOT_CONNECTED) continuam intactas. Não toquei em syncAiConfig nem em nenhum caminho de PATCH: complete nunca chamou AiSettings.upsert nem ai.updateTenantConfig, e isso continua assim.\n\nNão havia nenhuma suíte de teste para /v1/onboarding/complete no repositório (confirmado por busca antes de escrever). Criei apps/bff/tests/goal018-onboarding-complete.integration.test.ts com seis casos: conclusão com WhatsApp ausente; conclusão com WhatsApp vinculado e status DISCONNECTED; ausência dos dois códigos WhatsApp em error.details.issues; modalidade/endereço bloqueando junto das demais pendências (incluindo a transição de \"sem modalidade\" para \"ON_SITE sem endereço\" no mesmo perfil); e a prova de que concluir não altera AiSettings.enabled nem soma uma chamada nova a /internal/ai-tenant-config, muito menos uma com enabled: true.\n\nComandos executados: `npm run typecheck` (limpo), `npm run lint` (limpo), `npm test` sem banco (112 testes, 5 rodados/107 pulados por RUN_INTEGRATION=false, sem falhas). Para validar de fato a suíte nova, eu mesmo provisionei um PostgreSQL descartável temporário (initdb/pg_ctl em diretório de scratchpad, porta 55501, banco `atendly_bff_test`), rodei `npx prisma migrate deploy` (18 migrations aplicadas, incluindo a do WU-01) e depois `npx vitest run` com BFF_RUN_INTEGRATION_TESTS=true e as demais variáveis sintéticas do próprio validate-integration.mjs: resultado 17 arquivos / 112 testes passando, incluindo os seis novos. Derrubei o cluster e apaguei o diretório de dados ao final; nada disso ficou no repositório ou em processo aberto.\n\nNão toquei em PUBLIC_API_V1.md: conferi que os códigos de issues de /complete nunca foram documentados ali (nem os dois que saíram, nem os que ficaram), então a remoção de WHATSAPP_NOT_CONFIGURED/CONNECTED não torna nenhum documento vigente mentiroso.",
+      "changedFiles": [
+        "apps/bff/src/modules/onboarding/routes.ts",
+        "apps/bff/tests/goal018-onboarding-complete.integration.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "complete conclui com WhatsApp ausente e com WhatsApp desconectado",
+          "met": true,
+          "detail": "Testes 'conclui com WhatsApp ausente' e 'conclui com WhatsApp vinculado e desconectado' (status DISCONNECTED) em goal018-onboarding-complete.integration.test.ts, ambos 200 com completed:true; rodados contra Postgres real, passaram."
+        },
+        {
+          "criterion": "WHATSAPP_NOT_CONFIGURED e WHATSAPP_NOT_CONNECTED não aparecem mais em error.details.issues",
+          "met": true,
+          "detail": "routes.ts não empurra mais esses dois códigos; teste 'WHATSAPP_NOT_CONFIGURED e WHATSAPP_NOT_CONNECTED não aparecem mais em error.details.issues' confere ausência de ambos num 409, passou."
+        },
+        {
+          "criterion": "As demais pendências continuam bloqueando com 409, e modalidade não escolhida e endereço obrigatório ausente entram no mesmo conjunto",
+          "met": true,
+          "detail": "Teste 'modalidade não escolhida e endereço ON_SITE ausente bloqueiam com 409, junto das demais pendências' confere BUSINESS_MODALITY_NOT_SELECTED junto com BUSINESS_PROFILE_INCOMPLETE/CALENDAR_NOT_SELECTED/AI_TONE_NOT_SELECTED, depois BUSINESS_ADDRESS_REQUIRED isolado; passou."
+        },
+        {
+          "criterion": "Concluir não altera AiSettings.enabled nem projeta enabled: true, e o teste falha se alguém acoplar as duas coisas",
+          "met": true,
+          "detail": "Teste 'não altera AiSettings.enabled nem projeta enabled: true ao concluir' confere enabled:false antes/depois e que nenhuma chamada nova a /internal/ai-tenant-config acontece em complete, com asserção explícita contra enabled:true em qualquer chamada já registrada; passou."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-04-a1"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T23:21:08.113Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "013-r1-unit-wu-07-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "013-r1-unit-wu-07-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_ESCALATION",
+      "startedAt": "2026-09-13T23:21:08.113Z",
+      "endedAt": "2026-09-13T23:21:39.493Z",
+      "role": "work_unit",
+      "escalationReason": "TOOLING_PERMISSION_DENIED",
+      "routedTo": {
+        "modelKey": "sonnet",
+        "model": "claude-sonnet-5",
+        "family": "sonnet",
+        "effort": "high",
+        "reason": "TOOLING_PERMISSION_DENIED",
+        "fallbackAllowed": true
+      },
+      "fromModel": "haiku"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "013-r1-unit-wu-07",
+    "role": "work_unit",
+    "goal": "013",
+    "round": 1,
+    "workUnitId": "WU-07",
+    "unitType": "MECHANICAL",
+    "complexity": "LOW",
+    "risk": "LOW",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-013",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\013-audio-e-midia.md",
+    "parentJobId": "013-r1-developer-cafeeb2b",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "haiku",
+      "model": "claude-haiku-4-5-20251001",
+      "family": "haiku",
+      "effort": "high",
+      "complexity": "LOW",
+      "riskScore": null,
+      "signals": [
+        "MECHANICAL",
+        "RISK_LOW"
+      ],
+      "reason": "MECHANICAL_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-13T23:25:58.354Z",
+  "attemptStartedAt": "2026-09-13T23:21:39.493Z",
+  "requeuedAt": "2026-09-13T23:21:39.493Z"
+}

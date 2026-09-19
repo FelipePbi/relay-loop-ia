@@ -1,0 +1,72 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T21:18:59.788Z",
+  "attemptId": "012-r3-correction-eb780212-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r3-correction-eb780212",
+      "goal": "012",
+      "round": 3,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 012, rodada 3\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 1 blocker(s) registrados pelo Tech Lead na revisão da rodada 2, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (4): apps/ai-orchestrator/src/modules/assistant/assistant.service.ts, apps/ai-orchestrator/src/modules/internal/routes.ts, apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts, apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: B1 (residual) — recusa por mensagem não textual implementada em AssistantService.generateSuggestions, alinhada ao PUBLIC_API_V1.md — assistant.service.ts agora retorna { ok:false, reason:'NO_TEXTUAL_MESSAGE' } quando não há texto do último inbound antes de montar o prompt/criar AiRun; coberto por teste de rota (suggestions.routes.test.ts) e por teste de serviço real via harness (suggestions.eval.test.ts), ambos verdes; suíte completa e typecheck do ai-orchestrator sem falhas.\n\nBlocker: `PUBLIC_API_V1.md` (seção \"Sugestões de resposta no atendimento humano\") já documentava a recusa por \"mensagem do cliente não textual\", mas `AssistantService.generateSuggestions` não a implementava — sem `lastInboundText`, o prompt seguia normalmente.\n\nMudanças:\n- `apps/ai-orchestrator/src/modules/assistant/assistant.service.ts`: adicionado `\"NO_TEXTUAL_MESSAGE\"` a `SuggestionRefusalReason` (comentário de ordem atualizado) e um retorno antecipado `{ ok: false, reason: \"NO_TEXTUAL_MESSAGE\" }` logo após calcular `lastInboundText`, antes de qualquer leitura de conhecimento, montagem de prompt ou criação de `AiRun` — mesmo padrão das demais recusas próprias (contato, sessão, atendimento, config do negócio). Mensagens de mídia gravam `body` vazio (`InboundMessageProcessor`/`MessageGraphWorkflow`), então `!lastInboundText` cobre tanto o caso de mídia quanto o de nenhuma mensagem `INBOUND` na conversa.\n- `apps/ai-orchestrator/src/modules/internal/routes.ts`: comentário \"quatro recusas próprias\" → \"cinco recusas próprias\" (contagem correta após a quinta recusa).\n- `apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts`: união de tipos e lista parametrizada `it.each` do teste de rota passam a incluir `\"NO_TEXTUAL_MESSAGE\"`.\n- `apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts`: novo teste \"sugestão recusa mensagem do cliente não textual\" que roda o `AssistantService` real (via harness/eval world) com uma mensagem `INBOUND` de `body: \"\"`, e prova que a recusa acontece sem chamar o modelo (`world.model.calls` vazio) e sem criar `AiRun`. Também ajustado o teste pré-existente \"estilo não muda a sugestão operacional\" para semear uma mensagem `INBOUND` com texto real em cada mundo do loop de estilos, já que ele não seguia texto de entrada nenhum e passou a ser recusado pelo novo guard (esse teste não cobre ausência de texto — cobre paridade de estilo — então precisava de uma mensagem real para continuar válido).\n\nComandos executados e resultado:\n- `npx vitest run tests/internal/suggestions.routes.test.ts tests/evals/suggestions.eval.test.ts tests/evals/knowledge-memory-suggestions-isolation.eval.test.ts tests/tools/suggestion-out-of-reach.test.ts` (em `apps/ai-orchestrator`) → 4 arquivos, 23 testes, todos passando.\n- `npx vitest run` completo em `apps/ai-orchestrator` → 51 arquivos passados, 6 skipped, 417 testes passados, 52 skipped, 0 falhas.\n- `npx tsc --noEmit -p tsconfig.json` em `apps/ai-orchestrator` → sem output, sem erros.\n- Grep confirmou que nenhuma outra rota/serviço (BFF, frontend) enumera os `SuggestionRefusalReason` explicitamente (o BFF repassa `upstreamCode` genericamente), então nenhuma mudança adicional foi necessária ali.\n- `PUBLIC_API_V1.md` não precisou de edição: já descrevia a recusa corretamente; a divergência era só o código não implementá-la.\n\nNenhum outro arquivo do plano foi tocado; nenhum commit, push ou mudança de branch foi feito.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts",
+              "apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 3334,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "012-r3-correction-eb780212-a1"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:37:21.796Z",
+  "attemptId": "012-r1-unit-wu-11-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r1-unit-wu-11",
+      "goal": "012",
+      "round": 1,
+      "workUnitId": "WU-11",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "unit-tests",
+      "argv": [
+        "npm",
+        "test"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 4731,
+      "summary": "Unit tests passou (exit 0, 4731ms).",
+      "report": "\n> @atendly-ia/ai-orchestrator@0.1.0 test\n> vitest run\n\n\n RUN  v4.1.11 E:/Projetos/atendly-ia/.ai-worktrees/goal-012/apps/ai-orchestrator\n\n\n Test Files  51 passed | 6 skipped (57)\n      Tests  408 passed | 52 skipped (460)\n   Start at  17:37:17\n   Duration  4.33s (transform 2.59s, setup 0ms, import 26.19s, tests 4.42s, environment 6ms)\n\n",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "012-r1-unit-wu-11-a1"
+  }
+}

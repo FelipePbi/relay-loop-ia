@@ -1,0 +1,82 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-09T04:37:45.015Z",
+  "base": "9494eb643bd85199a876d6a91ba1461ada101099",
+  "worktreeInitialHead": "9494eb643bd85199a876d6a91ba1461ada101099",
+  "head": "9494eb643bd85199a876d6a91ba1461ada101099",
+  "branch": "ai-loop/goal-007",
+  "trackedDiffHash": "635551fffd956cbf06d78f84ba657a32c8aed27a0c2c994198f8e90de1716a58",
+  "trackedFileCount": 30,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+    "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+    "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+    "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/modules/customers/routes.ts",
+    "apps/bff/src/modules/services/routes.ts",
+    "apps/bff/src/modules/settings/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffServiceCatalogService.ts",
+    "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+    "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+    "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+    "apps/scheduling-service/prisma/schema.prisma",
+    "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+    "apps/scheduling-service/src/modules/calendar/routes.ts",
+    "apps/scheduling-service/src/modules/customers/atendly-customer-service.ts",
+    "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+    "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+    "apps/scheduling-service/tests/unit/customer-identity.test.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "docs/migration/DATA_MIGRATION.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "9d30bd71fa4f47efae5183c0f74dbdb4d5f623576fe6b2ac5aa238b7d9913e2d",
+  "untrackedFileCount": 7,
+  "untracked": [
+    {
+      "path": "apps/frontend/tests/service-schema.test.ts",
+      "sha256": "0fb4ca1b693fa1200a9ce858637bf4ee3b32ef59388f9cecfea7ac43f7a0f730",
+      "bytes": 2231
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260908170000_goal007_catalog_expand/migration.sql",
+      "sha256": "eabdfdaa4365c9be21778e37bdb1a9571bb6893d8a2e9cb8c9f9031cd3e4e9c4",
+      "bytes": 4281
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260908171000_goal007_catalog_constraints/migration.sql",
+      "sha256": "5a8d6fd95250d59b8b2b309508bd5a0614fd9714398def3a71b68b4bba9e5115",
+      "bytes": 3025
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/service-catalog.test.ts",
+      "sha256": "810cbecaebf30c96e33555a0928a2738dedb3564fe76ecfee17eddad01922131",
+      "bytes": 8825
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/agreement-total.test.ts",
+      "sha256": "90debbdd23fef240ac7450d3e28ed1f2e948864c9d72657069d41bb446e5256e",
+      "bytes": 1599
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/service-catalog.test.ts",
+      "sha256": "876ef32ca386e3049e98f02ab32b375f1666eefe4a008cedb2a71bd8d9bd0c6c",
+      "bytes": 10314
+    },
+    {
+      "path": "scripts/goal007-migration-rehearsal.mjs",
+      "sha256": "3e6ea3f43ca3a2375adb2b53ce1ff1d3453a93f8ed622727c378397b0b972230",
+      "bytes": 17908
+    }
+  ],
+  "contentHash": "4e637bae09eab0be00c96ca8dd9d1f86ef5ae401d6b843d32ffb1cbf28e0f6e7"
+}

@@ -1,0 +1,19 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:47:59.761Z",
+  "attemptId": "017-r3-tech_lead-c06964f5-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r3-tech_lead-c06964f5",
+      "goal": "017",
+      "round": 3,
+      "decision": "ACCEPTED",
+      "blockers": [],
+      "nextAction": "STOP",
+      "summary": "Rodada 3 resolveu o único blocker pendente. docs/migration/GAP_ANALYSIS.md:39 (G-09) deixou de afirmar falsamente que a composição visual de pendente/erro não existe: agora aponta os quatro deliveryState compostos em apps/frontend/src/features/conversations/MessageTimeline.tsx e preserva o resíduo verdadeiro (reconciliação depender de o WhatsApp honrar o correlationId, sem prova com transporte real). Verifiquei o fato no código: deliveryCopy cobre FAILED/PENDING/SENT/UNKNOWN com label e ícone próprios (linhas 65-74), DeliveryBadge só oferece \"Tentar reenviar\" em FAILED (95-105) e MessageBubble só renderiza o badge quando outgoing && message.deliveryState (157-163), consistente com goal017-delivery-state.test.tsx. Escopo respeitado: só GAP_ANALYSIS.md foi tocado; linha 5, MASTER_PLAN e MIGRATION_STATUS intactos e sem afirmação defasada sobre ProductConversationsScreen em CURRENT_STATE.md. Único desvio: na mesma linha, a coluna de referência passou de \"UI do estado de entrega é do Goal017\" para \"fechada no Goal017\" — factualmente correto e alinhado ao padrão de G-22/G-23/G-31, sem peso de blocker. Evidência própria na worktree: vitest frontend 37 arquivos/336 testes passando, tsc --noEmit limpo em frontend e BFF, eslint --max-warnings=0 limpo, e ProductConversationsScreen.tsx com 28 linhas confirmando as afirmações de REUSE_ANALYSIS.md e G-31."
+    },
+    "attemptId": "017-r3-tech_lead-c06964f5-a1"
+  }
+}

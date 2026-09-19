@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T14:06:58.870Z",
+  "attemptId": "021-r1-unit-wu-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "021-r1-unit-wu-002",
+      "goal": "021",
+      "round": 1,
+      "workUnitId": "WU-002",
+      "status": "COMPLETED",
+      "summary": "Implementado o domínio de configuração de lembrete no Scheduling (ReminderService + rotas internas), com default por constante nomeada, zero explícito distinguível, recusa de antecedência inválida e NUNCA como padrão de preço, todos cobertos por suíte unitária.",
+      "report": "Criado `apps/scheduling-service/src/modules/reminders/reminder-service.ts` (+`index.ts`): classe `ReminderService` com `get()`/`set()` sobre os modelos `ReminderSettings`/`ReminderRule` (já migrados pela WU-001). `get()` distingue ausência de linha (retorna `configured: false` e o default do produto — um lembrete `FIRST` a `DEFAULT_REMINDER_LEAD_MINUTES` = 1440 min = 24h, constante nomeada e única) de linha existente com zero regras (`configured: true`, `rules: []`, escolha explícita de desligar). `set()` normaliza e valida: no máximo duas regras (`FIRST`/`SECOND`, sem repetição), `leadMinutes` inteiro positivo até `MAX_REMINDER_LEAD_MINUTES` = 43200 (30 dias, espelhando a constraint SQL `ReminderRule_leadMinutes_check`), recusando com códigos próprios (`INVALID_REMINDER_LEAD_MINUTES`, `TOO_MANY_REMINDER_RULES`, `DUPLICATE_REMINDER_SLOT`, `INVALID_REMINDER_SLOT`, `INVALID_REMINDER_PRICE_POLICY`); `pricePolicy` tem `NEVER` como padrão tanto na leitura sem linha quanto na escrita sem campo informado. Escrita é transacional: upsert de `ReminderSettings` + `deleteMany`/`create` sequencial de `ReminderRule` (evitei `createMany`, que o dublê de teste não suporta e que não traz benefício real para no máximo duas linhas).\n\nAdicionadas duas rotas em `apps/scheduling-service/src/modules/internal-api/routes.ts`, no mesmo padrão de `/internal/availability-settings` (leitura livre ao chamador interno, escrita restrita a `requireHumanCaller` — a IA nunca configura lembrete — e ambas atrás de `requireCalendar`): `GET /internal/reminder-settings` e `PATCH /internal/reminder-settings`, com schema zod (`reminderSettingsBodySchema`) e um `reminderConfigDto`.\n\nEstendido `apps/scheduling-service/tests/unit/support/database-double.ts` com as tabelas `reminderSettings` (PK simples `tenantId`, defaults `confirmationEnabled: false`/`pricePolicy: \"NEVER\"`, `findUnique` sobrescrito para juntar `rules` do mesmo tenant, imitando o `include` do Prisma) e `reminderRule` (chave composta `tenantId_slot`, unicidade `[\"tenantId\",\"slot\"]`, espelhando `ReminderRule_pkey`).\n\nCriado `apps/scheduling-service/tests/unit/reminder-service.test.ts` com 13 testes cobrindo: (1) leitura sem linha = default de 24h por constante, sem fabricar linha; (2) zero configurado = escolha explícita, distinguível do default, inclusive salvando/lendo duas regras ordenadas por slot; (3) antecedência zero, negativa e acima do teto recusadas com `INVALID_REMINDER_LEAD_MINUTES` (e aceita exatamente no teto), mais excesso de regras e slot repetido; (4) `pricePolicy` padrão `NEVER` em ambos os caminhos e aceitação explícita de `WHEN_FIXED`; e isolamento entre tenants.\n\nComandos executados, com resultado real:\n- `npx vitest run tests/unit/reminder-service.test.ts` (em `apps/scheduling-service`) → 1 arquivo, 13 testes, todos passaram.\n- `npx vitest run tests/unit` (em `apps/scheduling-service`) → 20 arquivos, 291 testes, todos passaram (suíte inteira do serviço, sem regressão).\n- `npx tsc --noEmit -p tsconfig.json` (em `apps/scheduling-service`) → sem erros.\n- `node scripts/validate-core.mjs` (raiz do repo) → PASSED, incluindo `build:scheduling-service` e `test:scheduling-service`, sem falhas em nenhum step.\n\nNenhum commit, push ou mudança de branch foi feito. Não toquei em `goals/`, `reviews/`, `MIGRATION_STATUS.md`, nem em arquivos da WU-001 (schema.prisma, migration.sql, DATA_MIGRATION.md, scripts de ensaio/validate-integration aparecem modificados/novos no `git status`, mas são trabalho da dependência já concluída, não desta unidade).",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/reminders/reminder-service.ts",
+        "apps/scheduling-service/src/modules/reminders/index.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts",
+        "apps/scheduling-service/tests/unit/reminder-service.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Negócio sem configuração vale como um lembrete a 24 horas, por constante única, sem backfill",
+          "met": true,
+          "detail": "ReminderService.get() retorna configured:false e rules:[{slot:'FIRST', leadMinutes: DEFAULT_REMINDER_LEAD_MINUTES}] quando não há linha ReminderSettings; DEFAULT_REMINDER_LEAD_MINUTES=1440 é constante única no módulo, nunca materializada em linha (testes 'default sem linha' e 'RED: never fabricates a ReminderSettings row')."
+        },
+        {
+          "criterion": "Zero lembretes configurados é escolha legítima e distinguível de ausência de configuração",
+          "met": true,
+          "detail": "set({rules:[]}) grava ReminderSettings com zero ReminderRule; get() subsequente retorna configured:true, rules:[] — nunca o default de 24h (testes 'is distinguishable from never having configured' e 'RED: a business that turned reminders off never reads back the default')."
+        },
+        {
+          "criterion": "Antecedência zero, negativa ou acima do teto é recusada com código próprio",
+          "met": true,
+          "detail": "normalizeRules lança AppError('INVALID_REMINDER_LEAD_MINUTES', ...) para leadMinutes<=0 ou > MAX_REMINDER_LEAD_MINUTES (43200); testes cobrem zero, negativo, acima do teto e exatamente no teto (aceito)."
+        },
+        {
+          "criterion": "Política de preço tem NUNCA como padrão",
+          "met": true,
+          "detail": "normalizePricePolicy retorna 'NEVER' quando pricePolicy é undefined, tanto em get() sem linha quanto em set() sem o campo; teste 'defaults to NEVER, both unconfigured and when saved without an explicit policy'."
+        },
+        {
+          "criterion": "Suíte cobre os quatro casos acima",
+          "met": true,
+          "detail": "apps/scheduling-service/tests/unit/reminder-service.test.ts, 13 testes, todos verdes via `npx vitest run tests/unit/reminder-service.test.ts` e na suíte completa (291/291) e em validate:core."
+        }
+      ]
+    },
+    "attemptId": "021-r1-unit-wu-002-a1"
+  }
+}

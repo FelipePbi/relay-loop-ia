@@ -1,0 +1,217 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T22:57:01.190Z",
+  "attemptId": "026-r1-tech_lead-740e8b6b-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "026-r1-tech_lead-740e8b6b",
+      "goal": "026",
+      "summary": "Cobertura ampla: 35 dos 40 itens têm trabalho identificável no diff (remoção do protocolo legado no BFF/Scheduling/frontend, renomeação do writer remoto para `MinhaAgendaImportSourceReader`, remoção de `packages/contracts` e do resíduo de auth, quatro regras estáticas com caso negativo, D-042 e docs atualizadas). Cinco itens ficam UNCLEAR por dependerem de execução (404 real das rotas, suítes verdes, relatório de gates) e não do diff. Três observações para a revisão, não para a cobertura: (a) `apps/bff/PUBLIC_API_V1.md` continua mencionando `/v1/calendar/migrations` na própria seção de retirada, enquanto o critério 6 pede que nenhum arquivo de `apps/` mencione o path (a regra estática só varre fontes, e há uma exceção explícita para `apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts`); (b) `.github/workflows/validate.yml:45` ainda roda `npm ci` em `packages/contracts`, diretório que deixou de existir; (c) o schema do Scheduling tem `MigrationJob` e `MigrationConflict` — não existe `MigrationJobItem`, nome citado nos critérios 7 e 26.",
+      "items": [
+        {
+          "id": "§1",
+          "verdict": "COVERED",
+          "evidence": "Rotas públicas e internas do protocolo removidas (apps/bff/src/modules/migrations/routes.ts, apps/scheduling-service/src/modules/internal-api/routes.ts) e `calendar-migration-service.ts` (939 linhas) apagado; schema.prisma do Scheduling não está no diff e mantém `model MigrationJob` (linha 858) e `enum LegacyMigrationJobClass` (986)."
+        },
+        {
+          "id": "§2",
+          "verdict": "COVERED",
+          "evidence": "`minha-agenda/provider.ts` apagado e substituído por `import-source-reader.ts`, que só expõe `listServices`/`getImportSnapshot`; nenhum `implements CalendarProvider` nem `createAppointment`/`createHold`/`getAvailability` restam na origem."
+        },
+        {
+          "id": "§3",
+          "verdict": "COVERED",
+          "evidence": "`packages/contracts` inteiro, `apps/frontend/src/mocks/**`, `features/auth/types.ts` e o ramo `preview` de AuthScreen removidos; proveniência declarada em DECISIONS D-042 e em CURRENT_STATE (§Delta Goal026)."
+        },
+        {
+          "id": "§4",
+          "verdict": "COVERED",
+          "evidence": "scripts/final-production-audit.mjs ganhou `no_legacy_calendar_migration_routes`, `no_calendar_migration_service_reference`, `minha_agenda_origin_has_no_writer` e `frontend_mocks_directory_is_absent`, com funções puras exportadas e provadas em scripts/tests/final-production-audit-legacy-regression.test.mjs."
+        },
+        {
+          "id": "§5",
+          "verdict": "COVERED",
+          "evidence": "Preservados no diff: `listServices`/`getImportSnapshot` (import-source-reader.ts), `migrationAvailabilityRules` (availability.ts, consumida em import-execution-service.ts:23,614), `legacy-job-reconciliation.ts` intocado, schema e migrations não tocados; testes de importação reapontados em vez de removidos."
+        },
+        {
+          "id": "§6",
+          "verdict": "COVERED",
+          "evidence": "apps/bff/PUBLIC_API_V1.md: linha das três rotas sai da tabela de contratos legados e entra a seção \"Retirada do protocolo de migração pré-Goal010 (Goal026, 2026-09-19)\"."
+        },
+        {
+          "id": "§7",
+          "verdict": "COVERED",
+          "evidence": "Quatro regras estáticas + 12 casos (positivo e negativo) em scripts/tests/final-production-audit-legacy-regression.test.mjs; testes de importação, provider-factory, lease e completion reescritos semeando `MigrationJob` pelo Prisma do dublê (support/database-double.ts)."
+        },
+        {
+          "id": "§8",
+          "verdict": "COVERED",
+          "evidence": "CURRENT_STATE (delta Goal026), DECISIONS (D-042), GAP_ANALYSIS (G-10, G-19, G-32), REUSE_ANALYSIS (3 linhas), DATA_MIGRATION (M6) e VALIDATION_GATE atualizados."
+        },
+        {
+          "id": "critério 1",
+          "verdict": "UNCLEAR",
+          "evidence": "Os três `app.post`/`app.get` saíram de apps/bff/src/modules/migrations/routes.ts, junto de `publicMigration`/`internalSource`/`publicSource`; a resposta 404 real a uma requisição é comportamento em execução, não observável no diff."
+        },
+        {
+          "id": "critério 2",
+          "verdict": "COVERED",
+          "evidence": "`diagnoseMigration`, `createMigration` e `getMigration` removidos de apps/bff/src/clients/scheduling/index.ts, com `migrationDiagnosisSchema`/`migrationSchema` locais."
+        },
+        {
+          "id": "critério 3",
+          "verdict": "COVERED",
+          "evidence": "As três rotas `/internal/calendar/migrations*` e `migrationBodySchema` saíram de apps/scheduling-service/src/modules/internal-api/routes.ts, junto da instanciação `new CalendarMigrationService(prisma)`."
+        },
+        {
+          "id": "critério 4",
+          "verdict": "COVERED",
+          "evidence": "Arquivo apagado; export removido de modules/migrations/index.ts; grep em apps/ (fora de dist) só encontra o nome em prosa de comentário (legacy-job-reconciliation.ts:26, import-execution-service.ts:236), que a regra estática trata como permitido por desenho."
+        },
+        {
+          "id": "critério 5",
+          "verdict": "COVERED",
+          "evidence": "`diagnose`/`create`/`get` removidos de apps/frontend/src/data/services/BffMigrationService.ts; `migrationDiagnosisSchema`/`migrationStartSchema`/`migrationSchema` e os tipos derivados saíram de publicApiSchemas.ts, e o teste goal010-import-schema.test.ts perdeu o caso correspondente."
+        },
+        {
+          "id": "critério 6",
+          "verdict": "COVERED",
+          "evidence": "Regra `no_legacy_calendar_migration_routes` sobre `sourceFiles(\"apps\")`. Observação para a revisão: a regra exclui explicitamente apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts, e apps/bff/PUBLIC_API_V1.md — arquivo de apps/ — passou a citar os três paths na seção de retirada."
+        },
+        {
+          "id": "critério 7",
+          "verdict": "COVERED",
+          "evidence": "schema.prisma do Scheduling não aparece no diff; `model MigrationJob` (858), `model MigrationConflict` (897) e `enum LegacyMigrationJobClass` (986) seguem lá. Não existe modelo `MigrationJobItem` na árvore — o filho de `MigrationJob` chama-se `MigrationConflict`."
+        },
+        {
+          "id": "critério 8",
+          "verdict": "COVERED",
+          "evidence": "apps/scheduling-service/src/modules/migrations/legacy-job-reconciliation.ts não está no diff e continua lendo `prisma.migrationJob` (linhas 92, 100, 118, 135); tests/unit/legacy-job-reconciliation.test.ts também intocado."
+        },
+        {
+          "id": "critério 9",
+          "verdict": "COVERED",
+          "evidence": "Novo bloco em import-completion-service.test.ts (\"protocolo legado de migração não consome o direito\") semeia `migrationJob.create` pelo dublê e exige `available: true` + `started.created`; import-lease.test.ts faz o equivalente na retomada; a tabela `migrationJob` foi acrescentada a tests/unit/support/database-double.ts."
+        },
+        {
+          "id": "critério 10",
+          "verdict": "COVERED",
+          "evidence": "Nenhum arquivo sob `prisma/migrations/` aparece na lista de 73 arquivos alterados, em BFF, IA ou Scheduling."
+        },
+        {
+          "id": "critério 11",
+          "verdict": "COVERED",
+          "evidence": "import-source-reader.ts contém apenas `listServices`, `getImportSnapshot` e leitores privados; `createAppointment`, `rescheduleAppointment`, `cancelAppointment`, `createHold`/`listHolds`/`getHold`/`releaseHold` e `getAvailability` foram apagados com provider.ts."
+        },
+        {
+          "id": "critério 12",
+          "verdict": "COVERED",
+          "evidence": "Classe renomeada para `MinhaAgendaImportSourceReader` e sem `implements CalendarProvider`; integrations/index.ts reexporta o arquivo novo; grep em apps/ não encontra nenhuma ocorrência de `MinhaAgendaCalendarProvider` como símbolo — nem alias, nem reexport."
+        },
+        {
+          "id": "critério 13",
+          "verdict": "COVERED",
+          "evidence": "routes.ts usa `new MinhaAgendaImportSourceReader(...).listServices()` em `connect` e em `reconnect`; tests/unit/import-origin-connection.test.ts reaponta o `vi.mock` para import-source-reader.js e continua provando as duas chamadas via `origin.credentialChecks`."
+        },
+        {
+          "id": "critério 14",
+          "verdict": "COVERED",
+          "evidence": "import-preview-service.ts e import-execution-service.ts importam os tipos de `import-source-reader.js`; `buildMinhaAgendaReader` devolve o leitor novo; minha-agenda-import-snapshot.test.ts exercita `getImportSnapshot` sobre a classe renomeada."
+        },
+        {
+          "id": "critério 15",
+          "verdict": "COVERED",
+          "evidence": "Grep por `getMigrationSnapshot` em apps/ (fora de dist) não retorna nenhum arquivo; o método saiu junto de provider.ts."
+        },
+        {
+          "id": "critério 16",
+          "verdict": "COVERED",
+          "evidence": "De availability.ts saíram `computeAvailableSlots`, `AvailabilityInput`, `resolveWorkIntervals` e `buildBusyIntervals` (sem consumidor após a remoção do provider — grep por `computeAvailableSlots` em apps/ não retorna nada); `migrationAvailabilityRules` continua exportada (availability.ts:17) e consumida em import-execution-service.ts:23,614."
+        },
+        {
+          "id": "critério 17",
+          "verdict": "COVERED",
+          "evidence": "provider-factory.ts teve só o comentário reescrito (descreve a árvore real: não há provider remoto para instanciar); tests/unit/calendar-provider-factory.test.ts mantém as asserções de erro e troca o dublê para `MinhaAgendaImportSourceReader`."
+        },
+        {
+          "id": "critério 18",
+          "verdict": "COVERED",
+          "evidence": "apps/frontend/src/mocks não existe mais (glob vazio) e `features/auth/types.ts` foi apagado; AuthScreen perdeu a prop `preview`, o ramo `previewServices.auth.submit` e o `destination`. As seis rotas (login, cadastro, recuperar-senha, solicitacao-enviada, nova-senha, link-expirado) chamam `<AuthScreen scenario=... />` sem `preview`; o \"continuam submetendo como antes\" é comportamento em execução."
+        },
+        {
+          "id": "critério 19",
+          "verdict": "COVERED",
+          "evidence": "packages/contracts apagado por inteiro; `build:contracts` fora de package.json, do scripts/build-all.sh e de validate-core.mjs; skip `test:contracts` removido e gate.test.mjs ajustado. Exit 0 de `build:all`/`validate:core` é execução. Residual para a revisão: .github/workflows/validate.yml:45 ainda roda `npm ci` em `packages/contracts`."
+        },
+        {
+          "id": "critério 20",
+          "verdict": "COVERED",
+          "evidence": "packages/legal-contract não aparece na lista de arquivos alterados; continua referenciado por apps/bff/package.json + src/config/legal-versions.ts e apps/frontend/package.json + next.config.ts."
+        },
+        {
+          "id": "critério 21",
+          "verdict": "COVERED",
+          "evidence": "Linha G-32 em GAP_ANALYSIS reescrita para \"**NÃO fechado; pacote vazio retirado no Goal026 (pendente de revisão)**\", declarando que os três parsers continuam duplicados."
+        },
+        {
+          "id": "critério 22",
+          "verdict": "COVERED",
+          "evidence": "Promessas \"Sai no Goal024\" removidas de ai-settings.ts (IA), ai-conversation-style.ts (BFF), publicApiSchemas.ts, BffMigrationService.ts, internal-api/routes.ts e goal010-import-schema.test.ts; grep por `Goal024` em `**/src/**` só devolve comentários de autoria de feature. Os `{@link}` corrigidos apontam arquivos existentes: apps/ai-orchestrator/tests/internal/tenant-purge.schema.test.ts e apps/scheduling-service/tests/unit/tenant-purge-schema.test.ts."
+        },
+        {
+          "id": "critério 23",
+          "verdict": "COVERED",
+          "evidence": "Quatro `check(...)` novos em scripts/final-production-audit.mjs antes de `auditProductionHealth()`/`summarize()`; o arquivo passou a exportar `main` e a só auto-executar sob `isMain(import.meta.url)`. A aparição real na saída de `audit:static` depende de execução."
+        },
+        {
+          "id": "critério 24",
+          "verdict": "COVERED",
+          "evidence": "scripts/tests/final-production-audit-legacy-regression.test.mjs tem caso negativo para cada regra: rota pública e interna de volta, `calendar-migration-service.ts` de volta por arquivo/import/export/classe/instanciação, `MinhaAgendaCalendarProvider` e `implements CalendarProvider` de volta, e `apps/frontend/src/mocks` recriado em tmpdir."
+        },
+        {
+          "id": "critério 25",
+          "verdict": "UNCLEAR",
+          "evidence": "As suítes do ciclo (import-routes, import-preview, import-execution, import-completion, import-lease, goal010/goal020 de integração) continuam na árvore e foram reapontadas para o leitor novo, mas \"verdes\" é resultado de execução, ausente do diff."
+        },
+        {
+          "id": "critério 26",
+          "verdict": "COVERED",
+          "evidence": "`MigrationConflict` e `MigrationJob` continuam em TENANT_PURGE_TABLES (internal-api/tenantPurge.ts:59-61,151-152); os testes de cobertura derivada do schema não foram tocados (só o `{@link}` do cabeçalho). Não há modelo `MigrationJobItem` no schema, e a greenness depende de execução."
+        },
+        {
+          "id": "critério 27",
+          "verdict": "COVERED",
+          "evidence": "O único arquivo de rota pública no diff é apps/bff/src/modules/migrations/routes.ts, e nele só há remoções; nenhuma outra rota, código de erro ou status aparece alterado no diff."
+        },
+        {
+          "id": "critério 28",
+          "verdict": "COVERED",
+          "evidence": "PUBLIC_API_V1.md tem exatamente dois hunks: remoção da linha das três rotas na tabela e a nova seção de retirada; o parágrafo de `ATENDLY | EXTERNAL` aparece como contexto inalterado."
+        },
+        {
+          "id": "critério 29",
+          "verdict": "COVERED",
+          "evidence": "Nenhuma linha `eslint-disable` aparece entre as adições do diff."
+        },
+        {
+          "id": "critério 30",
+          "verdict": "UNCLEAR",
+          "evidence": "O relatório de gates do Developer não faz parte do diff; resultado de `validate:integration`, `validate:ui` nas cinco larguras e o número novo de skips de `validate:core` não são observáveis aqui (o diff apenas remove o skip `test:contracts`)."
+        },
+        {
+          "id": "critério 31",
+          "verdict": "COVERED",
+          "evidence": "GAP_ANALYSIS: linha G-10 reescrita com a renomeação para `MinhaAgendaImportSourceReader` e a remoção de `CalendarMigrationService`; linha G-19 passou a citar o Goal026 como pendente de revisão. A linha G-20 não foi alterada — cabe ao revisor julgar se o diff a afeta."
+        },
+        {
+          "id": "critério 32",
+          "verdict": "COVERED",
+          "evidence": "DECISIONS.md ganhou D-042 com Status/Contexto/Decisão/Alternativas/Motivo/Consequências/Revisar se, no mesmo formato das anteriores, acrescentada antes do parágrafo final e sem tocar blocos anteriores."
+        }
+      ]
+    },
+    "attemptId": "026-r1-tech_lead-740e8b6b-a1"
+  }
+}

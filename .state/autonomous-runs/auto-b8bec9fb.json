@@ -1,0 +1,27 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-b8bec9fb",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-14T15:46:00.970Z",
+  "currentGoal": "019",
+  "completedGoals": [
+    "016",
+    "017",
+    "018"
+  ],
+  "migrationAcceptedBaseline": "317c8262cd486a2f97b9f6051467ea17b8918bbf",
+  "pauseRequested": true,
+  "pauseAfterGoal": true,
+  "attempt": 1,
+  "ownerInstanceId": "2992-36ebc802",
+  "pausedAt": "2026-09-14T16:01:36.429Z",
+  "pauseReason": null,
+  "humanRequired": {
+    "reason": "MAX_CORRECTION_ROUNDS_REACHED",
+    "detail": "Goal 019 ended as HUMAN_REQUIRED",
+    "at": "2026-09-15T00:54:38.317Z"
+  },
+  "archivedAt": "2026-09-15T02:47:48.487Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "Blockers da rodada 3 analisados por humano: 1 blocker real e convergente (9-4-1), defeito de producao confirmado no ActivationTestAiDriver com correcao nomeada. Orcamento de rodadas elevado para 4 apenas nesta execucao, via variavel de ambiente; o padrao commitado segue 3. Dois bugs de harness corrigidos antes desta rodada: gate roda sobre arvore incompleta (eb4d05b) e teto de escalacao nao encerra mais a unidade (0cdd176)."
+}

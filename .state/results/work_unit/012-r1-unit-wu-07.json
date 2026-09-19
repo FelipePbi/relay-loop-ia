@@ -1,0 +1,44 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:20:47.792Z",
+  "attemptId": "012-r1-unit-wu-07-a2",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r1-unit-wu-07",
+      "goal": "012",
+      "round": 1,
+      "workUnitId": "WU-07",
+      "status": "COMPLETED",
+      "summary": "Adicionados schemas e serviços de dados do frontend para conhecimento, memória do cliente, resumo e sugestões (Goal012/WU-06), sem tela, com teste de schema novo; lint, typecheck e testes do frontend verdes.",
+      "report": "Segui o contrato documentado em `apps/bff/PUBLIC_API_V1.md` (seção \"Conhecimento, memória do cliente, resumo e sugestões (Goal012)\") e o DTO já validado por `apps/bff/src/clients/ai-orchestrator/index.ts` (WU-06) para fixar o vocabulário.\n\nMudanças:\n- `apps/frontend/src/data/mappers/publicApiSchemas.ts`: novos schemas `knowledgeDocumentTypeSchema`, `knowledgeDocumentStatusSchema`, `knowledgeChunkSchema`, `knowledgeDocumentSchema` (serviceId, versão, status), `customerMemoryKindSchema`, `customerMemoryOriginSchema`, `customerMemorySchema` (origem, permissão `aiAllowed`, idade via `observedAt`/`lastReinforcedAt`, substituição via `supersededById`, remoção), `customerSummarySchema` e `conversationSuggestionsSchema`, com os tipos `z.infer` correspondentes. Todos os campos de vocabulário fechado usam `z.enum`, então recusam valor desconhecido.\n- `apps/frontend/src/data/services/BffKnowledgeService.ts` (novo): `list`, `create`, `get`, `edit`, `deactivate`, `saveOtherInfo` — proxy fino para `/v1/knowledge/documents` e `/v1/knowledge/other-info`, sem hardcode de tipo/status (parâmetros vêm do chamador).\n- `apps/frontend/src/data/services/BffCustomerService.ts`: adicionados `listMemory`, `createMemory`, `setMemoryPermission`, `deleteMemory`, `generateSummary` para `/v1/customers/:id/memory...` e `/v1/customers/:id/summary`.\n- `apps/frontend/src/data/services/BffConversationService.ts`: adicionado `generateSuggestions` para `POST /v1/conversations/:id/suggestions`.\n- `apps/frontend/src/data/services/registry.ts`: registrado `knowledge: BffKnowledgeService` no `BffServiceRegistry`.\n- `apps/frontend/tests/goal012-knowledge-memory-schema.test.ts` (novo, padrão de `tests/goal010-import-schema.test.ts`): decodifica documento de conhecimento (com/sem `serviceId`, `ACTIVE`/`INACTIVE`), memória do cliente (origem `PROFESSIONAL`/`AI_INFERRED` com confiança/superseded/remoção), resumo (com e sem `aiRunId`) e sugestões (até três), além de casos de recusa explícita: `type`/`status` de documento fora do vocabulário, `origin`/`kind` de memória fora do vocabulário, e formato de resposta incompleto/malformado.\n\nNão criei tela nem toquei em `apps/frontend/src/app` ou componentes de UI, conforme o hint da unidade (UI é dos Goals 015/017/023).\n\nComandos executados nesta sessão (dentro da worktree, `apps/frontend`):\n- `npm ci` — node_modules do frontend não estava instalado nesta worktree; instalado para poder rodar lint/test/typecheck localmente (381 pacotes, sem alterar `package.json`/lockfile).\n- `npx vitest run tests/goal012-knowledge-memory-schema.test.ts tests/goal010-import-schema.test.ts` — 2 arquivos, 16 testes, todos passaram.\n- `npm test` (vitest run, suíte completa do frontend) — 6 arquivos, 40 testes, todos passaram.\n- `npm run lint` (`eslint src --max-warnings=0`) — sem erros/avisos.\n- `npm run typecheck` (`tsc --noEmit`) — sem erros (após ajustar `BffKnowledgeService.list` para montar o objeto de query explicitamente, evitando o erro de index signature do TS ao repassar uma interface nomeada como `query`).\n\nNão commitei nada.",
+      "changedFiles": [
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffKnowledgeService.ts",
+        "apps/frontend/src/data/services/BffCustomerService.ts",
+        "apps/frontend/src/data/services/BffConversationService.ts",
+        "apps/frontend/src/data/services/registry.ts",
+        "apps/frontend/tests/goal012-knowledge-memory-schema.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Schemas decodificam as respostas do BFF documentadas e recusam vocabulário desconhecido",
+          "met": true,
+          "detail": "knowledgeDocumentSchema, customerMemorySchema, customerSummarySchema e conversationSuggestionsSchema decodificam os DTOs de apps/bff/src/clients/ai-orchestrator/index.ts; tipos fechados (documentType, documentStatus, memoryKind, memoryOrigin) usam z.enum e o teste goal012-knowledge-memory-schema.test.ts cobre a recusa de type/status/origin/kind fora do vocabulário e de resposta malformada."
+        },
+        {
+          "criterion": "Serviços de dados expõem as operações sem tela e sem hardcode de valores",
+          "met": true,
+          "detail": "BffKnowledgeService (list/create/get/edit/deactivate/saveOtherInfo), métodos novos em BffCustomerService (listMemory/createMemory/setMemoryPermission/deleteMemory/generateSummary) e BffConversationService.generateSuggestions repassam parâmetros do chamador sem valor fixo; nenhum componente de UI foi criado."
+        },
+        {
+          "criterion": "Lint e testes do frontend verdes",
+          "met": true,
+          "detail": "`npm run lint` sem erros/avisos; `npm test` (vitest) 6 arquivos/40 testes verdes; `npm run typecheck` sem erros."
+        }
+      ]
+    },
+    "attemptId": "012-r1-unit-wu-07-a2"
+  }
+}

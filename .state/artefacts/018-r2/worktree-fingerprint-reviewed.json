@@ -1,0 +1,144 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-14T21:37:29.188Z",
+  "base": "4606f54fc03fa18fa1de97efca23ff5e4d1367c4",
+  "worktreeInitialHead": "4606f54fc03fa18fa1de97efca23ff5e4d1367c4",
+  "head": "4606f54fc03fa18fa1de97efca23ff5e4d1367c4",
+  "branch": "ai-loop/goal-018",
+  "trackedDiffHash": "437295964572de0e8ad435b634d998e3280f495e3e95c0b7ea92d5a75fdd5d40",
+  "trackedFileCount": 32,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/prompts/system.ts",
+    "apps/ai-orchestrator/src/modules/prompts/tenant-context.ts",
+    "apps/ai-orchestrator/src/modules/tenant-config/business-context.ts",
+    "apps/ai-orchestrator/tests/prompts/system.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/prisma/schema.prisma",
+    "apps/bff/src/lib/dto.ts",
+    "apps/bff/src/lib/errors.ts",
+    "apps/bff/src/modules/dashboard/routes.ts",
+    "apps/bff/src/modules/onboarding/routes.ts",
+    "apps/bff/src/modules/settings/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffOnboardingService.ts",
+    "apps/frontend/src/data/services/BffSettingsService.ts",
+    "apps/frontend/src/features/agenda/sourceGuard.ts",
+    "apps/frontend/src/features/customers/CustomerAgenda.tsx",
+    "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+    "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+    "apps/frontend/src/features/onboarding/OnboardingScreen.tsx",
+    "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+    "apps/frontend/src/features/onboarding/scenarios.ts",
+    "apps/frontend/src/features/onboarding/types.ts",
+    "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+    "apps/frontend/src/shared/layout/AppShell.tsx",
+    "apps/frontend/src/shared/runtime/systemStatus.tsx",
+    "apps/frontend/src/shared/styles/atendly.css",
+    "apps/frontend/tests/goal014-shell.test.ts",
+    "docs/migration/CURRENT_STATE.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "docs/migration/REUSE_ANALYSIS.md",
+    "tools/ia-loop/lib/temporary-postgres.mjs",
+    "tools/ia-loop/tests/test-databases.test.mjs"
+  ],
+  "untrackedHash": "d281efe2bc15e7cb849153c5a419d83fe94db3dc742a64a36234474b57d941d8",
+  "untrackedFileCount": 19,
+  "untracked": [
+    {
+      "path": "apps/ai-orchestrator/tests/tenant-config/business-context.test.ts",
+      "sha256": "7b49da00a056c5a6405be2efe36e91e4ef379378bb585c90be996c5e8667697d",
+      "bytes": 3425
+    },
+    {
+      "path": "apps/bff/prisma/migrations/20260914000000_goal018_business_profile_modalities/migration.sql",
+      "sha256": "5f3092606d2cee51306a39830125e3e0f28d82b09b8d3bc8ce1e0d726697c0b6",
+      "bytes": 1212
+    },
+    {
+      "path": "apps/bff/src/lib/business-profile.ts",
+      "sha256": "e7cfc89ddf03bcbf64c8bed376fda2dbf67b252ca000f2369bf4a8abdc9f2809",
+      "bytes": 3393
+    },
+    {
+      "path": "apps/bff/tests/goal018-ai-projection.integration.test.ts",
+      "sha256": "d3819d4ee39b32ef2e48f37653dfcfcc3767139ebe71689c467898112df3b521",
+      "bytes": 7913
+    },
+    {
+      "path": "apps/bff/tests/goal018-business-profile.integration.test.ts",
+      "sha256": "baff1d8a14d04fedaf8995331d556d1f89c64d7c137bb7e80f01b276c8eaeaca",
+      "bytes": 12675
+    },
+    {
+      "path": "apps/bff/tests/goal018-onboarding-complete.integration.test.ts",
+      "sha256": "7d45bf5b3db78af69d8d9d4f9eed994ea671c178decbbca6f78634b80ba6e46a",
+      "bytes": 11100
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/OnboardingShell.tsx",
+      "sha256": "23a345b29ec2a56f8889e766734190ccb2d556690ab5d13f839181a4581a7c17",
+      "bytes": 1896
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks.ts",
+      "sha256": "2fe6acc01eba4e1fb6dc65197d26aee6a529d3aea8ea144fbb9916186d407e8c",
+      "bytes": 2136
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/ai.tsx",
+      "sha256": "d0cf80501a5356f7adf2738b545f61c3974f58e0f1eaf73a107ee1e3a7140530",
+      "bytes": 1522
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/business.tsx",
+      "sha256": "760dc550fd1efdfcf251e9544b92c14c4e3b3b2c3d101fc87eba41fbe3664827",
+      "bytes": 6046
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/registry.ts",
+      "sha256": "968c473c41cf8124d7afc15c1560edc322f01006c9e900ae8b6838686419936d",
+      "bytes": 834
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/schedule.tsx",
+      "sha256": "6e1b2f0e87e1cb4658b26d67823c0ee2ede11c16c44a90fe84d1976e593fb728",
+      "bytes": 8691
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/shared.tsx",
+      "sha256": "dfd59e5ced7674b482a0d20d299fe1136534b90e42ab451f53c69f5c69ba74ad",
+      "bytes": 2210
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/whatsapp.tsx",
+      "sha256": "75ff2aa0708206ec6107ce6c27aa1d920c32ac02c9c11a5b89f4cacf180712e8",
+      "bytes": 2408
+    },
+    {
+      "path": "apps/frontend/tests/goal018-a11y.test.tsx",
+      "sha256": "4bcf5e31928d525d048f6abbe115488a3d2e2ffe9c70c8e8accf6819c194f496",
+      "bytes": 7386
+    },
+    {
+      "path": "apps/frontend/tests/goal018-business-block.test.tsx",
+      "sha256": "874f4b2c459f2fc03eb2647119b753530baee850dc1f98d429197240ff4d0097",
+      "bytes": 11360
+    },
+    {
+      "path": "apps/frontend/tests/goal018-dashboard-status.test.tsx",
+      "sha256": "5e1bdfc01b94cf85e800f0f41de8968b80016fdc7a13cd466d5efd28dbfacf9b",
+      "bytes": 9742
+    },
+    {
+      "path": "apps/frontend/tests/goal018-onboarding-reachability.test.tsx",
+      "sha256": "cadf42d52555825d6f76715887531c0d70a595ababf7e15ed832f82c83bb42b0",
+      "bytes": 19638
+    },
+    {
+      "path": "apps/frontend/tests/goal018-schema.test.ts",
+      "sha256": "ae32c6d03780f808e0d83078a92546735d802f5a4a3646538c0cf2cbde710154",
+      "bytes": 5329
+    }
+  ],
+  "contentHash": "d06d6867da841b5955d64561ffbd4a888a15b23b5b55779e66692129543ece85"
+}

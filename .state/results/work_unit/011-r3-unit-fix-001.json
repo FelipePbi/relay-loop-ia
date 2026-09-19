@@ -1,0 +1,36 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T08:14:30.354Z",
+  "attemptId": "011-r3-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "011-r3-unit-fix-001",
+      "goal": "011",
+      "round": 3,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Adicionadas as duas provas de teste pedidas pela rodada 2: DTO de /internal/services cobrindo recurrenceIntervalDays no Scheduling, e asserções de regressão contra \"parecer/fingir humana\" no prompt e no eval de persona.",
+      "report": "Blocker 1 (B2 residual, Critério 9): adicionei em apps/scheduling-service/tests/unit/service-catalog.test.ts um novo describe/teste que instancia CalendarService (o objeto que registerCalendarRoutes usa em GET /internal/services, calendar/routes.ts:156) sobre o database double com calendarSettings.source=\"ATENDLY\", cria dois serviços (um com recurrenceIntervalDays=14, outro sem) via AtendlyServiceService, e chama calendar.listOperationalServices(context) — exatamente o método que a rota invoca — verificando que o DTO retornado contém recurrenceIntervalDays: 14 e recurrenceIntervalDays: null respectivamente. Isso fecha a lacuna apontada: antes só listForScheduling() era exercitado e só a chave `id` era checada; agora o DTO de fato devolvido por /internal/services é coberto ponta a ponta (create → AtendlyServiceService.listOperational → toCalendarService → CalendarService.listOperationalServices).\n\nBlocker 2 (B3 residual, Critério 3): adicionei asserções de regressão em dois arquivos:\n- apps/ai-orchestrator/tests/prompts/system.test.ts: novo it.each sobre os três estilos verificando que o prompt montado não casa com /\\bparecer\\b[^.]{0,40}\\bhuman[ao]\\b/i, /\\bfingir\\b.../, /\\bfinja\\b.../ nem /\\batendente\\s+humana\\b/i.\n- apps/ai-orchestrator/tests/evals/style-and-persona.eval.test.ts: as mesmas quatro asserções adicionadas ao teste que já lê o prompt efetivamente entregue ao modelo no turno (world.model.chamada(0).instructions).\nValidei manualmente que a frase removida \"Voce deve parecer uma atendente humana.\" casa com as regexes novas (node -e ...), provando que os testes de fato detectariam a reintrodução da instrução.\n\nComandos executados e resultado:\n- `npx vitest run tests/unit/service-catalog.test.ts` (apps/scheduling-service): 21 passed.\n- `npx vitest run tests/prompts/system.test.ts tests/evals/style-and-persona.eval.test.ts` (apps/ai-orchestrator): 18 passed.\n- `npx vitest run` completo em apps/scheduling-service: 243 passed | 55 skipped (298 total), 0 falhas.\n- `npx vitest run` completo em apps/ai-orchestrator: 291 passed | 41 skipped (332 total), 0 falhas.\n\nNenhum código de produção foi tocado; apenas os três arquivos de teste listados em changedFiles.",
+      "changedFiles": [
+        "apps/scheduling-service/tests/unit/service-catalog.test.ts",
+        "apps/ai-orchestrator/tests/prompts/system.test.ts",
+        "apps/ai-orchestrator/tests/evals/style-and-persona.eval.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: B2 (residual) — prova (a) teste no Scheduling cobrindo o DTO que /internal/services devolve para recurrenceIntervalDays",
+          "met": true,
+          "detail": "Novo teste em apps/scheduling-service/tests/unit/service-catalog.test.ts chama CalendarService.listOperationalServices (método usado por GET /internal/services) e verifica recurrenceIntervalDays presente/nulo no DTO; suite completa passou (243 passed)."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: B3 (residual) — assertion de regressão contra reintrodução de instrução de parecer/fingir humana em system.test.ts e style-and-persona.eval.test.ts",
+          "met": true,
+          "detail": "Regexes novas em ambos os arquivos rejeitam a frase original removida (validado com node -e), e a suite completa do ai-orchestrator passou (291 passed)."
+        }
+      ]
+    },
+    "attemptId": "011-r3-unit-fix-001-a1"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T19:42:52.526Z",
+  "attemptId": "005-r2-tech_lead-958d5f1a-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "005-r2-tech_lead-958d5f1a",
+      "goal": "005",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "006",
+      "nextGoalTitle": "Clientes como pessoas",
+      "nextGoalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\006-clientes-como-pessoas.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Migration de identidade de cliente com corte de unicidade e consumers em Scheduling, IA, BFF e frontend, sem race nem mudança arquitetural.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/005-contatos-sessao-controle-humano.md",
+        "docs/migration/goals/006-clientes-como-pessoas.md"
+      ],
+      "summary": "Planejamento incremental após o Goal005 ACCEPTED, na worktree plan-after-goal-005 em 30fc42f62616ba826d0f2fc737386b038fbf9fb7. MIGRATION_STATUS: baseline aceita vigente atualizada para 30fc42f… (origem 9b31ea4…), linha 005 como ACCEPTED com commit e review, linha 006 como READY sobre essa baseline com o perfil OPUS_MEDIUM, e parágrafos de evidência da implementação005 (R1 e R2), dos reviews R1/R2 e do planejamento. MASTER_PLAN: entrada v10 no histórico registrando o fechamento integrado, a reavaliação incremental sem mudança de ordem, IDs ou escopo, e o escopo confirmado do 006 absorvendo os resíduos do 005. Ajuste administrativo no cabeçalho do documento do Goal005 para Status: ACCEPTED, sem reescrever o conteúdo. Goal006 escrito em docs/migration/goals/006-clientes-como-pessoas.md, único READY, declarando a baseline exata e a linha 'Developer execution profile: OPUS_MEDIUM': cliente do Scheduling por ID estável com telefone opcional e não exclusivo (hoje phone/normalizedPhone obrigatórios com unicidade por tenant, AtendlyCustomerService fazendo upsert por telefone e renomeando, e o provider chamando esse create antes da transação de agendamento); criação só dentro da transação de confirmação após validar o slot; candidatos por telefone com seleção explícita e IA propondo ou perguntando para quem é o atendimento; responsável principal confirmado antes de salvar; observações internas e tags manuais com autorização explícita de uso pela IA; Contact da IA referenciando a pessoa por ID; contratos por operação no Scheduling, BFF e frontend; resíduos do 005 (handoffs OPEN na rotação e índice parcial de sessão única). Critérios de aceite, migração expand-only com corte da unicidade só depois dos consumers, auditoria estática preservada, reversão documentada e review DEEP dirigido definidos; o Scheduling passa a ter suíte própria no gate. Nenhuma decisão nova: D-005 será implementada e avaliada no 006. A descoberta de Goal do próprio IA Loop foi executada contra a worktree e retornou 006 READY com anterior 005 ACCEPTED; git diff --check limpo; escritas restritas a docs/migration/.",
+      "reason": "O roadmap vigente aponta o Goal006 como próximo e a evidência do Goal005 não justifica inserir, reordenar ou superseder: o Contato de canal persistido é exatamente o ponto de ligação que a identidade de pessoa precisa, e os Goals 008 e 010 dependem de identidade estável antes de novas escritas de agenda e da importação. Restam Goals PLANNED e gaps críticos abertos (G-14 e G-15), então a migração não está completa, e não há decisão de produto ou arquitetura pendente que exija uma pessoa antes desta execução.",
+      "remainingCriticalGaps": [
+        "G-14 P1 — identidade de cliente: unicidade por telefone e upsert que renomeia pessoas no Scheduling",
+        "G-15 P2 — clientes/memória: cadastro sem relações, notas e tags autorizadas (parte de cadastro no 006; preferências, métricas e resumo no 012)"
+      ]
+    },
+    "attemptId": "005-r2-tech_lead-958d5f1a-a1"
+  }
+}

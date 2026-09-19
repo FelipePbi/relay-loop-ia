@@ -1,0 +1,72 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T17:53:29.069Z",
+  "attemptId": "017-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r1-unit-wu-04",
+      "goal": "017",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Chat agora compõe autoria por source, transcrição de áudio nos quatro estados, mídia sob demanda pelo proxy com as três recusas nomeadas, e deliveryState/201-202 no balão, com duas suítes novas provando cada critério.",
+      "report": "O que mudou e por quê:\n\n- `MessageTimeline.tsx`: balão ganhou classes `is-customer`/`is-ai`/`is-owner` (forma) além do texto do remetente já existente (`{negócio} · IA`, \"Você\", nome da pessoa) — autoria discreta e honesta nos três `source`. Adicionei `DeliveryBadge` que só aparece em mensagem `OUTBOUND` com `deliveryState` presente (nunca em mensagem recebida, nunca por ausência do campo), com texto próprio por valor (`Enviando…`, `Enviado`, `Não entregue` + `deliveryDetail`, `Não confirmado`) e botão \"Tentar reenviar\" só em `FAILED`.\n- `MessageAttachment.tsx` (novo): áudio mostra `transcriptStatus` nos quatro valores com textos distintos — `FAILED` nunca renderiza `transcript`, só `transcriptError`. Imagem/documento/vídeo mostram metadado (nome, tamanho) e só buscam bytes via `getMedia` (proxy) quando a profissional clica \"Ver mídia\"; `mediaAvailable: false` nunca oferece o botão; `tooLarge` aparece como metadado independente. As três recusas (`MESSAGE_ATTACHMENT_NOT_FOUND`, `MEDIA_TOO_LARGE`, `MEDIA_UNAVAILABLE`) são lidas de `error.details.upstreamCode` e têm copy própria, nunca a mensagem genérica do erro. A mídia abre num `Dialog` a partir de um `Blob` local (`URL.createObjectURL`) — nenhum `mediaUrl` chega à árvore.\n- `ConversationThread.tsx`: `send`/novo `resend` usam o novo retorno `{ message, status }` de `sendMessage` para compor \"Mensagem confirmada.\" (`201`) ou \"Tentativa de envio registrada…\" (`202`) perto do composer. `resend` reenvia pelo mesmo `sendMessage` com o corpo da mensagem falha (não existe endpoint de retry próprio no contrato).\n- `BffHttpClient.ts`: `request()` ganhou `requestWithStatus()` como base interna (comportamento de `request()` inalterado para as ~30 outras chamadas) — só assim o status bruto (`201`/`202`) fica disponível, já que o envelope de sucesso não carrega essa distinção.\n- `BffConversationService.sendMessage`: passou a devolver `{ message, status }` em vez de só a mensagem; único consumidor era `ConversationThread.tsx`, atualizado junto.\n- `format.ts`: `upstreamErrorCode`, `formatDuration`, `formatFileSize` — helpers puros usados pelo novo componente de anexo.\n- `atendly-conversations.css`: classes novas para `message-delivery`, `message-attachment*`, `message-transcript*`, `composer-confirmation`, `message-media-preview`.\n- Duas suítes novas: `goal017-chat-media.test.tsx` (autoria/forma, os quatro `transcriptStatus`, mídia sob demanda com blob local, as três recusas) e `goal017-delivery-state.test.tsx` (os quatro `deliveryState`, reenviar só em `FAILED`, ausência do campo, mensagem recebida nunca exibe entrega, `201`/`202`).\n\nComandos executados e resultado:\n- `npx tsc --noEmit` em `apps/frontend` → limpo.\n- `node_modules/.bin/eslint src --max-warnings=0` (equivalente exato ao script `lint`, chamado direto porque o wrapper `npm run lint` desta sessão estava interceptando e rodando eslint sobre `e2e/` e `eslint.config.mjs`, fora do escopo do script real — confirmado como artefato do proxy, não do código) → limpo, 0 erros/avisos.\n- `npx vitest run` em `apps/frontend` → 31 arquivos, 280 testes, todos passando (inclui as duas suítes novas e as 278 pré-existentes, sem regressão).\n\nNão toquei em `apps/bff`, `apps/ai-orchestrator`, docs de controle da migração, nem em arquivos que o findingsLedger marca como já alterados por outra Work Unit. As mudanças em `BffHttpClient.ts` e `BffConversationService.ts` são aditivas e mínimas (um método novo + um retorno enriquecido num único método sem outros consumidores) para viabilizar o critério 201/202, que depende do status HTTP bruto.",
+      "changedFiles": [
+        "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+        "apps/frontend/src/features/conversations/MessageAttachment.tsx",
+        "apps/frontend/src/features/conversations/ConversationThread.tsx",
+        "apps/frontend/src/features/conversations/format.ts",
+        "apps/frontend/src/data/http/BffHttpClient.ts",
+        "apps/frontend/src/data/services/BffConversationService.ts",
+        "apps/frontend/src/shared/styles/atendly-conversations.css",
+        "apps/frontend/tests/goal017-chat-media.test.tsx",
+        "apps/frontend/tests/goal017-delivery-state.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Autoria CUSTOMER, AI e OWNER é distinguível por texto e forma, e o que a IA escreveu se apresenta como escrito pela IA",
+          "met": true,
+          "detail": "MessageTimeline.tsx: classes is-customer/is-ai/is-owner + texto do remetente distinto; provado em goal017-chat-media.test.tsx (3 testes de autoria + 1 de classes distintas)."
+        },
+        {
+          "criterion": "transcriptStatus DONE, PENDING, FAILED e SKIPPED são apresentados distintamente; FAILED nunca exibe texto no lugar da transcrição",
+          "met": true,
+          "detail": "MessageAttachment.tsx TranscriptView; provado nos 4 testes de transcriptStatus + teste que confirma FAILED não renderiza o transcript indevido."
+        },
+        {
+          "criterion": "Imagem, documento e vídeo são exibidos sob demanda pelo proxy; mediaAvailable false não oferece ver mídia; tooLarge aparece como metadado",
+          "met": true,
+          "detail": "MediaAttachment em MessageAttachment.tsx; provado em 3 testes (mediaAvailable true abre via getMedia, mediaAvailable false sem botão, tooLarge como metadado)."
+        },
+        {
+          "criterion": "As três recusas de mídia têm copy própria lida de error.details.upstreamCode, nunca erro genérico",
+          "met": true,
+          "detail": "refusalCopy + upstreamErrorCode em MessageAttachment.tsx/format.ts; provado com test.each para os três upstreamCode, assertando ausência da mensagem genérica do erro."
+        },
+        {
+          "criterion": "deliveryState nos quatro valores é composto no balão; UNKNOWN se apresenta como não confirmado e não oferece reenviar",
+          "met": true,
+          "detail": "DeliveryBadge em MessageTimeline.tsx; provado nos 4 testes de deliveryState + teste que confirma ausência do botão em UNKNOWN."
+        },
+        {
+          "criterion": "Mensagem sem deliveryState não vira erro e mensagem recebida não exibe estado de entrega",
+          "met": true,
+          "detail": "Gate outgoing && message.deliveryState; provado em 2 testes em goal017-delivery-state.test.tsx."
+        },
+        {
+          "criterion": "202 é apresentada como tentativa registrada e 201 como confirmação",
+          "met": true,
+          "detail": "BffHttpClient.requestWithStatus + BffConversationService.sendMessage + composer-confirmation em ConversationThread.tsx; provado em 2 testes (201 e 202)."
+        },
+        {
+          "criterion": "Nenhum mediaUrl é exposto: o proxy é o único caminho",
+          "met": true,
+          "detail": "MediaAttachment só usa Blob local via URL.createObjectURL(getMedia(...).blob); teste afirma que o src da imagem é blob: e não contém whatsapp/minio/http."
+        }
+      ]
+    },
+    "attemptId": "017-r1-unit-wu-04-a1"
+  }
+}

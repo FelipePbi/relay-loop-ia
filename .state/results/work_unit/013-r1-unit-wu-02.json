@@ -1,0 +1,70 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T22:07:17.736Z",
+  "attemptId": "013-r1-unit-wu-02-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "013-r1-unit-wu-02",
+      "goal": "013",
+      "round": 1,
+      "workUnitId": "WU-02",
+      "status": "COMPLETED",
+      "summary": "Added video/sticker kinds, MessageAttachment persistence, base64 purge on ProcessedEvent conclusion, an explicit webhook body limit, and kind-based session renewal, all in apps/ai-orchestrator.",
+      "report": "O que mudou e por quê:\n\n**Kinds e mapeamento (Evolution adapter)**\n- `ChannelMessage.ts`: `ChannelMessageKind` ganhou `video`/`sticker`; novo tipo `MediaMetadata` (`mimetype`, `fileName`, `sizeBytes`, `durationSeconds`, `sha256`, `hasBase64`, `hasMediaUrl`, `mediaUrl`, `tooLarge`) e campo opcional `media` em `MappedChannelInboundMessage`.\n- `EvolutionTypes.ts`: `EvolutionMediaFields` (mimetype/fileSHA256/fileLength/seconds/fileName/caption) e `data.Message` tipado com `imageMessage/audioMessage/documentMessage/videoMessage/stickerMessage` + os campos que o Go mescla (`base64`, `mediaUrl`, `mimetype`, `mediaSize`, `fileName`, `mediaTooLarge`).\n- `EvolutionInboundMapper.ts`: `resolveKind` reconhece `video`/`sticker` (por `MediaType` e por `Type`); nova `extractMediaMetadata` monta `MediaMetadata` a partir do sub-objeto do proto com fallback para os campos mesclados pelo Go (usados quando `mediaTooLarge`); `extractText` ganhou caption de vídeo.\n\n**Modelo de dados (Prisma)**\n- `Message.kind MessageKind @default(TEXT)` + `@@unique([tenantId, id])` (necessário para a FK composta do attachment) + relação `attachments`.\n- Novo modelo `MessageAttachment` (tenantId, messageId, kind, mimetype, fileName, sizeBytes, durationSeconds, mediaUrl, tooLarge, transcript, transcriptStatus, transcriptError, transcriptProvider, transcriptModel, transcribedAt, skipReason) — os campos de transcrição nascem nulos, WU-03 os preenche.\n- Enums novos: `MessageKind` (TEXT/AUDIO/IMAGE/DOCUMENT/VIDEO/STICKER/UNKNOWN), `MessageAttachmentKind` (sem TEXT/UNKNOWN), `TranscriptStatus` (PENDING/DONE/FAILED/SKIPPED).\n- Migration aditiva `20260913140000_goal013_media_kinds_attachments`: cria os enums/tabela com guards idempotentes, e um backfill que roda `rawPayload #- '{data,Message,base64}'` em `ProcessedEvent` para status DONE/FAILED/IGNORED/LEGACY.\n- `src/modules/media/media-metadata.ts` (`toMessageKind`, `toMessageAttachmentKind`) e `src/modules/media/raw-payload-sanitizer.ts` (`stripMediaBase64`, pura e imutável) — usados tanto na persistência quanto na purga da inbox.\n\n**Persistência de toda mensagem (assistant.service.ts)**\n- `recordInboundText` agora grava `kind` (mapeado do `ChannelMessageKind`), passa `rawPayload` por `stripMediaBase64` antes de salvar (nunca há base64 em `Message.rawPayload`) e cria `MessageAttachment` quando o kind é mídia.\n\n**Grafo (message-graph.ts)**\n- `recordInbound`: persiste a mensagem para **qualquer** kind (antes só texto); a renovação de sessão (`recordContactMessage`) passou a ser condicionada a \"kind != sticker/unknown\" em vez de \"kind == text\".\n- `sessionGate`: quando a porta de sessão está ligada e o kind é `sticker`/`unknown`, encerra com `{ ok: true, action: \"unsupported_media_kind\" }` antes de `understandMessage` — não responde, não renova. Sem a porta de sessão (caminho legado), o comportamento anterior (resposta genérica de \"não suportado\") continua intacto — confirmado por teste dedicado.\n- Novo `action` `unsupported_media_kind` adicionado em `graph-state.ts` (`GraphResult`) e `InboundMessageProcessor.ts` (`InboundProcessingResult`).\n\n**Purga do base64 na inbox (InboxStore.ts)**\n- `record()`: quando o evento nasce já concluído (`status: \"IGNORED\"`, eventos técnicos), o `rawPayload` é saneado antes de gravar.\n- `complete()` (DONE/IGNORED) e `fail()` no ramo exaurido/dead-letter (FAILED): agora leem as linhas por id, removem `data.Message.base64` e gravam status+rawPayload juntos, mantendo o fencing por `leaseToken`. O ramo de retry (`fail()` não exaurido) não mexe no `rawPayload` — os bytes continuam disponíveis para a próxima tentativa.\n\n**Limite do corpo do webhook**\n- `env.EVOLUTION_WEBHOOK_BODY_LIMIT_BYTES` (default 32 MiB) e `.env.example` atualizado.\n- `evolutionWebhook.routes.ts`: `bodyLimit` aplicado só na rota `/webhooks/evolution` (Fastify aceita `RouteShorthandOptions.bodyLimit`), sem tocar no limite global do servidor.\n\n**Códigos e nomes para BFF/frontend/ensaio (Goal013 vindouro):**\n- `Message.kind`: TEXT | AUDIO | IMAGE | DOCUMENT | VIDEO | STICKER | UNKNOWN.\n- `MessageAttachment.kind`: AUDIO | IMAGE | DOCUMENT | VIDEO | STICKER.\n- `MessageAttachment.transcriptStatus`: PENDING | DONE | FAILED | SKIPPED (WU-03 escreve).\n- `ChannelMessageKind` (TS): \"text\" | \"audio\" | \"image\" | \"document\" | \"video\" | \"sticker\" | \"unknown\".\n- Novo `InboundProcessingResult.action`: \"unsupported_media_kind\" (sticker/unknown, persistido e sem resposta).\n- `EVOLUTION_WEBHOOK_BODY_LIMIT_BYTES` (bytes, default 33554432).\n\nComandos executados e resultado:\n- `npm install` em `apps/ai-orchestrator` (node_modules não existia na worktree) — ok, 366 pacotes.\n- `npx prisma generate` — ok, cliente gerado em `src/generated/prisma`.\n- `npx prisma format` — reformatou `schema.prisma` (só alinhamento de colunas no arquivo inteiro + minha adição; conferido via diff, nenhuma mudança semântica).\n- `npx tsc -p tsconfig.json --noEmit` — sem erros.\n- `npx eslint src --max-warnings=0` (escopo real do script `lint`) — sem erros.\n- `npx vitest run` — 447 passed, 55 skipped (as 6 suítes de integração contra Postgres real seguem `describe.skipIf(!AI_TEST_DATABASE_URL)`, e a variável não está definida neste sandbox — mesmo padrão dos Goals anteriores).\n\nTestes novos/alterados: `tests/media/raw-payload-sanitizer.test.ts`, `tests/media/media-metadata.test.ts`, `tests/channel/evolution.mapper.test.ts` (video/sticker + metadados + tooLarge), `tests/channel/webhook-inbox.routes.test.ts` (corpo de ~5 MiB aceito), `tests/session/message-graph-session.test.ts` (renovação para audio/image/document/video; sem renovação/resposta para sticker/unknown; política antiga preservada sem `sessions`), `tests/assistant/assistant.service.test.ts` (kind + attachment + rawPayload sem base64; texto não gera attachment), `tests/integration/transport-durability.test.ts` (purga em DONE, em dead-letter, preservação durante retry — gated por `AI_TEST_DATABASE_URL`, não executado aqui por falta do banco).\n\nRessalva honesta: o backfill SQL da migration (purga em ProcessedEvent legado) não foi exercitado contra um Postgres real neste sandbox — não há `AI_TEST_DATABASE_URL` disponível, mesma limitação das demais suítes `integration/*` deste repositório. A lógica é idêntica à de `stripMediaBase64`, que tem cobertura direta, e ao purge runtime de `complete`/`fail`, que tem cobertura de integração (gated).",
+      "changedFiles": [
+        "apps/ai-orchestrator/prisma/schema.prisma",
+        "apps/ai-orchestrator/prisma/migrations/20260913140000_goal013_media_kinds_attachments/migration.sql",
+        "apps/ai-orchestrator/src/config/env.ts",
+        "apps/ai-orchestrator/.env.example",
+        "apps/ai-orchestrator/src/modules/channel/domain/ChannelMessage.ts",
+        "apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionInboundMapper.ts",
+        "apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionTypes.ts",
+        "apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts",
+        "apps/ai-orchestrator/src/modules/channel/InboundMessageProcessor.ts",
+        "apps/ai-orchestrator/src/modules/inbox/InboxStore.ts",
+        "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+        "apps/ai-orchestrator/src/modules/graph/message-graph.ts",
+        "apps/ai-orchestrator/src/modules/graph/graph-state.ts",
+        "apps/ai-orchestrator/src/modules/media/media-metadata.ts",
+        "apps/ai-orchestrator/src/modules/media/raw-payload-sanitizer.ts",
+        "apps/ai-orchestrator/tests/media/raw-payload-sanitizer.test.ts",
+        "apps/ai-orchestrator/tests/media/media-metadata.test.ts",
+        "apps/ai-orchestrator/tests/channel/evolution.mapper.test.ts",
+        "apps/ai-orchestrator/tests/channel/webhook-inbox.routes.test.ts",
+        "apps/ai-orchestrator/tests/session/message-graph-session.test.ts",
+        "apps/ai-orchestrator/tests/assistant/assistant.service.test.ts",
+        "apps/ai-orchestrator/tests/integration/transport-durability.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Toda mensagem recebida vira Message com kind; mídia tem MessageAttachment com metadados; Message.rawPayload nunca contém base64",
+          "met": true,
+          "detail": "message-graph.ts recordInbound persiste para qualquer kind (testado em message-graph-session.test.ts para audio/image/document/video/sticker/unknown); assistant.service.ts grava kind e cria MessageAttachment quando há mídia e sempre passa rawPayload por stripMediaBase64 (testado em assistant.service.test.ts)."
+        },
+        {
+          "criterion": "ProcessedEvent.rawPayload perde o base64 ao concluir o evento e o backfill purga o estoque, preservando os demais campos; provado por teste",
+          "met": true,
+          "detail": "InboxStore.complete()/fail() (dead-letter) purgam via stripMediaBase64; testes em transport-durability.test.ts (DONE, FAILED dead-letter, retry preserva) e unit test puro de stripMediaBase64. Backfill SQL presente na migration com a mesma semântica de path jsonb; não executado contra DB real neste sandbox (sem AI_TEST_DATABASE_URL, mesma limitação de todas as suítes integration/*)."
+        },
+        {
+          "criterion": "Webhook com mídia de 5 MiB é aceito (limite explícito) e payload com mediaTooLarge é mapeado como attachment tooLarge",
+          "met": true,
+          "detail": "bodyLimit por rota via env.EVOLUTION_WEBHOOK_BODY_LIMIT_BYTES (32 MiB default); teste com payload de ~5 MiB retorna 202 em webhook-inbox.routes.test.ts; mapper test 'maps a too-large document as an attachment without inline bytes' confirma tooLarge:true, hasBase64:false."
+        },
+        {
+          "criterion": "Áudio/imagem/documento/vídeo renovam a sessão; sticker e unknown não renovam nem respondem; contato ignorado e sessão pessoal persistem e param como no Goal005",
+          "met": true,
+          "detail": "Testes parametrizados em message-graph-session.test.ts confirmam recordContactMessage chamado para audio/image/document/video e não chamado para sticker/unknown (action unsupported_media_kind, sem sendText); testes pré-existentes de ignored_contact/personal_session continuam passando inalterados."
+        },
+        {
+          "criterion": "Nomes de enums, campos e códigos registrados no relatório para BFF, frontend e ensaio",
+          "met": true,
+          "detail": "Seção dedicada no relatório lista MessageKind, MessageAttachmentKind, TranscriptStatus, ChannelMessageKind (TS), a nova action unsupported_media_kind e a env var EVOLUTION_WEBHOOK_BODY_LIMIT_BYTES."
+        }
+      ]
+    },
+    "attemptId": "013-r1-unit-wu-02-a1"
+  }
+}

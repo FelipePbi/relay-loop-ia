@@ -1,0 +1,63 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T01:32:38.577Z",
+  "attemptId": "024-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r1-unit-wu-04",
+      "goal": "024",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Criei o módulo features/knowledge/ (lista, formulário de documento, campo livre) e montei-o em AiSettings, consumindo BffKnowledgeService/BffServiceCatalogService já existentes sem tocar BFF ou schemas.",
+      "report": "Investiguei BffKnowledgeService.ts, knowledgeDocumentSchema (publicApiSchemas.ts), BffServiceCatalogService.ts e a seção do PUBLIC_API_V1.md sobre Conhecimento, confirmando: (1) knowledgeDocumentSchema nunca devolve o conteúdo indexado (só metadado: id, type, serviceId, title, source, version, checksum, status, timestamps), então editar sempre pede o texto de novo, sem prefill possível; (2) não existe GET dedicado para /v1/knowledge/other-info, então o campo livre é intencionalmente de escrita — a caixa nasce vazia e a confirmação de 'salvo' vem da resposta do próprio PUT, nunca de uma leitura anterior; (3) o 502 de indexação chega com error.details.upstreamCode: 'KNOWLEDGE_INDEX_UNAVAILABLE', no mesmo formato já usado em features/conversations/format.ts.\n\nCriei apps/frontend/src/features/knowledge/KnowledgeDocumentForm.tsx (Dialog com type/serviceId/título/conteúdo; tipo só aparece no modo criar, restrito aos 5 tipos não-BUSINESS_INFO; copy de edição explica que publica versão nova sem apagar a anterior; erro 502 KNOWLEDGE_INDEX_UNAVAILABLE vira mensagem própria dizendo que nada foi salvo), KnowledgeSection.tsx (lista GET /v1/knowledge/documents filtrando BUSINESS_INFO fora da exibição, distingue 'Geral' de documento ligado a serviço via nome resolvido de GET /v1/services, ações Editar/Desativar com Dialog de confirmação explicando que desativar tira do contexto da IA sem apagar nada) e OtherInfoSection.tsx (formulário isolado que só chama PUT /v1/knowledge/other-info, sem criar segundo documento nem desativar, com o mesmo tratamento de 502). Montei as duas seções dentro de AiSettings.tsx, envolvendo o painel existente de Atendimento/Tom num settings-stack. Adicionei classes .knowledge-list/.knowledge-row(-copy/-actions) em atendly-settings.css, incluindo o breakpoint mobile já existente.\n\nComandos executados nesta worktree (apps/frontend): `npx tsc --noEmit` (sem erros), `npx eslint src/features/knowledge src/features/settings/AiSettings.tsx --max-warnings=0` (sem erros/avisos), `npx vitest run` (66 arquivos, 617 testes, todos passando). `git status --porcelain` e `git diff --stat -- apps/bff apps/frontend/src/data/mappers/publicApiSchemas.ts` confirmam que nenhuma rota do BFF nem publicApiSchemas.ts foi tocada; as demais entradas untracked em features/settings/ pertencem a WU-01/02/03 (não alteradas por mim, exceto AiSettings.tsx que é desta unidade).",
+      "changedFiles": [
+        "apps/frontend/src/features/knowledge/KnowledgeSection.tsx",
+        "apps/frontend/src/features/knowledge/KnowledgeDocumentForm.tsx",
+        "apps/frontend/src/features/knowledge/OtherInfoSection.tsx",
+        "apps/frontend/src/features/settings/AiSettings.tsx",
+        "apps/frontend/src/shared/styles/atendly-settings.css"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A seção lista os documentos ativos do negócio e distingue documento geral de documento ligado a serviço",
+          "met": true,
+          "detail": "KnowledgeSection.tsx busca knowledge.list({}) e serviceCatalog.list() em paralelo; cada linha mostra tipo · nome do serviço resolvido por serviceId, ou 'Geral' quando serviceId é null."
+        },
+        {
+          "criterion": "É possível criar documento dos cinco tipos permitidos, opcionalmente ligado a um serviço escolhido por ID",
+          "met": true,
+          "detail": "KnowledgeDocumentForm modo create oferece select com CREATABLE_KNOWLEDGE_TYPES (FAQ, GUIDANCE, CARE, PROCEDURE, TEXT_POLICY) e select de serviceId populado por GET /v1/services, enviando serviceId ao knowledge.create()."
+        },
+        {
+          "criterion": "BUSINESS_INFO não aparece como opção em nenhum seletor de tipo",
+          "met": true,
+          "detail": "CREATABLE_KNOWLEDGE_TYPES exclui BUSINESS_INFO explicitamente (comentado com o motivo: reservado a PUT /v1/knowledge/other-info, recusado com 409 nas outras rotas); modo edit não tem seletor de tipo (mostra o tipo fixo)."
+        },
+        {
+          "criterion": "Editar diz na tela que publica versão nova e não apaga a anterior; desativar diz que tira do contexto da IA e não apaga nada",
+          "met": true,
+          "detail": "KnowledgeDocumentForm modo edit renderiza 'Publicar aqui cria uma versão nova deste documento; a versão vigente não é apagada.'; o Dialog de desativação em KnowledgeSection diz 'O documento sai do contexto que a IA usa para responder. Nada é apagado: as versões continuam guardadas.'"
+        },
+        {
+          "criterion": "502 com upstreamCode KNOWLEDGE_INDEX_UNAVAILABLE produz mensagem própria afirmando que nada foi salvo",
+          "met": true,
+          "detail": "KnowledgeDocumentForm.tsx e OtherInfoSection.tsx checam caught.status === 502 && upstreamCode === 'KNOWLEDGE_INDEX_UNAVAILABLE' e retornam 'Não foi possível indexar o conteúdo agora. Nada foi salvo.'"
+        },
+        {
+          "criterion": "O campo livre lê e grava só por PUT /v1/knowledge/other-info e não oferece criar um segundo nem desativá-lo",
+          "met": true,
+          "detail": "OtherInfoSection.tsx só chama knowledge.saveOtherInfo() (PUT); não há botão de criar novo nem de desativar; como o schema de KnowledgeDocument nunca retorna o conteúdo, a leitura do valor também não existe fora dessa chamada — a caixa nasce vazia e a confirmação vem da resposta do próprio PUT (documentado no comentário do arquivo)."
+        },
+        {
+          "criterion": "Nenhuma rota de conhecimento foi alterada no BFF e nenhum schema de publicApiSchemas.ts mudou de forma",
+          "met": true,
+          "detail": "git diff --stat -- apps/bff apps/frontend/src/data/mappers/publicApiSchemas.ts não retornou nenhuma linha; git status --porcelain confirma que só arquivos em apps/frontend/src/features e o CSS foram tocados por esta unidade."
+        }
+      ]
+    },
+    "attemptId": "024-r1-unit-wu-04-a1"
+  }
+}

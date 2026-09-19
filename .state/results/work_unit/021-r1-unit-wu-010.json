@@ -1,0 +1,63 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T15:13:52.942Z",
+  "attemptId": "021-r1-unit-wu-010-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Configurações → Agenda tem a seção de lembretes como bloco de módulo, sem redecompor ProductSettingsScreen",
+          "met": true,
+          "detail": "Novo apps/frontend/src/features/reminders/ReminderSettingsSection.tsx montado em CalendarSettings (ProductSettingsScreen.tsx), no mesmo padrão de ImportSettingsSection; ProductSettingsScreen.tsx só ganhou 2 linhas (import + <ReminderSettingsSection />)."
+        },
+        {
+          "criterion": "Quantidade até dois, antecedência com presets e personalizada, confirmação e política de preço são editáveis e persistem pela rota do BFF",
+          "met": true,
+          "detail": "UI limita a slots FIRST/SECOND (até dois por construção), presets 48h/24h/12h/2h + campo 'Personalizado (minutos)', toggle de confirmação e chips Nunca/Só quando for fixo; salva via settings.getReminders/updateReminders (GET/PATCH /v1/settings/reminders). Provado em tests/goal021-reminder-settings-section.test.tsx, inclusive payload exato enviado e rules:[] explícito ao desativar."
+        },
+        {
+          "criterion": "Suíte de schema cobre as respostas novas",
+          "met": true,
+          "detail": "tests/goal021-reminders-schema.test.ts cobre reminderSettingsSchema/reminderRuleSchema: default não configurado, dois lembretes, rules vazio, recusa de >2 itens, leadMinutes fora do intervalo e enum desconhecido."
+        },
+        {
+          "criterion": "Uma única chamada de useShellConfig por árvore renderizada, provada por render",
+          "met": true,
+          "detail": "tests/goal021-shell-invariant.test.tsx renderiza ProductSettingsScreen scenario=\"calendar\" dentro de ShellConfigProvider e interage repetidamente (presets, add/remove segundo lembrete, confirmação) sem lançar 'Maximum update depth exceeded', no mesmo padrão de goal020-shell-invariant.test.tsx."
+        },
+        {
+          "criterion": "Nenhum arquivo novo sem consumidor; nenhuma folha importada apontando para diretório vazio",
+          "met": true,
+          "detail": "ReminderSettingsSection.tsx é importado e renderizado por ProductSettingsScreen.tsx; os demais arquivos novos são suítes de teste consumidas pelo vitest. git status confirma que só os arquivos esperados (features/reminders, data/, ProductSettingsScreen.tsx, tests/) mudaram."
+        },
+        {
+          "criterion": "Suíte axe da superfície nova; largura, contraste e foco ficam para o gate validate-ui",
+          "met": true,
+          "detail": "tests/goal021-a11y.test.tsx roda expectNoA11yViolations nos três estados (um lembrete, dois lembretes, sem lembrete configurado) da rota /configuracoes/agenda."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffSettingsService.ts",
+        "apps/frontend/src/features/reminders/ReminderSettingsSection.tsx",
+        "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+        "apps/frontend/tests/goal020-reachability.test.tsx",
+        "apps/frontend/tests/goal021-a11y.test.tsx",
+        "apps/frontend/tests/goal021-reminder-settings-section.test.tsx",
+        "apps/frontend/tests/goal021-reminders-schema.test.ts",
+        "apps/frontend/tests/goal021-shell-invariant.test.tsx"
+      ],
+      "goal": "021",
+      "jobId": "021-r1-unit-wu-010",
+      "protocolVersion": 2,
+      "report": "Adicionei a seção de Lembretes a Configurações → Agenda como bloco de módulo novo, consumindo o contrato `GET/PATCH /v1/settings/reminders` que WU-009 já expôs no BFF.\n\nO que mudou e por quê:\n- `apps/frontend/src/data/mappers/publicApiSchemas.ts`: novos `reminderSlotSchema`, `reminderPricePolicySchema`, `reminderRuleSchema`, `reminderSettingsSchema` (e tipos derivados), espelhando exatamente o corpo documentado em `apps/bff/PUBLIC_API_V1.md` (`configured`, `confirmationEnabled`, `pricePolicy`, `rules` até dois itens).\n- `apps/frontend/src/data/services/BffSettingsService.ts`: `getReminders`/`updateReminders`, no mesmo padrão de `updateAvailability`; `ReminderSettingsInput` exige `rules` (mesmo vazio) e deixa `confirmationEnabled`/`pricePolicy` opcionais, como o contrato define.\n- `apps/frontend/src/features/reminders/ReminderSettingsSection.tsx` (novo): bloco de módulo que lê o estado real via `settings.getReminders`, nunca inventa estado próprio (mesmo padrão de `ImportSettingsSection`). Permite até dois lembretes (slots FIRST/SECOND, por construção — nunca um terceiro), presets de antecedência (48h/24h/12h/2h) mais campo \"Personalizado (minutos)\", toggle de confirmação de presença e chips \"Nunca\"/\"Só quando for fixo\" para preço. \"Desativar lembretes\" zera os dois de propósito (evita um \"Lembrete 2\" órfão sem o primeiro); \"Ativar lembretes\" nasce no default do produto (24h). Salva com `settings.updateReminders`, sempre enviando `rules` — inclusive `[]` quando desativado.\n- `apps/frontend/src/features/settings/ProductSettingsScreen.tsx`: duas linhas (import + `<ReminderSettingsSection />` dentro de `CalendarSettings`) — a tela de 910 linhas não foi redecomposta, conforme o hint da unidade.\n- `apps/frontend/tests/goal020-reachability.test.tsx`: precisou de ajuste (mock de `settings.getReminders`) porque essa suíte já montava `CalendarSettingsPage` de verdade e passou a atravessar o bloco novo — sem o mock, os testes pré-existentes quebravam com `getReminders is not a function`. Corrigido sem alterar o que a suíte prova (alcançabilidade da importação).\n\nTestes novos:\n- `tests/goal021-reminders-schema.test.ts`: contrato do schema (default não configurado, dois lembretes, `rules: []` explícito, recusa de mais de dois itens, `leadMinutes` fora de 1..43200, enum desconhecido).\n- `tests/goal021-reminder-settings-section.test.tsx`: comportamento do componente isolado — reflete o estado lido, ativa/desativa lembretes, adiciona/remove o segundo sem deixar órfão, envia o payload exato a `updateReminders` (inclusive `rules: []`), some silenciosamente em erro de carga.\n- `tests/goal021-shell-invariant.test.tsx`: prova a invariante D-030/D-031 de uma única chamada de `useShellConfig` por árvore, com interação repetida no bloco novo dentro de `ProductSettingsScreen scenario=\"calendar\"`.\n- `tests/goal021-a11y.test.tsx`: axe nos três estados (um lembrete, dois lembretes, sem lembrete configurado).\n\nComandos executados, todos dentro de `apps/frontend`, com resultado real:\n- `npx tsc --noEmit` → sem erros.\n- `npx eslint src/features/reminders tests/goal021-*.test.* src/features/settings/ProductSettingsScreen.tsx src/data/services/BffSettingsService.ts src/data/mappers/publicApiSchemas.ts tests/goal020-reachability.test.tsx --max-warnings=0` → sem issues.\n- `npx vitest run` → 57 arquivos, 548 testes, todos passando (rodado duas vezes: antes e depois do ajuste de `goal020-reachability.test.tsx`, e de novo após `prettier --write`).\n- `npx prettier --write` nos arquivos tocados, seguido de `npx prettier --check` (via `rtk proxy` para ver o resultado sem filtro) → \"All matched files use Prettier code style!\".\n\nNão executei `npm run validate:ui` (Playwright): fora do escopo desta unidade por definição do próprio `AGENTS.md` do frontend — largura, contraste e foco ficam para o gate renderizado, que o orquestrador roda à parte.\n\nPreview da mensagem ao cliente (mostrada no design de referência) foi deliberadamente omitida: exigiria duplicar no frontend a lógica de composição de mensagem que já vive em `apps/ai-orchestrator/src/modules/reminders/notification-message.ts` (WU-007), ou uma rota de preview que não existe no contrato — fora do escopo desta unidade, que é edição e persistência da configuração, não do texto enviado.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Seção de Lembretes adicionada a Configurações → Agenda como bloco de módulo, com schema, serviço BFF e testes (schema, comportamento, shell invariant, a11y) todos passando.",
+      "workUnitId": "WU-010"
+    },
+    "attemptId": "021-r1-unit-wu-010-a1"
+  }
+}

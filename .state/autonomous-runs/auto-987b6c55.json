@@ -1,0 +1,27 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-987b6c55",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-09T04:37:44.386Z",
+  "currentGoal": "007",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 1,
+  "ownerInstanceId": "15964-73bebe71",
+  "humanRequired": {
+    "reason": "GOAL_BOUNDARY_AMBIGUOUS",
+    "detail": "goal discovery: Goal 007 is ACCEPTED, expected READY",
+    "at": "2026-09-13T18:22:54.676Z"
+  },
+  "reconciledFrom": {
+    "reason": "STALE_ATTEMPT_RESULT_CONSUMED",
+    "jobId": "009-r2-tech_lead-b183a51e",
+    "decision": "ACCEPTED",
+    "at": "2026-09-10T01:52:35.258Z"
+  },
+  "archivedAt": "2026-09-13T18:25:32.948Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "Run auto-987b6c55 (2026-09-09, currentGoal=007) ficou orfa; Goals 007-011 foram concluidos manualmente via ia-loop:goal/ia-loop:close nos dias seguintes, fora do rastreamento desta run. Estado real confirmado antes de arquivar: MIGRATION_STATUS.md e runtime.json mostram Goal 011 ACCEPTED/closed, baseline a87dd5bb3c2d0b43b19d877deeeccf15179eb178, Goal 012 READY com executionPlan (18 units) e developerProfile (OPUS_MEDIUM) persistidos. Nenhum arquivo/estado de Goal foi alterado manualmente para chegar a essa conclusao."
+}

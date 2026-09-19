@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T21:25:11.506Z",
+  "attemptId": "012-r3-tech_lead-c58e095f-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r3-tech_lead-c58e095f",
+      "goal": "012",
+      "summary": "Fechamento documental do Goal012 (ACCEPTED na rodada 3), escrito somente em docs/migration/. Criado o review formal 012-review.md com a identidade do diff (66 arquivos, hash d4626cf9..., base 4116149 sobre a baseline a87dd5b), as três rodadas e seus blockers reais (B1 contrato de sugestões que sempre cairia em UPSTREAM_ERROR 502 contra a IA real, B2 inferência de memória a partir de rascunho não confirmado e menção única rotulada de serviço recorrente, B3 resumo sem AiRun; residual da rodada 2 fechado como NO_TEXTUAL_MESSAGE), o que o diff entrega e os limites do aceite. CURRENT_STATE.md ganhou o delta do Goal012 e a marcação do fato de baseline superado. GAP_ANALYSIS.md fecha G-24 com evidência e limites e atualiza o resíduo do G-21. DECISIONS.md ganhou D-028 (contratos de conhecimento, memória e sugestão) e teve as consequências de D-027 corrigidas, já que seus dois resíduos foram fechados neste diff. REUSE_ANALYSIS.md e TARGET_ARCHITECTURE.md passaram a refletir o que o 012 implementou sem trocar framework, provider ou fronteira. MASTER_PLAN.md recebeu a entrada v23 no histórico de planejamento. DATA_MIGRATION.md não foi tocado: a seção do Goal012 já havia sido escrita pelo executor no próprio diff e está correta. Nenhum Goal foi criado ou marcado READY, nenhum SHA de baseline registrado, MIGRATION_STATUS não foi tocado e nada fora de docs/migration/ foi alterado (git status: 58 entradas fora de docs/migration/, todas pré-existentes do diff aceito; git diff --check limpo).",
+      "documentsUpdated": [
+        "docs/migration/reviews/012-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "O contexto de fechamento indicava docs/migration/reviews/003-review.md como \"o review desta execução\", mas nesse repositório a numeração de review segue o número do Goal (001-review.md a 011-review.md) e 003-review.md é o review do Goal 003. O review desta execução foi criado como docs/migration/reviews/012-review.md, preservando 003-review.md intacto.\n\nDATA_MIGRATION.md aparece como modificado no worktree, mas a alteração é do executor (já consta em changedFiles) e cobre aditividade, ensaio, limite de reversão e motivo do skip de vector. Não havia substância a acrescentar, então não foi listado em documentsUpdated.\n\nResíduos registrados para o planejamento futuro (não acionados aqui): (1) memória AI_INFERRED entra no prompt já na primeira confirmação, fazendo PREFERRED_DAY/PREFERRED_PERIOD se comportarem como \"último dia marcado\" — dirigido ao próximo Goal que tocar memória (015); (2) o modo sugestão recupera conhecimento sem focusServiceIds; (3) PUBLIC_API_V1.md descreve as recusas de sugestão por situação sem listar os cinco códigos, dirigidos ao Goal017; (4) persistência de KnowledgeChunk com embedding continua sem prova contra banco por falta da extensão vector nesta máquina."
+    },
+    "attemptId": "012-r3-tech_lead-c58e095f-a1"
+  }
+}

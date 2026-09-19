@@ -1,0 +1,55 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T17:26:53.764Z",
+  "attemptId": "022-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "A migration do Scheduling contém apenas criação de índice — nenhuma coluna, tabela ou constraint nova",
+          "met": true,
+          "detail": "Nova migration 20260915130000_goal022_notification_center_index/migration.sql contém só `CREATE INDEX IF NOT EXISTS \"AppointmentEvent_tenantId_sequence_idx\"`. O índice de falhas usa o já existente (tenantId, state, dueAt) — não precisou de índice novo."
+        },
+        {
+          "criterion": "A leitura de falhas devolve apenas intenções em FAILED, com teto e cursor estável, e nunca `facts` nem `leaseToken`",
+          "met": true,
+          "detail": "listFailedNotificationIntents (notification-read-service.ts) filtra state=FAILED, pagina por cursor opaco (dueAt,id) com teto (FAILED_NOTIFICATION_INTENTS_MAX_LIMIT=200) e projeta sem facts/leaseToken. Testado em notification-center-reads.test.ts (5 casos, todos passando)."
+        },
+        {
+          "criterion": "O feed de agendamentos criados pela IA filtra type=CREATED e source=AI e avança por `sequence`, não por `occurredAt`",
+          "met": true,
+          "detail": "listAiCreatedAppointmentEvents (appointment-event-service.ts) filtra type=CREATED/source=AI, ordena e pagina por sequence (afterSequence). Testado em notification-center-reads.test.ts (4 casos)."
+        },
+        {
+          "criterion": "Ambas as leituras são escopadas por tenantId e não aceitam tenantId de corpo ou query",
+          "met": true,
+          "detail": "Rotas GET /internal/notification-intents/failed e /internal/appointment-events/ai-created usam context.tenantId de currentInternalContext(request) (header autenticado); os zod schemas de query só declaram cursor/limit/afterSequence, sem tenantId. Testes de isolamento por tenant passando."
+        },
+        {
+          "criterion": "Nenhum cliente HTTP de saída é adicionado ao Scheduling",
+          "met": true,
+          "detail": "Nenhuma dependência nova adicionada; ambas as leituras são apenas Prisma findMany contra o banco do próprio serviço."
+        }
+      ],
+      "changedFiles": [
+        "apps/scheduling-service/prisma/schema.prisma",
+        "apps/scheduling-service/prisma/migrations/20260915130000_goal022_notification_center_index/migration.sql",
+        "apps/scheduling-service/src/modules/appointments/appointment-event-service.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/src/modules/reminders/notification-read-service.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts",
+        "apps/scheduling-service/tests/unit/notification-center-reads.test.ts"
+      ],
+      "goal": "022",
+      "jobId": "022-r1-unit-wu-01",
+      "protocolVersion": 2,
+      "report": "Adicionei ao Scheduling duas leituras internas por tenant para a central de notificações, sem tocar em nenhuma outra Work Unit.\n\n1) `listFailedNotificationIntents` (apps/scheduling-service/src/modules/reminders/notification-read-service.ts): lê `AppointmentNotificationIntent` com `state=FAILED`, pagina por cursor opaco base64url em `(dueAt, id)` (estável sob inserção concorrente, ao contrário de offset), com teto padrão 50 e máximo 200. Projeção explícita sem `facts` nem `leaseToken`. Cursor malformado lança `AppError(\"INVALID_CURSOR\", 400)`.\n\n2) `listAiCreatedAppointmentEvents` (apps/scheduling-service/src/modules/appointments/appointment-event-service.ts, ao lado da leitura por-atendimento já existente `listAppointmentEvents`): lê `AppointmentEvent` com `type=CREATED, source=AI`, avança por `sequence` (BigInt convertido para string na saída) via parâmetro `afterSequence`, com o mesmo teto padrão/máximo (50/200). Um `afterSequence` que não seja inteiro não negativo lança o mesmo `INVALID_CURSOR`.\n\nAmbas expostas em `apps/scheduling-service/src/modules/internal-api/routes.ts` como `GET /internal/notification-intents/failed` e `GET /internal/appointment-events/ai-created`, atrás de `requireInternalAuth` + `requireHumanCaller` (a central é do BFF, não da IA — mesmo padrão de `reminder-settings`/`availability-settings`) e `requireCalendar` (nega 404 se o negócio não tem calendário). `tenantId` vem exclusivamente de `currentInternalContext(request)`; os schemas zod de query (`failedNotificationIntentsQuerySchema`, `aiCreatedAppointmentEventsQuerySchema`) só aceitam `cursor`/`limit` e `afterSequence`/`limit`.\n\nMigration aditiva: `apps/scheduling-service/prisma/migrations/20260915130000_goal022_notification_center_index/migration.sql` cria só `AppointmentEvent_tenantId_sequence_idx` em `(tenantId, sequence)` — necessário porque o índice existente `(tenantId, appointmentId, sequence)` é por atendimento, não serve para um feed que atravessa todos. Não criei índice novo para as falhas: o existente `(tenantId, state, dueAt)` já cobre a igualdade tenantId+state e o range em dueAt do cursor; o desempate por `id` não precisa estar no índice. `prisma/schema.prisma` ganhou só a linha `@@index([tenantId, sequence])` em `AppointmentEvent`.\n\nDescobri, ao escrever os testes, que o dublê de Prisma usado pelos testes unitários (`tests/unit/support/database-double.ts`) não aplicava `take` em `findMany` (ignorava o parâmetro silenciosamente) e recalculava `@default` estatal (o contador de `sequence`) a cada leitura quando a linha era inserida direto em `.rows` sem passar por `.create()` — o segundo ponto quebrava exatamente o cursor por `sequence` que eu precisava provar. Corrigi o primeiro (agora `findMany` fatia por `take`, comportamento que `selectDueIntents` no dispatch já presumia sem eu ver isso quebrar antes por sorte de ordem dos testes) e contornei o segundo gravando `sequence`/`occurredAt` explicitamente nas fixtures do teste novo, sem mexer no funcionamento de `.create()` que os outros testes usam.\n\nTestes novos: `apps/scheduling-service/tests/unit/notification-center-reads.test.ts`, 9 casos cobrindo filtro de estado/tipo/origem, ausência de `facts`/`leaseToken`, isolamento por tenant, paginação por cursor sem pular/repetir, e rejeição de cursor malformado nas duas leituras.\n\nComandos executados e resultado:\n- `npx prisma generate` — OK, client regenerado com o índice novo.\n- `npx tsc -p tsconfig.json --noEmit` — sem erros (rodado duas vezes, antes e depois do lint fix).\n- `npx eslint src --max-warnings=0` (script `lint` real do package.json) — sem erros/warnings.\n- `npx vitest run --dir tests/unit` — 24 arquivos, 350 testes, todos passando (incluindo os 9 novos).\n\nNão rodei `test:integration`: exige PostgreSQL vivo, que não está disponível nesta worktree (sem docker-compose nem DATABASE_URL configurados para o scheduling-service) — não inventei esse resultado.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Expus duas leituras internas por tenant no Scheduling (falhas de notificação e feed de agendamentos criados pela IA) com migration aditiva de índice, cobertas por 9 testes unitários novos, tudo passando em lint/typecheck/testes.",
+      "workUnitId": "WU-01"
+    },
+    "attemptId": "022-r1-unit-wu-01-a1"
+  }
+}

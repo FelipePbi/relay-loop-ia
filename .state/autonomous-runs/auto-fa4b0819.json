@@ -1,0 +1,21 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-fa4b0819",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-09T04:13:07.710Z",
+  "currentGoal": "007",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 1,
+  "ownerInstanceId": "18440-449b8f53",
+  "humanRequired": {
+    "reason": "POLICY_VIOLATION",
+    "detail": "Goal 007 ended as HUMAN_REQUIRED",
+    "at": "2026-09-09T04:13:07.917Z"
+  },
+  "archivedAt": "2026-09-09T04:37:44.383Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "A POLICY_VIOLATION da run auto-fa4b0819 já foi investigada e resolvida. A mutação de main ocorreu exclusivamente por commits de tooling, o Developer R2 permanece COMPLETED/REVIEW_REQUIRED e o bug de resume que tentava recriar CORRECTION em vez de seguir para REVIEW foi corrigido no commit 9cc3b36. O runtime do Goal007 está reconciliado para Round 2 REVIEW, sem human gate ativo."
+}

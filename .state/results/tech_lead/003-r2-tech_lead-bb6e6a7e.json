@@ -1,0 +1,17 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-07T15:49:34.282Z",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "003-r2-tech_lead-bb6e6a7e",
+      "goal": "003",
+      "round": 2,
+      "decision": "ACCEPTED",
+      "blockers": [],
+      "nextAction": "STOP",
+      "summary": "Review DEEP da rodada 2 sobre o diff 99a7210 → worktree goal-003 (HEAD inalterado, 48 arquivos rastreados, +2492/−306, mais os novos). Os três blockers da R1 estão resolvidos com o desenho pedido e cobertos por teste. (1) CSRF cross-host: o token passou a ser derivado por sessão (HMAC com JWT_SECRET sobre o sid, hash guardado na sessão) e é entregue no header de resposta x-csrf-token, exposto no CORS só para FRONTEND_ORIGIN, em toda resposta autenticada por cookie inclusive 403; o adapter BffHttpClient guarda em memória e reenvia, com document.cookie apenas como segunda opção; logout descarta o token; suíte nova do frontend (6 casos, sem document e sem cookie jar) entrou no validate:core, que deixou de pular test:frontend; PUBLIC_API_V1.md documenta os dois canais. Verifiquei que request.session é registrado antes das provas de CSRF apenas para o hook onSend, que request.user continua sendo definido só após as provas, que Bearer e anônimo não recebem o header e que currentSession não tem callers. (2) Transição do webhook: resolveChannelCredential virou função preguiçosa chamada só em sendText, sem queda para EVOLUTION_API_KEY; inbound de vínculo em credentialVersion 0 é processado e nenhuma chamada sai ao transporte (teste webhook-credential-transition); GET /v1/whatsapp reprojeta a credencial na IA de forma idempotente e tolerante a falha; ordem de corte registrada em VALIDATION_GATE.md. (3) Vínculo pendente: resolveLinkState separa pending de divergent; DELETE /v1/whatsapp descarta a linha pendente do próprio dono e recusa a divergência sem apagar nada; mensagem cita a rota; testes de integração cobrem descarte, revínculo e recusa. Evidência reproduzida por mim: validate:core PASSED 13/13 com os 4 skips explícitos remanescentes; validate:integration PASSED 6/6 num cluster PostgreSQL próprio e descartável no scratchpad (porta 55434, já parado), com 27 testes do BFF, ensaio M0 6→6/2/4 e go test de handler e repository; lint do frontend, BFF e IA e tsc do frontend sem erros; git diff --check limpo. Critérios 1 a 7 do Goal atendidos; G-02, G-03, G-04 e G-35 fechados com evidência. Observações não bloqueantes para o próximo Goal ou fechamento: resolveLinkState classifica como pending qualquer linha do usuário sem linha do tenant, sem exigir byUser.tenantId nulo — inalcançável com a associação única por usuário hoje, mas vale endurecer para divergent quando tenantId aponta outro negócio; GET /v1/whatsapp grava uma projeção nova na IA a cada poll (a cada 3 s durante a janela de pareamento) e o warn de falha registra só error.name, perdendo o código; resposta gerada durante a janela de transição fica sem reenvio, limitação documentada e pertencente ao Goal004; schema.prisma da IA continua sem @@index([credentialVersion]) em ChannelConnection embora a migration crie o índice; apps/ai-orchestrator/.env.example repete INTERNAL_SERVICE_TOKEN. Os clusters descartáveis do Developer em 55432 e 55433 estão inoperantes por erro 487 de memória compartilhada do Windows e podem ser removidos; não os toquei. Nenhum arquivo do repositório foi editado nesta revisão."
+    }
+  }
+}

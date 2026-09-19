@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:40:31.816Z",
+  "attemptId": "012-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r1-unit-diag-001",
+      "goal": "012",
+      "round": 1,
+      "workUnitId": "DIAG-001",
+      "status": "COMPLETED",
+      "summary": "validate:core falhava porque três pacotes (packages/contracts, apps/scheduling-service, apps/health-worker) nunca tiveram `npm install` executado nesta worktree; instalei as dependências e o gate agora passa.",
+      "report": "Diagnóstico: o erro 'tsc' não é reconhecido veio de `npm run build` em packages/contracts, cujo script `build` é `tsc -p tsconfig.json`. Cada app/pacote deste monorepo instala dependências de forma independente (não há workspaces npm nem package-lock.json na raiz). Verifiquei node_modules de cada pacote usado pelo gate e constatei que packages/contracts, apps/scheduling-service e apps/health-worker não tinham node_modules nesta worktree (apps/ai-orchestrator, apps/bff e apps/frontend tinham). Não é uma falha de código: nenhum arquivo-fonte, script de gate ou configuração precisou mudar — a causa era ambiente de dependências incompleto na worktree. Corrigi rodando `npm install` dentro de packages/contracts, apps/scheduling-service e apps/health-worker (node_modules é ignorado pelo git, então não há arquivos versionados alterados). Comandos executados e resultado: `npm install` em packages/contracts (added 2 packages); `npm run build --prefix packages/contracts` (passou, tsc compilou); `npm install` em apps/scheduling-service (added 350 packages, com avisos de allow-scripts para @prisma/engines/prisma/esbuild, mas sem erro); `npm install` em apps/health-worker (up to date, audited 1 package); `node scripts/validate-core.mjs` rodado do zero na raiz — resultado final: 14 passed, 0 failed, 3 skipped (test:bff, test:contracts, test:health-worker, todos skips já declarados propositalmente no próprio scripts/validate-core.mjs, não algo que eu introduzi), exit code 0. Repeti a execução do gate uma segunda vez para confirmar exit=0 de forma determinística. Não toquei em scripts/validate-core.mjs nem em scripts/lib/gate.mjs — a verificação continua exatamente como estava, apenas com as dependências que faltavam agora instaladas. `git status --porcelain` mostra apenas as modificações e arquivos não rastreados pré-existentes de outras Work Units (ai-orchestrator, bff, frontend, migrations, etc.), nenhum arquivo novo meu.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-core\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "`node scripts/validate-core.mjs` executado na raiz retornou exit code 0 (14 passed, 0 failed, 3 skipped previamente declarados no script). scripts/validate-core.mjs e scripts/lib/gate.mjs não foram modificados (git status não os lista)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "Nenhum arquivo de código-fonte, teste ou documentação foi alterado — apenas `npm install` em packages/contracts, apps/scheduling-service e apps/health-worker, que não gera diff versionado (node_modules é ignorado pelo git). `git status --porcelain` mostra exatamente as mesmas modificações/untracked pré-existentes de outras Work Units, sem alteração."
+        }
+      ]
+    },
+    "attemptId": "012-r1-unit-diag-001-a1"
+  }
+}

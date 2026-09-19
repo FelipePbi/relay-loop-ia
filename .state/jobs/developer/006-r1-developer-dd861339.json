@@ -1,0 +1,45 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T19:42:56.540Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "006-r1-developer-dd861339-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "006-r1-developer-dd861339-a1",
+      "status": "WAITING_FOR_CAPACITY",
+      "reason": "USAGE_LIMIT",
+      "startedAt": "2026-09-08T19:42:56.540Z",
+      "endedAt": "2026-09-08T21:30:00.873Z",
+      "classification": "USAGE_LIMIT",
+      "code": "NON_ZERO_EXIT",
+      "retryReason": "USAGE_LIMIT",
+      "nextRetryAt": "2026-09-08T21:30:00.693Z",
+      "capacityWait": true,
+      "role": "developer"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "006-r1-developer-dd861339",
+    "role": "developer",
+    "goal": "006",
+    "round": 1,
+    "type": "IMPLEMENTATION",
+    "migrationAcceptedBaseline": "30fc42f62616ba826d0f2fc737386b038fbf9fb7",
+    "executionBase": "8acd4c6035b3ee9a5013eedcabb27daff95cb63f",
+    "worktreeInitialHead": "8acd4c6035b3ee9a5013eedcabb27daff95cb63f",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-006",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\006-clientes-como-pessoas.md",
+    "blockers": [],
+    "previousImplementationReport": null,
+    "changedFiles": [],
+    "developerProfile": "OPUS_MEDIUM",
+    "developerProfileReason": "Migration de identidade de cliente com corte de unicidade e consumers em Scheduling, IA, BFF e frontend, sem race nem mudança arquitetural."
+  },
+  "statusAt": "2026-09-08T21:42:34.748Z",
+  "attemptStartedAt": "2026-09-08T21:30:00.873Z",
+  "requeuedAt": "2026-09-08T21:30:00.873Z"
+}

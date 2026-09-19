@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T20:37:44.268Z",
+  "attemptId": "018-r1-unit-wu-10-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-10",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-10",
+      "status": "COMPLETED",
+      "summary": "Home ganhou checklist pós-onboarding derivado de leitura real, PENDING passou a ter apresentação própria e AppShell+DashboardScreen agora compartilham um único poller de GET /v1/status.",
+      "report": "O que mudou e por quê:\n\n1) Poller único (D-030/D-031 espírito). `apps/frontend/src/shared/runtime/systemStatus.ts` virou `.tsx` (agora contém JSX): a lógica de fetch/interval/focus foi movida para um hook privado `useSystemStatusPolling`, exposta via `SystemStatusProvider` (novo, monta o poll uma vez) e `useSystemStatus()` passou a ler `useContext`, lançando erro se usado fora do provider. `AppShell` (`apps/frontend/src/shared/layout/AppShell.tsx`) foi dividido em `AppShell` (monta `SystemStatusProvider`) + `AppShellChrome` (conteúdo original, agora dentro do provider) — como `AppShell` é montado uma única vez em `app/(platform)/layout.tsx` e `children` (a tela, ex. `DashboardScreen`) renderiza dentro dele, os dois leem o mesmo resultado. `DashboardScreen.tsx` não mudou sua chamada a `useSystemStatus()`.\n\n2) PENDING com apresentação própria. `StatusView` ganhou o valor `\"pending\"`; `aiStatusView` mapeia `ai.state === \"PENDING\"` para `\"pending\"` em vez de cair em `\"off\"`. `StatusLine` (AppShell) e `StatusPoint` (DashboardScreen) ganharam `pendingCopy` opcional (default `\"${label} em ativação\"`, usado como `\"IA em ativação\"` nos três pontos de chamada de IA) e a classe `warning` no `.status-dot` (token já existente em `atendly.css`, antes não usado por esses componentes) — distinta de `danger` (off) e `neutral` (loading/unknown).\n\n3) Checklist pós-onboarding. Novo componente `PostOnboardingChecklist` em `DashboardScreen.tsx`, visível quando `status.phase !== \"loading\" && status.aiView !== \"active\"`. Três itens, cada um de leitura real: \"Cadastrar um serviço\" (`capabilities.aiActivationReady`), \"Definir horários de atendimento\" (`capabilities.hoursConfigured`), \"Conectar o WhatsApp\" (`status.whatsappView === \"active\"`). Cada `<li>` tem `aria-label` \"Rótulo: concluído/pendente\" (prova por role+nome acessível, não por classe CSS). \"Teste concluído\" — quarto item do vault — **não entra**: não existe produtor em nenhuma camada; fica para o Goal018B, como o próprio Goal018 já declara na seção 8.\n\nExtensão de escopo justificada (fora de `expectedFiles`, dentro de `relevantFiles`/exploração autorizada): `capabilities.aiActivationReady` já existia no Scheduling/BFF (usado por `PATCH /v1/settings/ai`) mas nunca era decodificado pelo frontend; adicionei ao `calendarCapabilitiesSchema` (`publicApiSchemas.ts`) como campo opcional. `hoursConfigured` não existia em lugar nenhum — verifiquei em `apps/scheduling-service` e `apps/bff` que nem `GET /v1/dashboard` nem `GET /v1/status` carregavam esse sinal. Em vez de tocar o scheduling-service, `apps/bff/src/modules/dashboard/routes.ts` ganhou `schedulingDashboardWithReadiness`, que reaproveita `scheduling.availabilitySettings(context)` (client já existente, já usado por `POST /v1/onboarding/complete`) e replica exatamente o predicado já provado em `onboarding/routes.ts` (`AVAILABILITY_REQUIRED`/`CALENDAR_INTEGRATION_NOT_CONNECTED`): ATENDLY exige regra ativa, EXTERNAL exige integração `CONNECTED`, sem fonte é `false`. Documentei em `PUBLIC_API_V1.md` (nova seção \"Checklist pós-onboarding da Home\"). `apps/frontend/src/features/agenda/sourceGuard.ts` precisou de um ajuste de tipo (`CalendarCapabilityKey` deixou de ser `keyof CalendarState[\"capabilities\"]` — que agora inclui os dois sinais de prontidão — e passou a listar explicitamente as 5 capabilities de escrita, que é o que aquele guard realmente usa).\n\nLacuna declarada, não escondida: não escrevi um teste de integração novo do BFF para `hoursConfigured`/`aiActivationReady` em `GET /v1/dashboard`, porque não há Postgres descartável neste ambiente para executá-lo de verdade — e o review017 já registrou como erro específico \"um teste de integração escrito e nunca executado\", que este Goal diz explicitamente que não pode se repetir. A lógica em si (o predicado de disponibilidade) já é coberta por integração via `goal018-onboarding-complete.integration.test.ts`; só o novo ponto de leitura (`/v1/dashboard`) ficou sem cobertura de integração própria. Recomendo `validate:integration` (rodado pelo orquestrador) como fechamento, ou uma WU/rodada seguinte para adicionar esse teste.\n\nComandos executados com resultado:\n- `cd apps/frontend && npx vitest run` → 40 arquivos, 392 testes, todos passando (inclui o novo `goal018-dashboard-status.test.tsx` com 8 testes e o `goal014-shell.test.ts` atualizado para `PENDING → \"pending\"`).\n- `cd apps/frontend && npx tsc --noEmit` → limpo.\n- `cd apps/frontend && npm run lint` (eslint src tests --max-warnings=0) → limpo.\n- `cd apps/bff && npx tsc --noEmit` → limpo (precisou do fix em `schedulingDashboardWithReadiness` para não depender de inferência genérica de `publicSchedulingDashboard`).\n- `cd apps/bff && npm run lint` → limpo.\n- `cd apps/bff && npx vitest run tests/internal-http-client.test.ts` (único teste não-integração do BFF) → 5 testes passando.\n- `git diff --check` (raiz) → limpo, sem erro de whitespace.\n- Não executei `apps/bff` `validate:integration` nem `apps/frontend` `validate:ui`/Playwright (não pedido nesta unidade e sem infraestrutura de Postgres descartável/Chromium provisionada aqui).\n\nArquivos alterados por esta unidade: `apps/frontend/src/shared/runtime/systemStatus.ts` → `.tsx` (rename+edit), `apps/frontend/src/shared/layout/AppShell.tsx`, `apps/frontend/src/features/dashboard/DashboardScreen.tsx`, `apps/frontend/src/shared/styles/atendly.css`, `apps/frontend/src/data/mappers/publicApiSchemas.ts`, `apps/frontend/src/features/agenda/sourceGuard.ts`, `apps/frontend/tests/goal014-shell.test.ts`, `apps/frontend/tests/goal018-dashboard-status.test.tsx` (novo), `apps/bff/src/modules/dashboard/routes.ts`, `apps/bff/PUBLIC_API_V1.md`.",
+      "changedFiles": [
+        "apps/frontend/src/shared/runtime/systemStatus.tsx",
+        "apps/frontend/src/shared/layout/AppShell.tsx",
+        "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+        "apps/frontend/src/shared/styles/atendly.css",
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/features/agenda/sourceGuard.ts",
+        "apps/frontend/tests/goal014-shell.test.ts",
+        "apps/frontend/tests/goal018-dashboard-status.test.tsx",
+        "apps/bff/src/modules/dashboard/routes.ts",
+        "apps/bff/PUBLIC_API_V1.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "O checklist mostra serviço operacional, horários configurados e WhatsApp conectado, cada um derivado de GET /v1/dashboard ou GET /v1/status e nenhum de configuração local",
+          "met": true,
+          "detail": "PostOnboardingChecklist lê capabilities.aiActivationReady/hoursConfigured (novos campos de GET /v1/dashboard, computados no BFF reaproveitando o predicado já usado em POST /v1/onboarding/complete) e status.whatsappView (GET /v1/status). Provado por teste 'mostra os três itens com fonte real...' em goal018-dashboard-status.test.tsx."
+        },
+        {
+          "criterion": "Item concluído aparece marcado e o checklist some quando a IA está efetivamente ativa",
+          "met": true,
+          "detail": "Cada <li> tem aria-label '<item>: concluído/pendente' e classe is-done; teste 'some quando a IA está efetivamente ativa' confirma o desaparecimento com ai.state ACTIVE."
+        },
+        {
+          "criterion": "O item teste concluído não aparece, e a ausência é declarada no relatório com o destino (Goal018B)",
+          "met": true,
+          "detail": "Apenas 3 itens implementados (sem 'teste concluído'); comentário no código e este relatório declaram o destino Goal018B; teste queryByText(/teste concluído/i) é null."
+        },
+        {
+          "criterion": "PENDING tem apresentação própria, distinta de desligada e de indisponível; os quatro estados de GET /v1/status mais o carregamento inicial são distinguíveis em tela",
+          "met": true,
+          "detail": "aiStatusView mapeia PENDING para novo StatusView 'pending' ('IA em ativação', dot .warning), distinto de off (.danger, 'IA desligada') e unknown/loading (.neutral, textos próprios). Testes 'distinta de OFF e UNKNOWN', 'OFF continua...', 'UNKNOWN continua...' confirmam."
+        },
+        {
+          "criterion": "Existe um único poller de GET /v1/status por árvore renderizada, provado por render da Home dentro do shell real e não por leitura de código",
+          "met": true,
+          "detail": "SystemStatusProvider (novo) é montado uma única vez dentro de AppShell, compartilhado por AppShellChrome e pelos children; teste renderiza <AppShell><ProductDashboardScreen/></AppShell> real e afirma statusGet chamado exatamente 1 vez."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-10-a1"
+  }
+}

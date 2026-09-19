@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:41:36.284Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "016-r3-unit-fix-001-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "016-r3-unit-fix-001",
+    "role": "work_unit",
+    "goal": "016",
+    "round": 3,
+    "workUnitId": "FIX-001",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-016",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\016-ui-agenda.md",
+    "parentJobId": "016-r3-correction-bfa15093",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T15:43:10.430Z"
+}

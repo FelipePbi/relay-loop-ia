@@ -1,0 +1,21 @@
+{
+  "autonomousRunId": "auto-3667d89d",
+  "attemptId": "migration-loop-a2",
+  "attempt": 2,
+  "agent": "orchestrator",
+  "ownerKind": "orchestrator",
+  "kind": "job",
+  "key": "migration-loop",
+  "workerInstanceId": "28392-39d71ff5",
+  "hostname": "Borges",
+  "bootAt": "2026-09-15T02:26:47.904Z",
+  "pid": 28392,
+  "processStartedAt": "2026-09-16T02:48:45.021Z",
+  "status": "SUPERSEDED",
+  "version": 1,
+  "acquiredAt": "2026-09-16T02:48:45.107Z",
+  "heartbeatAt": "2026-09-16T02:48:45.107Z",
+  "expiresAt": "2026-09-16T02:50:15.107Z",
+  "supersededAt": "2026-09-16T02:50:24.195Z",
+  "supersededProof": "PROCESS_GONE"
+}

@@ -1,0 +1,62 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:14:18.863Z",
+  "attemptId": "018-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Migration aplica em banco recriado do zero; linha existente fica com modalidades vazias, endereço nulo e versão projetada distinta da corrente, sem backfill que invente modalidade a partir de categoria, nome ou serviço",
+          "met": true,
+          "detail": "Migration 20260914000000_goal018_business_profile_modalities adiciona modalities/address/businessContextVersion/businessContextProjectedVersion só com DEFAULT de coluna, sem UPDATE. Applyed via 'prisma migrate deploy' do zero contra Postgres descartável (18 migrations, ok). Teste insere via SQL cru uma linha só com colunas pré-Goal018 e confirma modalities=[], address=null, version 1 vs projected 0."
+        },
+        {
+          "criterion": "Corpo sem modalities preserva o que estiver gravado e nunca grava conjunto vazio por omissão",
+          "met": true,
+          "detail": "resolveBusinessProfileFields usa patch.modalities ?? current?.modalities ?? []; testes 'preserva o que está gravado' e 'conjunto vazio explícito... distinto de omissão' provam ambos os casos em PATCH /v1/settings/business."
+        },
+        {
+          "criterion": "Corpo com ON_SITE e endereço vazio ou ausente é recusado com 400 e código próprio, junto ao campo",
+          "met": true,
+          "detail": "AppError BUSINESS_ADDRESS_REQUIRED (novo ErrorCode) com details.field='address'; testado em /v1/settings/business (ausente e string só-espaço) e em /v1/onboarding, ambos 400 com o código próprio."
+        },
+        {
+          "criterion": "Sem ON_SITE, endereço nulo é aceito; retirar ON_SITE de um perfil que tem endereço não apaga o endereço",
+          "met": true,
+          "detail": "resolveBusinessProfileFields só substitui address quando a chave está presente no corpo ('address' in patch); teste prova que remover ON_SITE sem enviar address preserva o endereço gravado, e que ONLINE-only sem endereço aceita null."
+        },
+        {
+          "criterion": "category continua sendo o segmento: nenhuma coluna concorrente de segmento nasce",
+          "met": true,
+          "detail": "Nenhuma coluna nova de segmento foi criada; category permanece intocada no schema e confirmada preservada no teste de migração."
+        },
+        {
+          "criterion": "Nenhum campo novo é projetado para o Scheduling, e isso é declarado no relatório",
+          "met": true,
+          "detail": "Nem settings/routes.ts nem onboarding/routes.ts enviam modalities/address ao SchedulingClient; syncAi continua só com businessName/timezone. Teste inspeciona os bodies das chamadas upstream e confirma ausência de modalities/address."
+        }
+      ],
+      "changedFiles": [
+        "apps/bff/prisma/schema.prisma",
+        "apps/bff/prisma/migrations/20260914000000_goal018_business_profile_modalities/migration.sql",
+        "apps/bff/src/lib/business-profile.ts",
+        "apps/bff/src/lib/dto.ts",
+        "apps/bff/src/lib/errors.ts",
+        "apps/bff/src/modules/settings/routes.ts",
+        "apps/bff/src/modules/onboarding/routes.ts",
+        "apps/bff/tests/goal018-business-profile.integration.test.ts",
+        "apps/bff/PUBLIC_API_V1.md"
+      ],
+      "goal": "018",
+      "jobId": "018-r1-unit-wu-01",
+      "protocolVersion": 2,
+      "report": "Adicionei modalidades de atendimento (BusinessModality: ON_SITE/AT_HOME/ONLINE, lista de enum Postgres), endereço nulável e versionamento do contexto de negócio (businessContextVersion contador, businessContextProjectedVersion para a Work Unit de projeção da IA) ao BusinessProfile, via migration puramente aditiva (só ADD COLUMN com DEFAULT de coluna — modalities '{}', address NULL, version 1/0 — sem nenhum UPDATE de backfill).\n\nCriei apps/bff/src/lib/business-profile.ts (mesmo padrão de reuso de apps/bff/src/lib/ai-conversation-style.ts, já compartilhado entre settings e onboarding) com businessModalitySchema, businessAddressSchema e resolveBusinessProfileFields — a função que funde o corpo recebido com o que já está gravado, decide o valor efetivo de modalities/address e lança BUSINESS_ADDRESS_REQUIRED (novo ErrorCode, com details.field) quando ON_SITE está presente e o endereço efetivo é vazio.\n\nAmbas as rotas (PATCH /v1/settings/business e a seção business de PATCH /v1/onboarding) agora buscam o profile atual antes do upsert, chamam resolveBusinessProfileFields e persistem modalities/address, incrementando businessContextVersion a cada escrita bem-sucedida (contador simples, nunca timestamp, conforme o hint). GET /v1/settings e GET /v1/onboarding passaram a expor modalities, address e contextVersion no objeto business; businessProfileDto (usado por POST/GET de sessão em auth/routes.ts) também ganhou modalities/address para não divergir do mesmo profile serializado em outro lugar.\n\nAtualizei apps/bff/PUBLIC_API_V1.md com uma seção nova documentando os três campos, a regra de omissão vs. explícito, o erro BUSINESS_ADDRESS_REQUIRED e a declaração explícita de que nada disso viaja para o Scheduling.\n\nValidação executada (não simulada):\n- `npx prisma generate` e `npm run typecheck` (prisma generate + tsc --noEmit) — limpos.\n- `npm run lint` (eslint src --max-warnings=0) — limpo.\n- Provisionei um Postgres descartável dedicado (atendly_bff_test_goal018wu01, cluster local já existente em 127.0.0.1:55432, seguindo docs/migration/VALIDATION_GATE.md) e rodei `npx prisma migrate deploy` do zero — as 18 migrations, incluindo a nova, aplicaram sem erro.\n- `npx vitest run tests/goal018-business-profile.integration.test.ts` — 8/8 testes verdes, cobrindo os 6 critérios de aceitação.\n- `npx vitest run` (suíte completa do BFF, 15 arquivos) — 103/103 testes verdes, sem regressão nas suítes existentes (auth, onboarding legado de estilo de IA, calendário, conversas, etc.).\n- Banco de teste descartável derrubado ao final (DROP DATABASE).\n\nFora de escopo, não tocado: schema de contexto da IA, projeção versionada/estado observável (consumidoras de businessContextProjectedVersion), conclusão de onboarding sem WhatsApp, telas/frontend. onboarding/complete continua checando só businessName/category (BUSINESS_PROFILE_INCOMPLETE) — não estendi essa checagem para modalities/address porque não está nos critérios desta unidade e pertence à Work Unit de conclusão.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "BusinessProfile ganhou modalidades, endereço nulável e versionamento do contexto por migration aditiva, lidos/gravados em GET/PATCH /v1/settings/business e na seção business de GET/PATCH /v1/onboarding, com 103/103 testes do BFF verdes.",
+      "workUnitId": "WU-01"
+    },
+    "attemptId": "018-r1-unit-wu-01-a1"
+  }
+}

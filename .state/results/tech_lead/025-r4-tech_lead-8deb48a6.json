@@ -1,0 +1,257 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T13:02:20.951Z",
+  "attemptId": "025-r4-tech_lead-8deb48a6-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r4-tech_lead-8deb48a6",
+      "goal": "025",
+      "summary": "Cobertura ampla: 46 dos 48 itens têm trabalho identificável no diff (módulo `apps/bff/src/modules/account/` completo, migration aditiva, rotas internas de purga em IA e Scheduling com teste de cobertura derivado do schema, guarda em `ai-activation.ts` + `settings/routes.ts`, tela `AccountSettings.tsx` + banner do `AppShell`, contrato e docs de migração). Dois itens ficam UNCLEAR por dependerem de execução/relato fora do diff: o resultado real dos gates (critério 35) e a ausência de regressão de forma/código de erro em rotas existentes só é parcialmente afirmável pelo diff — esse último tem trabalho deliberado, então fica COVERED, e o UNCLEAR restante é o critério 35. Também marquei UNCLEAR o critério 32 (“e em nenhum outro ponto” exige leitura integral do arquivo alterado, não só do trecho no diff).",
+      "items": [
+        {
+          "id": "§1",
+          "verdict": "COVERED",
+          "evidence": "`apps/bff/prisma/schema.prisma` (model `AccountDeletion`, enum `AccountDeletionStatus`, campos de lease) + `prisma/migrations/20260916000000_goal025_account_deletion/migration.sql`; decisão isolada em `modules/account/state.ts` e prazo em `constants.ts`."
+        },
+        {
+          "id": "§2",
+          "verdict": "COVERED",
+          "evidence": "`modules/account/routes.ts` (`POST /v1/account/deletion` sob `requireTenantContext`, `verifyPassword` antes de qualquer efeito) e `service.ts` (`startAccountDeletion`: `schedule` transacional + `projectAiDesired` + `takeDownAiChannel` + `disconnectWhatsApp`)."
+        },
+        {
+          "id": "§3",
+          "verdict": "COVERED",
+          "evidence": "`lib/ai-activation.ts` (`deletionPending` força `desired=false` e bloqueia autoativação), `assertAiActivationNotBlockedByDeletion` chamada em `modules/settings/routes.ts`, e reordenação em `NotificationDeliveryService.ts` (IA avaliada antes do canal) com teste `notification-delivery.test.ts`."
+        },
+        {
+          "id": "§4",
+          "verdict": "COVERED",
+          "evidence": "`DELETE /v1/account/deletion` em `modules/account/routes.ts` + `cancelAccountDeletion` em `service.ts` (sem porta de efeito); copy da não-restauração no diálogo de `AccountSettings.tsx`."
+        },
+        {
+          "id": "§5",
+          "verdict": "COVERED",
+          "evidence": "`modules/account/purge.ts` (`claimAccount`/`purgeAccount`/`runAccountPurge`, ordem ai→scheduling→bff, `purgeLocalAccount` com `User` por último) e `worker.ts` montado em `app.ts` sob `ACCOUNT_PURGE_ENABLED`."
+        },
+        {
+          "id": "§6",
+          "verdict": "COVERED",
+          "evidence": "`apps/ai-orchestrator/src/modules/internal/tenantPurge.ts` + rota `POST /internal/retention/tenant` (escopo `tenant:purge`) e `apps/scheduling-service/src/modules/internal-api/tenantPurge.ts` + rota equivalente sob `requireInternalAuth`; testes `tenant-purge.schema.test.ts` e `goal025-tenant-purge.test.ts`."
+        },
+        {
+          "id": "§7",
+          "verdict": "COVERED",
+          "evidence": "`features/settings/AccountSettings.tsx` (`AccountDeletionSection`, dois diálogos, estados loading/erro/agendado/purgado) e `shared/layout/AppShell.tsx` (banner persistente com `accountDeletionDaysRemaining`)."
+        },
+        {
+          "id": "§8",
+          "verdict": "COVERED",
+          "evidence": "`apps/bff/PUBLIC_API_V1.md`: linha nova na tabela de rotas, campos `accountDeletion.status`/`dueAt` na seção de status e seção “Ciclo de vida da conta (Goal025/WU-03)” com corpos e códigos."
+        },
+        {
+          "id": "§9",
+          "verdict": "COVERED",
+          "evidence": "Testes de baseline em `goal025-ai-activation-deletion-guard.test.ts` (describe “sem exclusão agendada, a baseline inteira”); refactor de `whatsapp/routes.ts` delegando ao `disconnect.ts` extraído sem mudar a resposta; fixtures de status atualizadas em goal018/022/023/024."
+        },
+        {
+          "id": "§10",
+          "verdict": "COVERED",
+          "evidence": "`apps/bff/tests/goal025-account-lifecycle.integration.test.ts` (pedir/cancelar, vencimento com loja falhando e retomada, purga dupla, login e sessões após purga), `goal025-account-purge.test.ts`, `goal025-account-deletion-routes.integration.test.ts` e as duas suítes de frontend goal025."
+        },
+        {
+          "id": "§11",
+          "verdict": "COVERED",
+          "evidence": "`PUBLIC_API_V1.md`, `docs/migration/GAP_ANALYSIS.md` (G-29), `CURRENT_STATE.md` (delta Goal025), `DATA_MIGRATION.md` §13, `REUSE_ANALYSIS.md` (linha nova) e `DECISIONS.md` (D-041). Nenhum documento novo criado."
+        },
+        {
+          "id": "critério 1",
+          "verdict": "COVERED",
+          "evidence": "`model AccountDeletion` com `requestedByUserId`, `requestedAt`, `dueAt`, `cancelledAt`, `purgedAt`, `status` e campos de lease (`schema.prisma`, migration)."
+        },
+        {
+          "id": "critério 2",
+          "verdict": "COVERED",
+          "evidence": "Sem FK para `Tenant`/`User` (migration + doc do modelo); `purgeLocalAccount` não toca `AccountDeletion`; teste “a linha de exclusão sobrevive à purga e não carrega dado pessoal” em `goal025-account-purge.test.ts`."
+        },
+        {
+          "id": "critério 3",
+          "verdict": "COVERED",
+          "evidence": "`modules/account/constants.ts`: `ACCOUNT_DELETION_GRACE_PERIOD_DAYS = 7`, `accountDeletionDueAt(requestedAt)` e `isAccountDeletionDue(dueAt, now)` com `now` injetável; `startAccountDeletion` recebe `now`."
+        },
+        {
+          "id": "critério 4",
+          "verdict": "COVERED",
+          "evidence": "`migration.sql`: `CREATE TYPE` sob guarda `pg_type`, `CREATE TABLE IF NOT EXISTS`, dois `CREATE INDEX IF NOT EXISTS`; nenhuma coluna alterada/removida, sem backfill."
+        },
+        {
+          "id": "critério 5",
+          "verdict": "COVERED",
+          "evidence": "`modules/account/routes.ts`: `preHandler: requireTenantContext`, corpo `z.object({ password })` apenas; teste “does not accept an identity from the caller: a spoofed userId/tenantId in the body schedules nothing” em `goal025-account-deletion-routes.integration.test.ts`."
+        },
+        {
+          "id": "critério 6",
+          "verdict": "COVERED",
+          "evidence": "Verificação de senha antes de qualquer chamada a `startAccountDeletion` (`routes.ts`) e teste “refuses with the wrong password and schedules nothing”."
+        },
+        {
+          "id": "critério 7",
+          "verdict": "COVERED",
+          "evidence": "`accountDeletionStore().schedule` grava `AccountDeletion` e `aiSettings.upsert({ enabled: false, activatedByRunId: null })` em `$transaction`; efeitos `projectAiDesired(false)`, `takeDownAiChannel` (rota `DELETE /internal/channel-connections/evolution` + `deactivateTenantChannels`) e `disconnectWhatsApp`; teste “derruba o canal na IA e desconecta o WhatsApp, nesta ordem”."
+        },
+        {
+          "id": "critério 8",
+          "verdict": "COVERED",
+          "evidence": "`decideStart` recusa sobre `SCHEDULED` com `ACCOUNT_DELETION_ALREADY_SCHEDULED`; teste “pedir duas vezes não cria segunda exclusão nem repete efeito” em `goal025-account-deletion.test.ts`."
+        },
+        {
+          "id": "critério 9",
+          "verdict": "COVERED",
+          "evidence": "Nenhum import de sessão em `modules/account/service.ts`; teste “não alcança o caminho de revogação de sessão” em `goal025-account-deletion.test.ts`; integração confirma sessão viva após pedir/cancelar."
+        },
+        {
+          "id": "critério 10",
+          "verdict": "COVERED",
+          "evidence": "`lib/ai-activation.ts` (`deletionPending` no caminho comum) e `goal025-ai-activation-deletion-guard.test.ts` (“execução bem-sucedida não religa a IA com exclusão SCHEDULED”, “desliga o efetivo que sobrou ligado”)."
+        },
+        {
+          "id": "critério 11",
+          "verdict": "COVERED",
+          "evidence": "Describe “Goal025/WU-04 — sem exclusão agendada, a baseline inteira” com seis casos (autoativação, não-SUCCEEDED, sem serviço operacional, idempotência, convergência, superseded) em `goal025-ai-activation-deletion-guard.test.ts`."
+        },
+        {
+          "id": "critério 12",
+          "verdict": "COVERED",
+          "evidence": "`NotificationDeliveryService.ts` move a aptidão da IA para antes do vínculo de canal; teste “dispensa por IA desligada mesmo sem canal” exige `DISMISSED`/`AI_NOT_ENABLED`; nenhum valor novo no vocabulário (nenhuma mudança de enum/constraint no diff). A parte do “relatório nomeia o motivo” está fora do diff, mas o porquê está no comentário e no teste."
+        },
+        {
+          "id": "critério 13",
+          "verdict": "COVERED",
+          "evidence": "`cancelAccountDeletion` chama só `store.cancel` (sem `effects` na assinatura); teste “volta o estado para não agendado e não dispara efeito de purga”."
+        },
+        {
+          "id": "critério 14",
+          "verdict": "COVERED",
+          "evidence": "`decideCancel` com `ACCOUNT_DELETION_NOT_SCHEDULED`, `GRACE_PERIOD_EXPIRED`, `ALREADY_CANCELLED`, `ALREADY_PURGED` (`errors.ts`, todos 409 com `details.reason`); teste “recusa fora do prazo e em estado terminal, sem alterar nada”."
+        },
+        {
+          "id": "critério 15",
+          "verdict": "COVERED",
+          "evidence": "Teste “não reconecta WhatsApp nem religa a IA” (BFF) e diálogo “Cancelar a exclusão da conta?” em `AccountSettings.tsx` com a copy de reconectar/refazer o teste, exercitada em `goal025-account-deletion-screen.test.tsx`."
+        },
+        {
+          "id": "critério 16",
+          "verdict": "COVERED",
+          "evidence": "`purge.ts`: `ACCOUNT_PURGE_STORE_ORDER = ['ai','scheduling','bff']`, `purgeLocalAccount` lê donos, apaga `Tenant` e só então `User`; teste “purga IA, Scheduling e BFF, com o User por último, e só então marca PURGED”."
+        },
+        {
+          "id": "critério 17",
+          "verdict": "COVERED",
+          "evidence": "`result.purged` só vira `true` após a porta `bff` confirmar; `releaseAccount` grava `PURGED` apenas com `purged=true`; teste “a conta não é marcada PURGED enquanto uma loja não confirma”."
+        },
+        {
+          "id": "critério 18",
+          "verdict": "COVERED",
+          "evidence": "Falha por loja isolada mantém `SCHEDULED`; testes “passada que morre entre o Tenant e o User deixa estado retomável, e a seguinte conclui” (unit) e o caso de duas passadas com Scheduling fora do ar em `goal025-account-lifecycle.integration.test.ts`."
+        },
+        {
+          "id": "critério 19",
+          "verdict": "COVERED",
+          "evidence": "`claimAccount` só reivindica `SCHEDULED` vencida; testes “purgar duas vezes não é erro e não produz efeito colateral” (unit e integração) verificando que as portas remotas não são chamadas de novo."
+        },
+        {
+          "id": "critério 20",
+          "verdict": "COVERED",
+          "evidence": "`maxRowsPerStore` (`ACCOUNT_PURGE_MAX_ROWS_PER_STORE`) propagado às rotas internas; `hasMore` do `TenantPurgeService` (`deleteBatch` lê `limit+1`) sobe para `AccountPurgeResult.hasMore`; teste “o teto por passada segura o trabalho, sinaliza o resto e não apaga o dono”."
+        },
+        {
+          "id": "critério 21",
+          "verdict": "COVERED",
+          "evidence": "`env.ACCOUNT_PURGE_ENABLED: boolEnv(false)` e `app.ts` só instancia o worker se ligado; testes “nasce desligado, por variável própria”, “o worker parado nunca chamou porta nenhuma” e “nenhum teste deste arquivo sobe o laço”; as suítes chamam `purgeAccount`/`runAccountPurge` direto."
+        },
+        {
+          "id": "critério 22",
+          "verdict": "COVERED",
+          "evidence": "`claimAccount` (UPDATE atômico com `leaseExpiresAt`/`now()`) e `releaseAccount` com `WHERE leaseToken = ...`; testes “duas instâncias não purgam a mesma conta ao mesmo tempo” e “quem perdeu o lease não sobrescreve o resultado de quem assumiu”."
+        },
+        {
+          "id": "critério 23",
+          "verdict": "COVERED",
+          "evidence": "IA: `POST /internal/retention/tenant` com `tenantPurgeSchema.strict()` e tenant de `trustedTenantContext`; Scheduling: mesma rota com `tenantPurgeBodySchema.strict()` sob `requireInternalAuth`. Testes “recusa lista de negocios no corpo”, “recusa qualquer forma declarada de apagar tudo”, “recusa sem contexto de tenant”."
+        },
+        {
+          "id": "critério 24",
+          "verdict": "COVERED",
+          "evidence": "`apps/ai-orchestrator/tests/internal/tenant-purge.schema.test.ts` e `apps/scheduling-service/tests/unit/tenant-purge-schema.test.ts` leem `schema.prisma`, comparam com `TENANT_PURGE_TABLES`/`TENANT_PURGE_CASCADE_ONLY` e falham com modelo novo não declarado (inclui guarda contra parsing vazio)."
+        },
+        {
+          "id": "critério 25",
+          "verdict": "COVERED",
+          "evidence": "Teste “nao apaga nem toca nenhuma linha do negocio vizinho, em nenhuma tabela” em `apps/ai-orchestrator/tests/retention/tenant-purge.test.ts` e em `apps/scheduling-service/tests/integration/goal025-tenant-purge.test.ts`."
+        },
+        {
+          "id": "critério 26",
+          "verdict": "COVERED",
+          "evidence": "`goal025-account-lifecycle.integration.test.ts`, caso “…depois disso o login do e-mail e a sessão anterior deixam de autenticar”: login 401 e `GET /v1/auth/session` 401 por cookie e Bearer para duas sessões abertas antes da purga."
+        },
+        {
+          "id": "critério 27",
+          "verdict": "COVERED",
+          "evidence": "Bloco desabilitado removido de `AccountSettings.tsx` (diff), busca por “etapa futura”/“Exclusão indisponível` em `apps/frontend/src` não retorna nada, teste antigo removido de `goal024-account-sessions.test.tsx` e teste novo “o bloco desabilitado do Goal024 não existe mais”."
+        },
+        {
+          "id": "critério 28",
+          "verdict": "COVERED",
+          "evidence": "Diálogo “Excluir sua conta?” com lista dos quatro efeitos e campo `Password name=\"password\"` em `AccountSettings.tsx`; teste “pedir enuncia os efeitos antes de executar e exige senha atual”."
+        },
+        {
+          "id": "critério 29",
+          "verdict": "COVERED",
+          "evidence": "`accountDeletionDaysRemaining(dueAt)` em `shared/runtime/systemStatus.tsx`, consumida pela seção e pelo banner; testes “os dias restantes vêm do vencimento devolvido pelo servidor” e “o número de dias segue o vencimento, não uma contagem fixa de sete”."
+        },
+        {
+          "id": "critério 30",
+          "verdict": "COVERED",
+          "evidence": "`requestAccountDeletion`/`cancelAccountDeletionRequest` só fecham o diálogo e chamam `refreshStatus()` após sucesso; testes “senha atual incorreta recusa com erro de campo…”, “falha de rede ao pedir a exclusão nunca é apresentada como sucesso” e “falha ao cancelar não fecha o diálogo nem afirma sucesso”."
+        },
+        {
+          "id": "critério 31",
+          "verdict": "COVERED",
+          "evidence": "`modules/status/routes.ts` devolve `accountDeletion` lido pelo mesmo `accountDeletionStore()`; `AppShell.tsx` deriva o banner de `status.accountDeletion`; `publicApiSchemas.ts` valida o campo; `goal025-account-deletion-shell-banner.test.tsx` cobre inclusive “enquanto GET /v1/status não responde, não há aviso nenhum”."
+        },
+        {
+          "id": "critério 32",
+          "verdict": "UNCLEAR",
+          "evidence": "O diff de `PUBLIC_API_V1.md` mostra só a linha da tabela de rotas, os dois campos de `accountDeletion` em `GET /v1/status` e a seção nova — consistente com o critério. A cláusula “e em nenhum outro ponto” é afirmação sobre o arquivo inteiro e seu histórico de edição, que o recorte do diff sozinho não fecha."
+        },
+        {
+          "id": "critério 33",
+          "verdict": "COVERED",
+          "evidence": "Há trabalho deliberado: `whatsapp/routes.ts` delega ao `disconnect.ts` extraído preservando o `CONFLICT` da divergência; `assertAiActivationNotBlockedByDeletion` recusa com o mesmo `409 CONFLICT` sem `details` já usado por `PATCH /v1/settings/ai`; `GET /v1/status` só ganha campo novo (chaves atualizadas em `goal022-notification-center.integration.test.ts`). A verificação de não-regressão em si é julgamento de revisão."
+        },
+        {
+          "id": "critério 34",
+          "verdict": "COVERED",
+          "evidence": "Busca por `eslint-disable` nos arquivos novos/alterados do Goal (módulo `account/`, `tenantPurge.ts`, suítes goal025) não retorna nada; os três `eslint-disable` existentes em `apps/frontend/src` estão em arquivos fora do diff."
+        },
+        {
+          "id": "critério 35",
+          "verdict": "UNCLEAR",
+          "evidence": "O resultado real de `validate:core`, `validate:integration` e `validate:ui` nas cinco larguras vive no relatório do Developer, fora do diff. O diff só mostra preparo de harness (`scripts/goal012-knowledge-memory-migration-rehearsal.mjs` criando `KnowledgeChunk` para a suíte de purga)."
+        },
+        {
+          "id": "critério 36",
+          "verdict": "COVERED",
+          "evidence": "Linha G-29 reescrita em `docs/migration/GAP_ANALYSIS.md` descrevendo `AccountDeletion`, as duas rotas públicas, a guarda em `ai-activation.ts`, `AccountPurgeWorker`, `TENANT_PURGE_TABLES`/`tenant:purge`, com o risco residual e o estado `PROPOSED` de D-041."
+        },
+        {
+          "id": "critério 37",
+          "verdict": "COVERED",
+          "evidence": "`docs/migration/DECISIONS.md`: bloco D-041 acrescentado com Status/Contexto/Decisão/Alternativas/Motivo/Consequências/Revisar se, depois de D-040 e antes da linha de encerramento; nenhum bloco anterior alterado no diff."
+        }
+      ]
+    },
+    "attemptId": "025-r4-tech_lead-8deb48a6-a1"
+  }
+}

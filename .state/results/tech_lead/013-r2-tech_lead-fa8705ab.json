@@ -1,0 +1,395 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T01:38:19.804Z",
+  "attemptId": "013-r2-tech_lead-fa8705ab-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "013-r2-tech_lead-fa8705ab",
+      "goal": "013",
+      "decision": "NEXT_GOAL",
+      "summary": "Planejamento após o Goal013 (ACCEPTED, fechamento integrado como 108f88d4463498fc7fed0096955b0a241bcff71b, origem b16cb36d269144229d831d6613158dfbab85ddf4), no worktree `plan-after-goal-013`, escrevendo só em docs/migration/. MIGRATION_STATUS: baseline aceita vigente atualizada para 108f88d (anterior 90ffa23 preservada na cadeia), linha 013 ACCEPTED com commit/origem, review de duas rodadas, snapshot de 74 arquivos e gates reproduzidos; linha 014 READY com baseline exata, link do Prompt014 e perfil OPUS_MEDIUM; parágrafos de Implementação013, Review013 (R1/R2) e Planejamento após 013 acrescentados. MASTER_PLAN: entrada v26 registrando o fechamento013 e a reavaliação incremental (sem evidência para alterar ordem, IDs ou escopo): com política, conhecimento, memória, sugestões e mídia fechados no backend, o bloco de interface começa pela base compartilhada. Nenhuma decisão nova (os contratos de status e a direção visual adotada serão registrados no fechamento do 014 conforme evidência). Goal014 escrito em docs/migration/goals/014-fundacao-visual-shell-auth.md, único READY, com `Developer execution profile: OPUS_MEDIUM`, baseline 108f88d, fatos confirmados na baseline (Next 16/React 19 sem biblioteca visual, `AppShell` com três destinos no mobile e WhatsApp conectado por omissão, cada tela montando o shell, identidade Inter/IBM Plex Mono, preview e `personas-ui` fora do produto, paleta e fontes da direção Recepção carregadas do Google no protótipo, `/v1/dashboard` sem o efetivo da IA e IA sem rota de leitura da configuração, reset por link do 003 versus recuperação visual do vault), sete seções de escopo (tokens/fontes locais OFL/primitivas; shell com cinco destinos, `+` contextual, layout compartilhado e status real; read model `GET /v1/status` com rota interna nova na IA; autenticação no visual aprovado com recuperação apenas visual; Início mínimo; provas; documentação), sem migration, 11 critérios e entrega. Verificação: `git diff --check` limpo, três documentos em CRLF, `discoverGoal` do IA Loop reconhece o 014 READY com baseline igual à aceita, 013 ACCEPTED e perfil OPUS_MEDIUM; `parseMigrationStatus` mostra 014 como única linha READY. Nenhum commit, push ou cluster do Developer tocado.",
+      "nextGoalId": "014",
+      "nextGoalTitle": "Fundação visual, shell e autenticação",
+      "nextGoalPath": "docs/migration/goals/014-fundacao-visual-shell-auth.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Shell e tokens com todas as telas como consumers, read model de status em três apps e fidelidade de acessibilidade.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/014-fundacao-visual-shell-auth.md"
+      ],
+      "executionPlan": {
+        "goalSummary": "Goal 014 sobre a baseline 108f88d4463498fc7fed0096955b0a241bcff71b. Base compartilhada do frontend na direção visual aprovada (Recepção): tokens semânticos centralizados (cor, tipografia, espaçamento, raio, sombra, foco, motion com reduced-motion), Literata e Hanken Grotesk servidas localmente sob OFL com fallback, primitivas acessíveis (botão, campo, badge de status, skeleton, spinner, empty state, sheet/drawer, diálogo, toast, item de lista, cabeçalho), tema claro. Shell substituído: bottom nav mobile com Início/Conversas/Agenda/Clientes/Mais, `+` contextual por módulo, \"Mais\" como lista de destinos, sidebar em tablet/notebook/desktop, layout compartilhado em `(platform)` com as 12 telas existentes funcionais dentro dele, remoção de preview e `personas-ui`, `/sistema/[state]` refeito, acessibilidade preservada. Read model honesto: `GET /internal/ai-tenant-config` na IA (efetivo do tenant) e `GET /v1/status` no BFF (WhatsApp verificado CONNECTED|DISCONNECTED|UNKNOWN; IA desiredEnabled/effectiveEnabled e state ACTIVE|OFF|PENDING|UNKNOWN; degraded), nunca 500 por dependência; shell e Início mostram carregando, desconhecido, ativo e desligado distintos e nunca conectado por omissão. Autenticação: login e cadastro no visual aprovado sobre a sessão real do 003, aceite legal, erros junto ao campo; recuperação de senha apenas visual em quatro telas sem rede e sem copy de envio, com o fluxo por link do 003 intacto e sem entrada pela UI. Início mínimo com status, pendências e próximos do `/v1/dashboard`, skeleton, erro recuperável e empty states. Provas: testes de lógica no frontend (navegação, mapeamento de status, máquina de estados da recuperação, schemas), integração do BFF com dublês, rota da IA com escopo; `next build`, lint e typecheck; matriz de larguras relatada. Sem migration; PUBLIC_API, README/AGENTS do frontend e CURRENT_STATE atualizados. Fora: telas de módulo (015–018, 023), reconciliação desired/effective (018), tema escuro, recuperação real.",
+        "executionStrategy": "Cada Work Unit tem exatamente um workspace. WU-01 (rota interna de leitura na IA) e WU-03 (tokens, fontes e primitivas no frontend) começam em paralelo; WU-02 (read model `/v1/status` no BFF) segue WU-01. WU-04 (shell, layout compartilhado, status real, remoção de preview) segue WU-02 e WU-03; WU-05 (autenticação e recuperação visual) segue WU-03; WU-06 (Início mínimo) segue WU-04. Verificação determinística no fim, uma por workspace: typecheck e lint em apps/ai-orchestrator (WU-07, WU-08), lint em apps/bff (WU-09), typecheck, lint e targeted-tests em apps/frontend (WU-10 a WU-12), git-diff-check (WU-13), validate-core (WU-14, que inclui `next build` e os testes do frontend) e validate-integration (WU-15, que inclui os testes de integração do BFF). Nenhum teste chama serviço real; a matriz de larguras é conferida e relatada pela unidade do shell.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "IA: rota interna de leitura da configuração efetiva do tenant",
+            "objective": "Em apps/ai-orchestrator, expor `GET /internal/ai-tenant-config` em src/modules/internal/routes.ts devolvendo `enabled`, `tone` e `promptVersion` efetivos de `AiTenantConfig` do tenant do contexto interno, ou `null` quando nunca projetado; escopo de leitura próprio em src/lib/internal-credentials.ts concedido ao uso `command`, com o caminho caindo em `internal:unmapped` sem escopo. Teste de rota cobrindo tenant projetado, tenant nunca projetado, isolamento por tenant, 401/403.",
+            "type": "MECHANICAL",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [],
+            "scope": "apps/ai-orchestrator",
+            "expectedFiles": [
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/src/lib/internal-credentials.ts",
+              "apps/ai-orchestrator/tests/internal/ai-tenant-config.routes.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts",
+              "docs/migration/goals/014-fundacao-visual-shell-auth.md"
+            ],
+            "acceptanceCriteria": [
+              "Rota devolve o efetivo do tenant do contexto e null quando nunca projetado; nunca lê outro tenant",
+              "Escopo de leitura declarado; caminho sem escopo continua fechado",
+              "Teste de rota verde com 401/403 e isolamento"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ],
+            "implementationHints": "Seguir o padrão de `PUT /internal/ai-tenant-config` e de `requiredScope`; o DTO é só leitura, sem mudar a projeção."
+          },
+          {
+            "id": "WU-02",
+            "title": "BFF: read model `GET /v1/status` honesto com WhatsApp verificado e IA desejado/efetivo",
+            "objective": "Em apps/bff, acrescentar a src/clients/ai-orchestrator/index.ts a leitura de `GET /internal/ai-tenant-config`; criar src/modules/status/ com `GET /v1/status` (tenant da sessão) devolvendo `whatsapp` (`CONNECTED | DISCONNECTED | UNKNOWN`, `phoneNumber`, `checkedAt`, verificado no Evolution como o dashboard faz), `ai` (`desiredEnabled` de `AiSettings`, `effectiveEnabled` da IA ou null, `state` ACTIVE quando desejado e efetivo, OFF quando desejado desligado, PENDING quando desejado ligado e efetivo diferente ou nulo, UNKNOWN quando a IA não respondeu) e `degraded`; dependência indisponível vira UNKNOWN com erro registrado, nunca 500. Registrar em app.ts, documentar em PUBLIC_API_V1.md com a semântica de cada estado e cobrir por testes de integração com Evolution e IA em dublê de fetch: cada estado, degradação e isolamento por sessão.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/modules/status/routes.ts",
+              "apps/bff/src/app.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/tests/goal014-status.integration.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/dashboard/routes.ts",
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/modules/whatsapp/routes.ts",
+              "apps/bff/tests/goal013-media.integration.test.ts"
+            ],
+            "acceptanceCriteria": [
+              "`/v1/status` deriva os estados declarados a partir de settings, Evolution e IA; dependência indisponível vira UNKNOWN sem 500",
+              "Nunca devolve CONNECTED ou ACTIVE sem verificação real",
+              "PUBLIC_API_V1.md documenta a rota e a semântica; testes de integração cobrem cada estado e rodam no validate:integration"
+            ],
+            "verification": [
+              "typecheck",
+              "lint"
+            ],
+            "implementationHints": "Reusar `whatsappSummary`/`settled` do dashboard em vez de duplicar; `/v1/dashboard` não muda. Reconciliação e autoativação são do 018: aqui só leitura."
+          },
+          {
+            "id": "WU-03",
+            "title": "Frontend: tokens da direção Recepção, fontes locais OFL e primitivas acessíveis",
+            "objective": "Em apps/frontend, criar src/shared/styles/tokens.css como fonte única dos tokens semânticos derivados de Marca/Acabamento/QA-Global/Movimento (cor, tipografia, espaçamento, raio, sombra, foco, z-index, motion com prefers-reduced-motion), servir Literata e Hanken Grotesk de public/fonts com arquivos OFL e licença no repositório e fallback declarado, substituir a base Inter/IBM Plex Mono em atendly.css e fazer o CSS por módulo herdar os tokens sem quebrar as telas existentes; criar/refazer as primitivas em src/shared/ui (botão, campo, badge de status com texto e ícone, skeleton, spinner, empty state, sheet/drawer, diálogo, toast, item de lista, cabeçalho de página) com foco por teclado, área de toque confortável e estado nunca só por cor; remover public/personas-ui. Tema claro apenas.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/shared/styles/tokens.css",
+              "apps/frontend/src/shared/styles/atendly.css",
+              "apps/frontend/src/app/globals.css",
+              "apps/frontend/public/fonts/",
+              "apps/frontend/src/shared/ui/",
+              "apps/frontend/README.md"
+            ],
+            "relevantFiles": [
+              "docs/design-reference/claude-design/prototype/project/Marca.dc.html",
+              "docs/design-reference/claude-design/prototype/project/Acabamento.dc.html",
+              "docs/design-reference/claude-design/prototype/project/Movimento.dc.html",
+              "docs/design-reference/claude-design/prototype/project/QA-Global.dc.html",
+              "docs/product-vault/03-UX-UI/05-Design-System-Conceitual.md",
+              "docs/migration/REUSE_ANALYSIS.md"
+            ],
+            "acceptanceCriteria": [
+              "Tokens semânticos centralizados na direção Recepção; identidade Inter/IBM Plex Mono removida da base; tema claro apenas",
+              "Literata e Hanken Grotesk locais com licença OFL no repositório e fallback; nenhuma fonte carregada de terceiros em runtime",
+              "Primitivas listadas com foco visível, toque confortável, estado não só por cor e reduced-motion respeitado",
+              "Telas existentes continuam renderizando com o CSS de módulo herdando os tokens; `personas-ui` removido; lint, typecheck e build verdes"
+            ],
+            "verification": [
+              "typecheck",
+              "lint",
+              "build"
+            ],
+            "implementationHints": "Os HTMLs do protótipo especificam resultado visual, não arquitetura; extrair valores, não copiar markup. Sem Tailwind/shadcn ou biblioteca visual (AGENTS do frontend)."
+          },
+          {
+            "id": "WU-04",
+            "title": "Frontend: shell mobile-first com cinco destinos, layout compartilhado e status real",
+            "objective": "Em apps/frontend, substituir src/shared/layout/AppShell.tsx: bottom nav mobile com Início/Conversas/Agenda/Clientes/Mais, `+` contextual por módulo, \"Mais\" como lista de destinos, sidebar em tablet/notebook/desktop conforme Atendly.dc.html; criar src/app/(platform)/layout.tsx montando o shell uma vez e adaptar os 12 consumers em features/* para declarar só destino ativo, ação contextual e título, mantendo todas as telas funcionais; status real de IA e WhatsApp a partir de `GET /v1/status` (schema em publicApiSchemas.ts, serviço em data/services, carga no ProductRuntime ou hook próprio com revalidação) com quatro estados visuais distintos e sem default conectado; skip link, aria-current, anúncio de rota, foco após navegação e navegação por teclado; remover src/app/%5Fpreview e features/preview; refazer /sistema/[state] com as primitivas. Testes de lógica em tests/ para o modelo de navegação e o mapeamento de status; matriz de larguras (360/390, 768, 1024, 1440) conferida e relatada.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-02",
+              "WU-03"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/shared/layout/AppShell.tsx",
+              "apps/frontend/src/shared/layout/",
+              "apps/frontend/src/app/(platform)/layout.tsx",
+              "apps/frontend/src/shared/runtime/ProductRuntime.tsx",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/",
+              "apps/frontend/src/features/",
+              "apps/frontend/src/features/system/SystemScreen.tsx",
+              "apps/frontend/tests/goal014-shell.test.ts"
+            ],
+            "relevantFiles": [
+              "docs/design-reference/claude-design/prototype/project/Atendly.dc.html",
+              "docs/product-vault/03-UX-UI/02-Responsividade-Mobile-First.md",
+              "docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md",
+              "apps/frontend/src/shared/ui/RouteAnnouncer.tsx"
+            ],
+            "acceptanceCriteria": [
+              "Cinco destinos no mobile, `+` contextual, \"Mais\" como lista; sidebar em larguras maiores; layout compartilhado em (platform)",
+              "As 12 telas existentes continuam funcionais dentro do shell novo; preview e personas removidos; /sistema refeito",
+              "Status de IA e WhatsApp vem de /v1/status com carregando, desconhecido, ativo e desligado distintos; nenhum default conectado no código, provado por teste de mapeamento",
+              "Acessibilidade preservada: skip link, aria-current, anúncio de rota, foco, teclado; matriz de larguras relatada"
+            ],
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ],
+            "implementationHints": "O modelo de navegação e o mapeamento de status devem ser funções puras testáveis em ambiente node; o shell as consome. Não redesenhar as telas de módulo."
+          },
+          {
+            "id": "WU-05",
+            "title": "Frontend: login e cadastro no visual aprovado, recuperação de senha apenas visual",
+            "objective": "Em apps/frontend, refazer features/auth com as primitivas e Login*.dc.html nas três larguras: login (e-mail, senha, entrar, recuperar, criar conta) e cadastro (nome, e-mail, senha, aceite de Termos e Política) mantendo a integração real com /v1/auth/*, erro junto ao campo, valores preservados em erro de servidor, estados de carregamento e mensagens sem jargão; recuperação de senha como fluxo visual de quatro telas (informar e-mail, informar código, nova senha, sucesso) sem chamada de rede e sem copy que afirme envio, com máquina de estados pura testada; manter /nova-senha e /link-expirado funcionais e sem entrada pela UI; páginas legais preservadas; redirects do ProductRuntime inalterados.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-03"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/auth/",
+              "apps/frontend/src/app/login/page.tsx",
+              "apps/frontend/src/app/cadastro/page.tsx",
+              "apps/frontend/src/app/recuperar-senha/page.tsx",
+              "apps/frontend/src/app/solicitacao-enviada/page.tsx",
+              "apps/frontend/tests/goal014-auth.test.ts"
+            ],
+            "relevantFiles": [
+              "docs/design-reference/claude-design/prototype/project/Login.dc.html",
+              "docs/design-reference/claude-design/prototype/project/Login-Tablet.dc.html",
+              "docs/design-reference/claude-design/prototype/project/Login-Desktop.dc.html",
+              "docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md",
+              "apps/frontend/src/data/services/BffAuthService.ts"
+            ],
+            "acceptanceCriteria": [
+              "Login e cadastro no visual aprovado com integração real preservada, aceite legal obrigatório e erros junto ao campo",
+              "Recuperação em quatro telas visuais sem chamada de rede e sem copy de envio; fluxo por link do 003 intacto e sem entrada pela UI",
+              "Máquina de estados da recuperação testada; sessão, CSRF e logout do 003 intactos"
+            ],
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ],
+            "implementationHints": "Não remover nem alterar as rotas de reset do BFF; não chamar forgot-password a partir da UI nova (G-34)."
+          },
+          {
+            "id": "WU-06",
+            "title": "Frontend: Início mínimo com status, pendências e próximos",
+            "objective": "Em apps/frontend, refazer features/dashboard como Início mínimo com as primitivas: status de IA e WhatsApp (mesmos estados do shell, de /v1/status), pendências (conversas que precisam de atenção) e próximos atendimentos do /v1/dashboard existente, skeleton no carregamento, erro recuperável preservando a estrutura com retry contextual, empty states com a copy do vault e poucas métricas secundárias; desktop pode adicionar contexto sem dashboard denso. Checklist, central de alertas e métricas adicionais ficam no 023.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-04"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/dashboard/",
+              "apps/frontend/src/app/(platform)/inicio/page.tsx"
+            ],
+            "relevantFiles": [
+              "docs/design-reference/claude-design/prototype/project/Home.dc.html",
+              "docs/product-vault/03-UX-UI/06-Copy-e-Linguagem.md",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts"
+            ],
+            "acceptanceCriteria": [
+              "Início mostra status honesto, pendências e próximos do dashboard existente",
+              "Skeleton, erro recuperável com retry e empty states conforme os princípios e a copy do vault",
+              "Sem métricas não aprovadas; lint e typecheck verdes"
+            ],
+            "verification": [
+              "typecheck",
+              "lint"
+            ],
+            "implementationHints": "Não mudar /v1/dashboard; consumir o DTO existente."
+          },
+          {
+            "id": "WU-07",
+            "title": "Typecheck apps/ai-orchestrator",
+            "objective": "Rodar o typecheck da IA após a rota interna nova.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01"
+            ],
+            "action": "typecheck",
+            "scope": "apps/ai-orchestrator",
+            "acceptanceCriteria": [
+              "tsc --noEmit sem erros em apps/ai-orchestrator"
+            ]
+          },
+          {
+            "id": "WU-08",
+            "title": "Lint apps/ai-orchestrator",
+            "objective": "Rodar o lint da IA com zero avisos.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01"
+            ],
+            "action": "lint",
+            "scope": "apps/ai-orchestrator",
+            "acceptanceCriteria": [
+              "npm run lint sem erros nem avisos em apps/ai-orchestrator"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "title": "Lint apps/bff",
+            "objective": "Rodar o lint do BFF com zero avisos após o read model de status.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-02"
+            ],
+            "action": "lint",
+            "scope": "apps/bff",
+            "acceptanceCriteria": [
+              "npm run lint sem erros nem avisos em apps/bff"
+            ]
+          },
+          {
+            "id": "WU-10",
+            "title": "Typecheck apps/frontend",
+            "objective": "Rodar o typecheck do frontend após tokens, shell, autenticação e Início.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05",
+              "WU-06"
+            ],
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "acceptanceCriteria": [
+              "tsc --noEmit sem erros em apps/frontend"
+            ]
+          },
+          {
+            "id": "WU-11",
+            "title": "Lint apps/frontend",
+            "objective": "Rodar o lint do frontend com zero avisos.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05",
+              "WU-06"
+            ],
+            "action": "lint",
+            "scope": "apps/frontend",
+            "acceptanceCriteria": [
+              "npm run lint sem erros nem avisos em apps/frontend"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "title": "Testes do frontend",
+            "objective": "Rodar os testes do frontend, incluindo navegação, mapeamento de status, recuperação visual e schemas do Goal014.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05",
+              "WU-06"
+            ],
+            "action": "targeted-tests",
+            "scope": "apps/frontend",
+            "pattern": "tests",
+            "acceptanceCriteria": [
+              "vitest run tests verde em apps/frontend"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "title": "git diff --check",
+            "objective": "Verificar espaços em branco e finais de linha do diff completo.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07",
+              "WU-08",
+              "WU-09",
+              "WU-10",
+              "WU-11",
+              "WU-12"
+            ],
+            "action": "git-diff-check",
+            "acceptanceCriteria": [
+              "git diff --check sem saída"
+            ]
+          },
+          {
+            "id": "WU-14",
+            "title": "validate:core",
+            "objective": "Rodar o gate core completo (builds incluindo next build do frontend, testes da IA, scheduling, frontend, Go, gate scripts, auditoria estática) com os skips explícitos do Goal002 mantidos.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-13"
+            ],
+            "action": "validate-core",
+            "acceptanceCriteria": [
+              "npm run validate:core passa; skips explícitos apenas os do Goal002"
+            ]
+          },
+          {
+            "id": "WU-15",
+            "title": "validate:integration com os testes do read model de status",
+            "objective": "Rodar o gate de integração completo, incluindo os testes de integração do BFF com o read model `/v1/status`, com BFF_TEST_DATABASE_URL apontando para banco descartável.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-14"
+            ],
+            "action": "validate-integration",
+            "acceptanceCriteria": [
+              "npm run validate:integration passa com os testes do Goal014 do BFF incluídos"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "013-r2-tech_lead-fa8705ab-a1"
+  }
+}

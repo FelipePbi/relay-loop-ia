@@ -1,0 +1,19 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-a8f2ed50",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-07T17:30:32.166Z",
+  "currentGoal": "004",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "588b70f575670eeda015750b400a09752ceb5490",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "humanRequired": {
+    "reason": "UNKNOWN_FATAL",
+    "detail": "Goal 004 ended as ACCEPTED",
+    "at": "2026-09-07T17:30:33.349Z"
+  },
+  "archivedAt": "2026-09-07T17:35:53.831Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "harness: Goal004 herdou runtime do Goal003 (c47cc31) e lease do orquestrador vazava em saida antecipada (ultimo commit); ambos corrigidos com regressao"
+}

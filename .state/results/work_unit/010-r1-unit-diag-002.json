@@ -1,0 +1,34 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T06:24:47.010Z",
+  "attemptId": "010-r1-unit-diag-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-diag-002",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "DIAG-002",
+      "status": "COMPLETED",
+      "summary": "Diagnosed the empty (\"sem saída\") typecheck failure as a Windows spawn ENOENT on npm/npx and fixed it at the source by routing those commands through node.exe + npm's own cli.js entry points, with no shell involved.",
+      "report": "Diagnóstico: a verificação \"typecheck\" do WU-16 não roda `npm run typecheck` — roda a ação determinística homônima em `tools/ia-loop/lib/deterministic-actions.mjs` (`npx tsc --noEmit`, cwd = SCOPE), executada por `runDeterministicAction` em `tools/ia-loop/lib/deterministic-executor.mjs` via `child_process.spawn(argv[0], ..., { shell: false })`. A saída reportada como \"(sem saída)\" só é produzida quando stdout E stderr estão ambos vazios, o que em `toDeterministicResult` acontece exatamente no caso de falha de spawn (o erro fica em `blockedReason`, não em `report`).\n\nReproduzi isso diretamente: `spawn('npx', ['tsc','--noEmit'], { cwd:'apps/scheduling-service', shell:false })` falha com `SPAWN ERROR: spawn npx ENOENT` neste ambiente Windows — porque `npm`/`npx` são wrappers `.cmd`, e o Node recusa (por design, desde a correção da CVE-2024-27980) executar um `.cmd` diretamente sem shell. Isso bate exatamente com a saída vazia observada: não é falha de compilação TypeScript, é falha de spawn na ferramenta que roda a verificação.\n\nCorreção (raiz, não a verificação em si): adicionei em `deterministic-executor.mjs` um `platformSpawn` que, apenas no Windows e apenas quando o comando é `npm`/`npx`, resolve para os entry points reais que o npm já publica ao lado de `node.exe` (`npm-cli.js`/`npx-cli.js`) e os executa via `process.execPath` — um `.exe` de verdade, sem shell. `shell: true` foi descartado deliberadamente: reintroduziria exatamente o risco de injeção via metacaracteres que o comentário do arquivo documenta como propriedade de segurança intencional (`pattern`/`scope` de um plano nunca viram string de shell). `platformSpawn` só é usado como valor padrão de `spawnFn` — testes que injetam seu próprio `spawnFn` (como os dois testes de `work-unit-compatibility.test.mjs` que verificam `command === 'npx'` e `shell === false`) continuam vendo exatamente o argv lógico original, sem qualquer mudança de comportamento.\n\nNenhuma outra Work Unit foi tocada; a ação `typecheck` e seu comando (`npx tsc --noEmit`) permanecem exatamente como estavam — não foram alterados, desabilitados nem afrouxados.\n\nComandos executados e resultado:\n- `node -e \"spawn('npx', ['tsc','--noEmit'], {cwd:'apps/scheduling-service', shell:false})\"` → reproduziu `SPAWN ERROR: spawn npx ENOENT` (causa raiz confirmada).\n- `node --input-type=module -e \"import { runDeterministicAction } ... unit={action:'typecheck', scope:'apps/scheduling-service'}\"` → antes do fix: falharia por SPAWN_FAILED; depois do fix: `ok: true, exitCode: 0` (rodei depois do fix e confirmei `ok: true` para `apps/scheduling-service` e `apps/bff`).\n- `node --test tools/ia-loop/tests/work-unit-compatibility.test.mjs` → 20/20 passaram, incluindo os dois testes que fixam o contrato \"argv, sem shell\" do executor determinístico.\n- `npm run test:ia-loop` (raiz) → 1094/1094 testes passaram.\n- `npm run typecheck` em `apps/scheduling-service` e em `apps/bff` (script completo, com `prisma generate`) → exit 0 em ambos.",
+      "changedFiles": [
+        "tools/ia-loop/lib/deterministic-executor.mjs"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"typecheck\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "A ação 'typecheck' (npx tsc --noEmit) em deterministic-actions.mjs não foi tocada. Corrigi apenas o mecanismo de spawn em deterministic-executor.mjs (causa raiz do ENOENT no Windows). Execução real via runDeterministicAction com o executor de produção (sem spawnFn injetado) retornou ok:true, exitCode:0 para apps/scheduling-service e apps/bff."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "git diff --stat mostra que apenas tools/ia-loop/lib/deterministic-executor.mjs foi alterado por mim; os demais arquivos modificados/novos no working tree são de outras Work Units e permaneceram intocados. Os 20 testes de work-unit-compatibility.test.mjs e os 1094 testes de `npm run test:ia-loop` passaram, incluindo os dois testes que fixam o contrato 'argv, sem shell' do executor."
+        }
+      ]
+    },
+    "attemptId": "010-r1-unit-diag-002-a1"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "relay-ia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relay IA — orquestrador autônomo de agentes, extraído do tools/ia-loop do atendly-ia.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ia-loop:spike": "node spike-agent-invocation.mjs",
+    "ia-loop:supervised": "node run-supervised.mjs",
+    "ia-loop:sessions": "node persistent-session-spike.mjs",
+    "ia-loop:tech-lead": "node workers/tech-lead.mjs",
+    "ia-loop:developer": "node workers/developer.mjs",
+    "ia-loop:goal": "node run-goal.mjs",
+    "ia-loop:close": "node run-close.mjs",
+    "ia-loop:auto": "node run-auto.mjs",
+    "ia-loop:pause": "node run-pause.mjs",
+    "ia-loop:status": "node run-status.mjs",
+    "ia-loop:resources": "node run-resources.mjs",
+    "ia-loop:resources:cleanup": "node run-resources-cleanup.mjs",
+    "ia-loop:resume": "node run-resume.mjs",
+    "ia-loop:recover": "node run-recover.mjs",
+    "ia-loop:reclassify": "node run-reclassify.mjs",
+    "ia-loop:authorize-retry": "node run-authorize-retry.mjs",
+    "ia-loop:reconcile-runtime": "node run-reconcile-runtime.mjs",
+    "ia-loop:usage": "node run-usage.mjs",
+    "ia-loop:metrics": "node run-metrics.mjs",
+    "ia-loop:benchmark": "node run-benchmark.mjs",
+    "ia-loop:worker": "node run-worker.mjs",
+    "test:ia-loop": "node --test tests/**/*.test.mjs",
+    "test": "node --test tests/**/*.test.mjs"
+  }
+}

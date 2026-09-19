@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T21:18:59.722Z",
+  "attemptId": "012-r3-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r3-unit-fix-001",
+      "goal": "012",
+      "round": 3,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Implementada a recusa NO_TEXTUAL_MESSAGE em generateSuggestions, fechando a divergência residual do B1 entre PUBLIC_API_V1.md e o código.",
+      "report": "Blocker: `PUBLIC_API_V1.md` (seção \"Sugestões de resposta no atendimento humano\") já documentava a recusa por \"mensagem do cliente não textual\", mas `AssistantService.generateSuggestions` não a implementava — sem `lastInboundText`, o prompt seguia normalmente.\n\nMudanças:\n- `apps/ai-orchestrator/src/modules/assistant/assistant.service.ts`: adicionado `\"NO_TEXTUAL_MESSAGE\"` a `SuggestionRefusalReason` (comentário de ordem atualizado) e um retorno antecipado `{ ok: false, reason: \"NO_TEXTUAL_MESSAGE\" }` logo após calcular `lastInboundText`, antes de qualquer leitura de conhecimento, montagem de prompt ou criação de `AiRun` — mesmo padrão das demais recusas próprias (contato, sessão, atendimento, config do negócio). Mensagens de mídia gravam `body` vazio (`InboundMessageProcessor`/`MessageGraphWorkflow`), então `!lastInboundText` cobre tanto o caso de mídia quanto o de nenhuma mensagem `INBOUND` na conversa.\n- `apps/ai-orchestrator/src/modules/internal/routes.ts`: comentário \"quatro recusas próprias\" → \"cinco recusas próprias\" (contagem correta após a quinta recusa).\n- `apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts`: união de tipos e lista parametrizada `it.each` do teste de rota passam a incluir `\"NO_TEXTUAL_MESSAGE\"`.\n- `apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts`: novo teste \"sugestão recusa mensagem do cliente não textual\" que roda o `AssistantService` real (via harness/eval world) com uma mensagem `INBOUND` de `body: \"\"`, e prova que a recusa acontece sem chamar o modelo (`world.model.calls` vazio) e sem criar `AiRun`. Também ajustado o teste pré-existente \"estilo não muda a sugestão operacional\" para semear uma mensagem `INBOUND` com texto real em cada mundo do loop de estilos, já que ele não seguia texto de entrada nenhum e passou a ser recusado pelo novo guard (esse teste não cobre ausência de texto — cobre paridade de estilo — então precisava de uma mensagem real para continuar válido).\n\nComandos executados e resultado:\n- `npx vitest run tests/internal/suggestions.routes.test.ts tests/evals/suggestions.eval.test.ts tests/evals/knowledge-memory-suggestions-isolation.eval.test.ts tests/tools/suggestion-out-of-reach.test.ts` (em `apps/ai-orchestrator`) → 4 arquivos, 23 testes, todos passando.\n- `npx vitest run` completo em `apps/ai-orchestrator` → 51 arquivos passados, 6 skipped, 417 testes passados, 52 skipped, 0 falhas.\n- `npx tsc --noEmit -p tsconfig.json` em `apps/ai-orchestrator` → sem output, sem erros.\n- Grep confirmou que nenhuma outra rota/serviço (BFF, frontend) enumera os `SuggestionRefusalReason` explicitamente (o BFF repassa `upstreamCode` genericamente), então nenhuma mudança adicional foi necessária ali.\n- `PUBLIC_API_V1.md` não precisou de edição: já descrevia a recusa corretamente; a divergência era só o código não implementá-la.\n\nNenhum outro arquivo do plano foi tocado; nenhum commit, push ou mudança de branch foi feito.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts",
+        "apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: B1 (residual) — recusa por mensagem não textual implementada em AssistantService.generateSuggestions, alinhada ao PUBLIC_API_V1.md",
+          "met": true,
+          "detail": "assistant.service.ts agora retorna { ok:false, reason:'NO_TEXTUAL_MESSAGE' } quando não há texto do último inbound antes de montar o prompt/criar AiRun; coberto por teste de rota (suggestions.routes.test.ts) e por teste de serviço real via harness (suggestions.eval.test.ts), ambos verdes; suíte completa e typecheck do ai-orchestrator sem falhas."
+        }
+      ]
+    },
+    "attemptId": "012-r3-unit-fix-001-a1"
+  }
+}

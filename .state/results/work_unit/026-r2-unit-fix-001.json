@@ -1,0 +1,49 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T23:08:34.256Z",
+  "attemptId": "026-r2-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "026-r2-unit-fix-001",
+      "goal": "026",
+      "round": 2,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Os 4 blockers da rodada 1 foram corrigidos: writer remoto removido de client.ts, regra estática endurecida com caso negativo, CI corrigido e arquivos órfãos de pnpm removidos.",
+      "report": "Blocker 1 — Writer remoto em client.ts: removi de `MinhaAgendaSourceClient` (interface) e de `MinhaAgendaClient` (classe) os métodos `createAppointment`, `updateAppointment`, `cancelWithComments`, `createCustomer`, `getAppointment`, `appointmentExists` e `searchCustomers`. Sobrou apenas o que `import-source-reader.ts` de fato consome: `listServices`, `findAppointmentsByDateRange`, `getCompanyWorkSchedule`, `getEmployeeWorkScheduleByEmployeeId`. Removi também os tipos órfãos `CreateCustomerInput`, `CreateAppointmentInput`, `UpdateAppointmentInput` de `types.ts` (só existiam para os métodos removidos) e os imports agora não usados em `client.ts`. Atualizei o dublê `FakeSourceClient` em `minha-agenda-import-snapshot.test.ts` para não implementar mais os métodos removidos da interface (eram stubs \"not used by the import reader\").\n\nBlocker 2 — Regra estática fraca: `findMinhaAgendaWriterReferences` (scripts/final-production-audit.mjs) só reprovava o nome antigo da classe e `implements CalendarProvider`. Adicionei uma terceira checagem por nome de método de escrita/leitura operacional (`createAppointment`, `rescheduleAppointment`, `cancelAppointment`, `createHold`, `listHolds`, `getHold`, `releaseHold`, `getAvailability`, `getAppointment`, `listAppointments`, `getMigrationSnapshot`, `updateAppointment`, `cancelWithComments`, `createCustomer`, `appointmentExists`, `searchCustomers`), casada por limite de palavra seguida de `(`, para pegar declaração/chamada mesmo sem o nome de classe antigo. Adicionei dois casos negativos novos em `scripts/tests/final-production-audit-legacy-regression.test.mjs` provando que a regra agora reprova um método de escrita e um de leitura operacional isolados, sem depender do nome da classe nem de `implements CalendarProvider`.\n\nBlocker 3 — CI quebrado por `packages/contracts`: removi `packages/contracts` do loop `npm ci --prefix` em `.github/workflows/validate.yml` (job `core`). Reproduzi o comando fora do diretório do pacote e confirmei `npm ci --prefix packages/contracts` sai com código 1 (`npm error code EUSAGE`) — a mesma falha que o Tech Lead reportou —, e o step do job passa a não executá-lo mais.\n\nBlocker 4 — Arquivos não rastreados fora de escopo: removi `pnpm-lock.yaml` (raiz), `apps/scheduling-service/pnpm-lock.yaml` e `apps/scheduling-service/pnpm-workspace.yaml` (o último tinha o placeholder literal `'@prisma/engines': set this to true or false`, confirmado antes de apagar). Não toquei em `scripts/tests/final-production-audit-legacy-regression.test.mjs`, que é o arquivo novo desta correção (caso negativo do Blocker 2), não um resíduo de `pnpm --filter`.\n\nComandos executados e resultado real:\n- `npm run typecheck` em apps/scheduling-service → passou limpo (Prisma generate + tsc --noEmit sem erros).\n- `npx vitest run tests/unit/minha-agenda-client.test.ts tests/unit/minha-agenda-import-snapshot.test.ts` → 2 arquivos, 12 testes, todos passaram.\n- `npx vitest run tests/unit` (suíte completa de unit do scheduling-service) → 27 arquivos, 370 testes, todos passaram.\n- `node --test scripts/tests/final-production-audit-legacy-regression.test.mjs scripts/tests/gate.test.mjs` → 22 testes, todos passaram (16 do audit + 6 do gate).\n- `node scripts/final-production-audit.mjs` → 19 checks, 0 falhas, incluindo `minha_agenda_origin_has_no_writer: ok=true`.\n- Reproduzi `npm ci --prefix packages/contracts` num diretório limpo sem esse caminho → confirmado exit code 1 (evidência do Blocker 3 antes da correção).\n- `git status --porcelain` final → só os arquivos abaixo mudaram nesta unidade; nenhum arquivo de controle da migração (goals/, reviews/, MIGRATION_STATUS.md) foi tocado.\n\nNão ampliei escopo: deixei intocado o campo `enableWrites` em config.ts/routes.ts (validação de conexão, não parte do writer client.ts citado no blocker) e não toquei em `tools/ia-loop/**`, que também referenciam `packages/contracts` mas pertencem à ferramenta de orquestração, não ao workflow de CI do app citado no blocker.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/integrations/minha-agenda/client.ts",
+        "apps/scheduling-service/src/modules/integrations/minha-agenda/types.ts",
+        "apps/scheduling-service/tests/unit/minha-agenda-import-snapshot.test.ts",
+        "scripts/final-production-audit.mjs",
+        "scripts/tests/final-production-audit-legacy-regression.test.mjs",
+        ".github/workflows/validate.yml"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: writer remoto removido de client.ts (createAppointment, updateAppointment, cancelWithComments, createCustomer, getAppointment, appointmentExists, searchCustomers) na classe e na interface",
+          "met": true,
+          "detail": "Métodos removidos de MinhaAgendaSourceClient e MinhaAgendaClient em client.ts; só sobraram listServices, findAppointmentsByDateRange, getCompanyWorkSchedule, getEmployeeWorkScheduleByEmployeeId, os únicos consumidos por import-source-reader.ts. Confirmado por typecheck limpo e 370 testes unit passando."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: regra estática minha_agenda_origin_has_no_writer agora prova ausência de método de escrita, não só do nome antigo da classe",
+          "met": true,
+          "detail": "findMinhaAgendaWriterReferences ganhou checagem por nome de método (createAppointment, updateAppointment, cancelWithComments, createCustomer, appointmentExists, searchCustomers, getAppointment e os da §4). Dois casos negativos novos em final-production-audit-legacy-regression.test.mjs provam que a regra reprova um método isolado sem o nome de classe antigo nem 'implements CalendarProvider'; 16 testes do arquivo passaram."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: CI não executa mais npm ci --prefix packages/contracts",
+          "met": true,
+          "detail": ".github/workflows/validate.yml linha do loop 'for dir in ...' não inclui mais packages/contracts. Reproduzi separadamente que o comando removido falhava com exit 1 (npm error EUSAGE) num diretório sem esse caminho, confirmando a causa do blocker antes da correção."
+        },
+        {
+          "criterion": "Blocker 4 resolvido: arquivos não rastreados fora de escopo removidos",
+          "met": true,
+          "detail": "pnpm-lock.yaml (raiz), apps/scheduling-service/pnpm-lock.yaml e apps/scheduling-service/pnpm-workspace.yaml (placeholder '@prisma/engines': set this to true or false confirmado) apagados; git status final não lista mais nenhum deles, só o arquivo de teste novo desta correção."
+        }
+      ]
+    },
+    "attemptId": "026-r2-unit-fix-001-a1"
+  }
+}

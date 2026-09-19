@@ -1,0 +1,19 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T13:02:57.507Z",
+  "attemptId": "007-r3-tech_lead-371d4ebc-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "007-r3-tech_lead-371d4ebc",
+      "goal": "007",
+      "round": 3,
+      "decision": "ACCEPTED",
+      "blockers": [],
+      "nextAction": "STOP",
+      "summary": "Review DEEP dirigido da rodada 3 do Goal007 (worktree goal-007, HEAD 9494eb6, 37 arquivos), sem edição pelo reviewer. Diff entre as rodadas 2 e 3 restrito ao previsto: o patch dos 30 arquivos rastreados é byte a byte idêntico ao da rodada 2, e o único arquivo alterado foi `scripts/goal007-migration-rehearsal.mjs`, cuja função `inventory` passou a excluir sondas (`WHERE \"id\" NOT LIKE 'probe-%'`) na contagem de `Service`, mantendo a sonda `probe-review-ok` até a limpeza final e todas as demais asserções (fingerprint, preço zero explícito, quatro tipos). Blocker R2-01 CLOSED: `validate:integration` reproduzido em cluster descartável próprio (127.0.0.1:55445, parado ao final) PASSED 17/17 — ensaio `goal007-migration-rehearsal` PASSED (expansão preserva serviços e snapshots, constraint antiga de preço segura até o passo de constraints, lockstep de revisão vigente desde a expansão, quatro tipos validando após o corte), `provision:scheduling-test-database` aplicou as oito migrations, Scheduling integração 19/19, IA integração 39/39, outbox do Go OK, BFF e ensaios 003–006 OK. `validate:core` PASSED 14 passed/3 skipped (IA 185 testes/39 pulados, Scheduling unit 40, frontend 15); `git diff --check` limpo. Evidência das rodadas anteriores permanece válida por ausência de mudança de código: lint/tsc exit 0 nos quatro apps, constraints SQL conferidas no banco migrado e `migrate diff` sem drift do Goal007. Aceite cobre os critérios 1–10 do Goal: quatro semânticas de preço com constraints SQL e sem zero fabricado; duração opcional com revisão em lockstep e predicado operacional único usado por `/internal/services`, `requireActive` e `aiActivationReady` para ambas as fontes; atributos do MVP persistidos e validados sem efeito operacional; snapshot do acordo com total por regra única no Scheduling e na IA; mapper do Minha Agenda sem `FIXED`/zero/duração copiada; contratos por operação em Scheduling, BFF (com recusa de ativar a IA sem serviço operacional), frontend e IA; resíduos do 006 fechados (tag idempotente, proveniência pela sessão, compromissos por `customerId`). Observações não bloqueantes para o fechamento: (1) `countOperationalServices` consulta o provider (HTTP externo na fonte Minha Agenda) em toda leitura de `/internal/calendar`, engolindo falha como zero; (2) replays de idempotência anteriores ao Goal007 recebem `totalPriceType: NONE` por default mesmo com `totalPrice` numérico; (3) o mapper do Minha Agenda não valida a resposta por schema e converte preço numérico em string para `NOT_INFORMED`, a tratar no Goal010; (4) onboarding normaliza tipos novos para o par binário ao reenviar e o formulário legado do diretório só exibe os quatro tipos, ambos documentados e de responsabilidade do Goal015; (5) `migrate diff` mantém o drift de forma pré-existente do Goal006 (`updatedAt` e nomes de FK); (6) DATA_MIGRATION e GAP_ANALYSIS editados pelo Developer com redação \"pendente de review\", a alinhar no fechamento documental."
+    },
+    "attemptId": "007-r3-tech_lead-371d4ebc-a1"
+  }
+}

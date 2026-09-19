@@ -1,0 +1,68 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T04:30:02.041Z",
+  "attemptId": "010-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-wu-04",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Entreguei o ImportExecutionService: importação por item ou grupo dependente, com efeito, ExternalEntityMap e checkpoint no mesmo commit, falha parcial que não bloqueia o lote e escrita de agenda só por runCalendarWrite.",
+      "report": "## O que mudou e por quê\n\n**Novo `apps/scheduling-service/src/modules/migrations/import-execution-service.ts`** — o motor da importação única. Não existe transação cobrindo o lote: cada item (ou o grupo dependente da disponibilidade) roda em transação própria que grava, no **mesmo commit**, três coisas: o registro criado na Atendly, a linha de `ExternalEntityMap (tenantId, provider, entityType, externalId)` e o checkpoint do `ImportItem` (`status=IMPORTED`, `entityType`, `internalId`, `attemptCount`, `processedAt`). Esse casamento é o ponto onde duplicação apareceria — separar mapa e checkpoint abriria a janela de \"efeito gravado, checkpoint perdido\" —, e ele tem caso negativo explícito (teste \"checkpoint perdido depois do efeito não duplica\").\n\n- **Ordem de dependência** (`CATEGORY_ORDER`): serviço e cliente antes de bloqueio, disponibilidade e agendamentos. O agendamento resolve cliente e serviço pelo índice de `ExternalEntityMap`; ausência é `AppError` própria (`IMPORT_CUSTOMER_MAPPING_MISSING` / `IMPORT_SERVICE_MAPPING_MISSING`) que marca **aquele** item e o laço segue.\n- **Falha parcial**: qualquer erro por item vira `FAILED` com motivo sanitizado (código estável + mensagem, nunca payload cru). O `raw` da origem é `unknown` até ser validado pelos schemas zod do WU-02; registro fora do contrato falha só ele (`IMPORT_SOURCE_RECORD_INVALID`). `NEEDS_REVIEW` não é reprocessado: \"Importar tudo\" não resolve divergência sozinho.\n- **Contagens** são relidas do banco (`importItem.findMany` + `tally`) no fecho de cada categoria e da sessão, nunca acumuladas em memória.\n- **Escrita de agenda** (agendamento e `TimeBlock`) só por `runCalendarWrite` + `lockCalendarDays(calendarDaysBetween(...))`. Serviço e cliente usam `$transaction` comum (não ocupam tempo de agenda). Disponibilidade **não** é revalidada na importação: recusar horário importado por regra de oferta atual apagaria história real; o que a política única dá aqui é serialização e lock de dia.\n- **Fidelidade**: futuro nasce `CONFIRMED`/`source=INTEGRATION` com snapshots do Goal007 nos itens e evento `CREATED` no mesmo commit; histórico preserva data, horário, cliente, serviço, status e preço, com `completedAt` e `noShowAt` **nulos** — nada de conclusão inventada pela data.\n- **Retomada** por `maxItems`, com cursor por categoria (`{lastExternalId}`) e `checkpointAt`.\n- Lease e conclusão única ficaram **fora** (WU-05 e WU-06): o motor só move a sessão para `EXECUTING` condicionado a estado executável e a devolve a `PARTIAL` (sobrou item) ou `READY` (tudo resolvido, esperando a decisão do usuário).\n\n**Alterações de apoio, aditivas:** `import-preview-service.ts` passou a **exportar** `CATEGORY_ENTITY_TYPE` (o motor precisa exatamente do mesmo mapeamento categoria→tipo de entidade; duas cópias seriam duas definições da mesma identidade); `index.ts` exporta o novo serviço; `tests/unit/support/database-double.ts` ganhou a unicidade real `(tenantId, provider, entityType, externalId)` em `externalEntityMap`, para que uma segunda criação do mesmo registro de origem seja recusada pelo dublê como o banco recusaria.\n\n**Novo `tests/unit/import-execution-service.test.ts`** (14 casos). Os testes montam o preview de verdade (`ImportPreviewService.analyze`) e só então executam — os itens consumidos são os que a análise produz, não uma fixture paralela.\n\n## Comandos executados\n\n- `npx tsc --noEmit -p tsconfig.json` (apps/scheduling-service) — **verde**.\n- `npx eslint src/modules/migrations --max-warnings=0` — **verde**.\n- `npx vitest run tests/unit/import-execution-service.test.ts` — **14/14 passam**.\n- `npx vitest run tests/unit` — **186 testes, 13 arquivos, todos passam** (nenhuma suíte existente quebrou com a mudança do dublê).\n- `git diff --check` — limpo.\n- `npm run validate:core` (raiz) — **não executável nesta worktree**: falha no primeiro passo, `build:contracts`, com `'tsc' não é reconhecido`. A worktree só tem `apps/scheduling-service/node_modules`; não existem `node_modules` na raiz nem em `packages/contracts`. É limitação pré-existente do ambiente, sem relação com este diff (não toquei `packages/contracts`), e por isso rodei diretamente os passos equivalentes do Scheduling. Não rodei `npm install` na raiz por ser mutação pesada de ambiente fora do escopo desta unidade.\n- `npm run lint` do Scheduling inteiro acusa 2 erros em `src/modules/appointments/appointment-series-service.ts` — arquivo **não modificado por mim** (`git status` limpo para ele), erros pré-existentes do código já commitado.\n\n## Nota de escopo\n\n`CalendarMigrationService.importToAtendly` **continua existindo** com sua transação monolítica. Isso é decisão já tomada pelo WU-07, que documentou no próprio arquivo que o protocolo antigo é \"compatibilidade temporária declarada... removido no Goal024\". Removê-lo aqui seria reverter trabalho de outra Work Unit. O critério \"não resta transação monolítica\" vale para o caminho de importação deste Goal, que é o novo motor.\n\nNenhum documento vigente passou a mentir: o módulo ainda não está ligado a rota (contratos são do WU-08) e as decisões de arquitetura envolvidas já estão registradas no Goal e no cabeçalho da migration do WU-01.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+        "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+        "apps/scheduling-service/src/modules/migrations/index.ts",
+        "apps/scheduling-service/tests/unit/import-execution-service.test.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A importação processa por item ou grupo dependente com checkpoints persistidos; não resta transação monolítica cobrindo o lote inteiro",
+          "met": true,
+          "detail": "Cada item roda em transação própria; a única exceção é o grupo dependente da disponibilidade. Teste 'não abre transação sobre o lote' prova dois agendamentos em índices de transação distintos no journal, com o evento CREATED no mesmo commit. Checkpoint por item em ImportItem e cursor/checkpointAt por categoria. O importToAtendly legado segue existindo por decisão do WU-07 (compatibilidade declarada, removida no Goal024)."
+        },
+        {
+          "criterion": "Dependências são respeitadas: serviço e cliente são importados antes do agendamento que os referencia",
+          "met": true,
+          "detail": "CATEGORY_ORDER coloca SERVICE e CUSTOMER antes das quatro categorias de agendamento. Teste 'importa serviço e cliente antes do agendamento' verifica appointment.customerId = cliente criado e appointmentItem.serviceId = serviço criado; teste 'marca o agendamento cujo cliente não foi importado' prova IMPORT_CUSTOMER_MAPPING_MISSING quando a dependência falta."
+        },
+        {
+          "criterion": "Reprocessar o mesmo registro da origem não cria segundo registro na Atendly, com ExternalEntityMap como chave de idempotência por origem/item",
+          "met": true,
+          "detail": "Três testes: reexecução da mesma sessão (processed=0, tabelas inalteradas); 'checkpoint perdido depois do efeito não duplica' (itens forçados a PENDING com o mapa gravado — nenhum registro novo, itens reconciliados com ALREADY_IMPORTED_FROM_SOURCE); base preenchida com mapa pré-existente reaproveita o registro. O dublê agora declara a unicidade real (tenantId, provider, entityType, externalId)."
+        },
+        {
+          "criterion": "Um item inválido no meio do lote marca apenas aquele item e os demais continuam; a sessão fica em estado parcial",
+          "met": true,
+          "detail": "Teste 'um registro fora do contrato marca só aquele item': serviço 901 com price não numérico vira FAILED/IMPORT_SOURCE_RECORD_INVALID enquanto 900 e 902 são IMPORTED; sessão termina PARTIAL. Mesmo comportamento para dependência ausente no teste do agendamento sem cliente."
+        },
+        {
+          "criterion": "Contagens de importados, ignorados, em revisão e falhos batem com o que está no banco",
+          "met": true,
+          "detail": "finish() e checkpointCategory() releem ImportItem do banco e tabulam. Teste 'contagens ... batem com o banco' compara result.counts, ImportSession.*Count e ImportSessionCategory.*Count contra a contagem direta das linhas do dublê: {imported:1, failed:1, needsReview:1, skipped:0, pending:0}."
+        },
+        {
+          "criterion": "Escritas de agenda passam por runCalendarWrite com locks ordenados e retry limitado, sem caminho paralelo de escrita",
+          "met": true,
+          "detail": "Agendamento e TimeBlock são os únicos escritos de agenda e ambos passam por runCalendarWrite + lockCalendarDays(calendarDaysBetween(...)). Teste 'trava os dias afetados e repete o aborto serializável' injeta P2034 na primeira transação: o atendimento é criado na retentativa (1 linha) e journal.locks contém 'tenant-a:2026-10-01'. Teste do TimeBlock prova lock do dia e escrita dentro de transação."
+        },
+        {
+          "criterion": "Agendamento futuro importado nasce como atendimento normal da Atendly, com snapshot do Goal007 e evento CREATED; histórico preserva data, horário, cliente, serviço, status e preço quando existirem e não inventa conclusão pela data",
+          "met": true,
+          "detail": "Teste do futuro: source=INTEGRATION, status=CONFIRMED, statusRaw=SCHEDULED, 12:00Z–13:00Z para 09:00 em São Paulo, item com serviceNameSnapshot/durationMinutesSnapshot/priceTypeSnapshot/priceSnapshot e um único evento CREATED com ator do chamador. Teste do histórico: passado fica CONFIRMED com completedAt e noShowAt nulos e preço 120 preservado; cancelado fica CANCELLED com statusRaw CANCELLED."
+        },
+        {
+          "criterion": "Reinício no meio do lote retoma do checkpoint sem duplicar",
+          "met": true,
+          "detail": "Teste 'reinício no meio do lote continua de onde parou': primeira passada com maxItems=1 importa só o serviço 900 (sessão PARTIAL, cursor {lastExternalId:'900'}); a segunda processa os 3 restantes e termina com 2 serviços, 1 cliente, 1 atendimento, imported=4, failed=0, pending=0, status READY — sem duplicata."
+        }
+      ]
+    },
+    "attemptId": "010-r1-unit-wu-04-a1"
+  }
+}

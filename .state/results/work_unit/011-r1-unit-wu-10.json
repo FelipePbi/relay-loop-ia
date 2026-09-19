@@ -1,0 +1,49 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T07:01:31.408Z",
+  "attemptId": "011-r1-unit-wu-10-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Ensaio prova, em base nova e em fixture legada, backfill, default e leitura do legado nos dois bancos, com repetição sem mudança de estado e contagens que excluem sondas",
+          "met": true,
+          "detail": "Executado ao vivo contra Postgres real (container descartável): PASSED, provando aditividade, backfill linha a linha sem sobra, default novo (IA) e ausência de default (BFF), leitura de legado pós-corte, e repetição idempotente. Contagens usam NOT LIKE 'probe-%'. Regressão negativa (linha de backfill comentada) fez o ensaio falhar de verdade; restaurado, PASSED de novo."
+        },
+        {
+          "criterion": "Passo novo presente em validate:integration e coberto por scripts/tests; npm run test:gate passa",
+          "met": true,
+          "detail": "rehearse:goal011-ai-style-migration adicionado a scripts/validate-integration.mjs e à lista esperada em validate-integration.test.mjs. Novo scripts/tests/goal011-ai-style-migration-rehearsal.test.mjs cobre a lógica pura do ensaio. npm run test:gate passou 36/36."
+        },
+        {
+          "criterion": "DATA_MIGRATION registra o limite de reversão do estilo descontraído",
+          "met": true,
+          "detail": "DATA_MIGRATION.md §5.6 ganhou o parágrafo do Goal011: binário anterior continua seguro enquanto nenhum tenant estiver em CASUAL."
+        },
+        {
+          "criterion": "Nenhum segredo nem credencial real no output ou nas fixtures",
+          "met": true,
+          "detail": "Script só imprime host:port/nome-do-banco; fixtures usam tenants sintéticos. Confirmado na execução real, sem vazar string de conexão."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "scripts/goal011-ai-style-migration-rehearsal.mjs",
+        "scripts/tests/goal011-ai-style-migration-rehearsal.test.mjs",
+        "scripts/validate-integration.mjs",
+        "scripts/tests/validate-integration.test.mjs",
+        "docs/migration/DATA_MIGRATION.md"
+      ],
+      "goal": "011",
+      "jobId": "011-r1-unit-wu-10",
+      "protocolVersion": 2,
+      "report": "Criado scripts/goal011-ai-style-migration-rehearsal.mjs no padrão dos ensaios anteriores (goal010-migration-rehearsal.mjs / goal006-ai-migration-rehearsal.mjs): dois bancos Postgres descartáveis, próprios e derivados de BFF_TEST_DATABASE_URL (sufixos _goal011_ai e _goal011_bff), um reconstruindo o schema pré-Goal011 de AiTenantConfig (IA, enum de 2 valores, default DB 'LIGHT_CLOSE') e outro o de AiSettings (BFF, mesmo enum, tone nulável sem default). Cada banco recebe fixture com tenants nos dois valores antigos (o BFF também com um tenant nunca configurado, tone nulo) e aplica as migrations reais de WU-01 (3 passos) e WU-07 (2 passos) em sequência, provando: (1) o passo de vocabulário é aditivo — nenhuma linha muda e os valores antigos continuam aceitos pelo tipo; (2) o backfill move cada linha determinística e completamente (PROFESSIONAL_OBJECTIVE→PROFESSIONAL, LIGHT_CLOSE→BALANCED), sem sobra em valor antigo, sem tocar outras colunas, e sem alterar o nulo do BFF; (3) o default novo (IA) e a ausência de default (BFF) valem para linha inserida sem \"tone\" explícito; (4) uma linha escrita depois com valor antigo continua legível — a janela de compatibilidade declarada nos cabeçalhos das migrations; (5) reaplicar todos os passos não muda nada nem falha. Contagens sempre excluem sondas (id/tenantId NOT LIKE 'probe-%'); nenhuma credencial aparece no output (só host:port/nome do banco).\n\nRegistrado o passo `rehearse:goal011-ai-style-migration` em scripts/validate-integration.mjs (logo após o do Goal010) e atualizada a lista de steps esperada em scripts/tests/validate-integration.test.mjs. Criado scripts/tests/goal011-ai-style-migration-rehearsal.test.mjs cobrindo a lógica pura do ensaio (mapa de backfill, resolução/recusa de alvo, dois nomes de banco distintos) sem exigir banco — roda dentro de `npm run test:gate`.\n\nAtualizado docs/migration/DATA_MIGRATION.md §5.6 com o parágrafo do Goal011 registrando o limite de reversão: o binário anterior continua sendo destino seguro de rollback enquanto nenhum tenant estiver no estilo CASUAL.\n\nComandos executados e resultado real:\n- `node --test scripts/tests/goal011-ai-style-migration-rehearsal.test.mjs` → 5/5 PASS.\n- `node --test scripts/tests/validate-integration.test.mjs` → 24/24 PASS (novo step presente na lista esperada).\n- `npm run test:gate` → 36/36 PASS (duas vezes, antes e depois da prova ao vivo).\n- `node --check scripts/goal011-ai-style-migration-rehearsal.mjs` → sintaxe OK.\n- Prova ao vivo contra Postgres real: subi um container descartável (`docker run postgres:16-alpine`, porta 127.0.0.1:55433, credenciais sintéticas, removido ao final com `docker rm -f`) e rodei `BFF_TEST_DATABASE_URL=... node scripts/goal011-ai-style-migration-rehearsal.mjs` — PASSED, exit 0, criando/dropando os dois bancos `atendly_bff_test_goal011_ai` e `atendly_bff_test_goal011_bff`.\n- Regressão negativa: comentei temporariamente a linha `LIGHT_CLOSE → BALANCED` do backfill real do BFF e rodei o ensaio de novo — falhou de verdade com exit 1 e duas asserções apontando a linha presa no valor antigo, confirmando que o ensaio não é cosmético. Restaurei o arquivo original (`git diff` confirmou zero alteração) e rodei novamente — PASSED, exit 0.\n\nNenhum arquivo de outra Work Unit foi tocado; nenhum commit, push ou mudança de branch foi feito.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Criado o ensaio da migração de estilo de conversa nos dois bancos (IA e BFF), registrado em validate:integration com testes próprios em scripts/tests, e documentado o limite de reversão do estilo CASUAL em DATA_MIGRATION.md.",
+      "workUnitId": "WU-10"
+    },
+    "attemptId": "011-r1-unit-wu-10-a1"
+  }
+}

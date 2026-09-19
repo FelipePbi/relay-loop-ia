@@ -1,0 +1,69 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:48:47.463Z",
+  "attemptId": "016-r4-correction-b938a736-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r4-correction-b938a736",
+      "goal": "016",
+      "round": 4,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 016, rodada 4\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 2 blocker(s) registrados pelo Tech Lead na revisão da rodada 3, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (1): apps/frontend/tests/goal016-agenda-views.test.tsx\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: teste renderizado exercendo a aba já ativa (esqueleto permanente) — Novo teste 'clicar na aba já ativa não prende a tela no esqueleto de carregamento' em goal016-agenda-views.test.tsx clica na aba Dia já ativa e afirma ausência do esqueleto de carregamento e persistência do conteúdo. Passou em npx vitest run.\n- OK: Blocker 2 resolvido: teste com bloco cruzando a meia-noite provando o filtro por dia do DayView — Novo teste 'bloqueio que atravessa a meia-noite não vaza para o dia seguinte' usa TimeBlock com startAt ISO_YESTERDAY 23:00 / endAt ISO_TODAY 00:30, e afirma ausência no dia seguinte e presença truncada (--start: 16, --span: 1) no dia de início. Passou em npx vitest run.\n\nAmbos os blockers da rodada 3 eram sobre prova ausente, não sobre código incorreto: a correção do esqueleto permanente (`AgendaBoard.tsx:184-189`, early return quando `nextView === view`) e o filtro por dia do `DayView` (`DayView.tsx:42`, `entriesForDate` antes de `layoutDayEntries`/`timeGridBounds`) já estavam implementados, mas sem teste renderizado exercendo o caso que motivou cada um.\n\nAdicionei dois testes em `apps/frontend/tests/goal016-agenda-views.test.tsx`:\n\n1. \"clicar na aba já ativa não prende a tela no esqueleto de carregamento\" (describe \"Dia, Semana e Mês alternáveis\"): renderiza a Agenda, clica na aba \"Dia\" já ativa e afirma que `screen.queryByLabelText(\"Carregando agenda\")` não está presente e que o conteúdo carregado (nome do cliente) continua visível — exercendo exatamente o cenário que travava permanentemente antes do early-return.\n\n2. \"bloqueio que atravessa a meia-noite não vaza para o dia seguinte\" (describe \"Dia na posição real do tempo\"): fixture de `TimeBlock` com `startAt` em `ISO_YESTERDAY 23:00` e `endAt` em `ISO_TODAY 00:30` (America/Sao_Paulo, UTC-3). Afirma que o bloqueio não aparece na seção do dia atual (`within(todaySection).queryByText(...)` ausente) e que, ao navegar para o dia anterior via \"Dia anterior\", ele aparece truncado até a virada (`--start: 16`, `--span: 1`, coerente com `timeGridBounds`/`entryPlacement` para um bloco 23:00–24:00 com grade começando às 07:00).\n\nTambém acrescentei a constante `ISO_YESTERDAY` no topo do arquivo de teste, necessária para a fixture do segundo teste.\n\nComandos executados:\n- `npx vitest run tests/goal016-agenda-views.test.tsx` dentro de `apps/frontend` → 12 testes passaram (10 preexistentes + 2 novos).\n- `npx vitest run` (suíte completa do frontend) → 27 arquivos de teste, 230 testes, todos passaram.\n\nNão toquei em `AgendaBoard.tsx` nem `DayView.tsx` — a correção de código já estava correta e aceita; o escopo desta unidade era só a prova.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/frontend/tests/goal016-agenda-views.test.tsx"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 3884,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "016-r4-correction-b938a736-a1"
+  }
+}

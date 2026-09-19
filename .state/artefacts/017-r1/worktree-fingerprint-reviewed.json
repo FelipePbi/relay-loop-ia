@@ -1,0 +1,148 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-14T18:29:46.956Z",
+  "base": "6582a650f09e7c54e9a37a5b550c5850d9704574",
+  "worktreeInitialHead": "6582a650f09e7c54e9a37a5b550c5850d9704574",
+  "head": "6582a650f09e7c54e9a37a5b550c5850d9704574",
+  "branch": "ai-loop/goal-017",
+  "trackedDiffHash": "1392f22319d702f2bffaacb0bcadf6c550177ec81ad2d96443e9ec4b2d7fac11",
+  "trackedFileCount": 21,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/internal/routes.ts",
+    "apps/ai-orchestrator/tests/internal/conversation-controls.routes.test.ts",
+    "apps/bff/.env.example",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/ai-orchestrator/index.ts",
+    "apps/bff/src/clients/internal-http-client.ts",
+    "apps/bff/src/config/env.ts",
+    "apps/frontend/package.json",
+    "apps/frontend/src/data/http/BffHttpClient.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffConversationService.ts",
+    "apps/frontend/src/features/conversations/ProductConversationsScreen.tsx",
+    "apps/frontend/src/features/conversations/types.ts",
+    "apps/frontend/src/mocks/data/conversations.ts",
+    "apps/frontend/src/shared/styles/atendly-conversations.css",
+    "apps/frontend/tests/bff-http-client.test.ts",
+    "apps/frontend/tests/goal013-media-schema.test.ts",
+    "apps/frontend/tests/goal016-agenda-reachability.test.tsx",
+    "apps/frontend/tests/goal016-agenda-views.test.tsx",
+    "apps/frontend/tests/goal016-appointment-create.test.tsx",
+    "apps/frontend/tests/support/a11y.test.tsx"
+  ],
+  "untrackedHash": "fe5d875224ccfa91261fc1b0828e93441d2ba1be64fdc4cefd86759d9e75dd3a",
+  "untrackedFileCount": 22,
+  "untracked": [
+    {
+      "path": "apps/bff/tests/internal-http-client.test.ts",
+      "sha256": "7e362cc9523e2bbd24108ff8a9b5ef6a6f0690891a0b4c1e8138cbf2593094e1",
+      "bytes": 2291
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationContextPanel.tsx",
+      "sha256": "7ba413fc43e3e3b30a0630102e01b68b6296cafa1c9930f8259fafe11b6f5e71",
+      "bytes": 4427
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationInbox.tsx",
+      "sha256": "311bf07fd811260bf886c99325d7edd7ee7a88001ac005c23d3bc49e45ae7351",
+      "bytes": 8354
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationLoading.tsx",
+      "sha256": "e3ab3e8cc2b7bb4622084dd4b5da00f46ecef7908bc127602ee6eb4abc819390",
+      "bytes": 654
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationRow.tsx",
+      "sha256": "75b9bb0c65bfc8d56f1efabb9cdb94964855324ae382d5a430c09f059b670888",
+      "bytes": 2277
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationSuggestions.tsx",
+      "sha256": "08ff3bd60314c15639a369fa115d52f7e7052970b8b47a83aef7a5d7f82cca4f",
+      "bytes": 4072
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/ConversationThread.tsx",
+      "sha256": "854bcc1e2476f4de6ba2a476a04c18ed4dd6a5f1888b73c354bc122524909cb8",
+      "bytes": 18139
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/MessageAttachment.tsx",
+      "sha256": "9689be685254318ce688f5652becfb9bfdfff4cb3a5efc5b4c26563a330aeabd",
+      "bytes": 8258
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+      "sha256": "c2683f8fd636a638f5c9bc253de5be1392f8503e506023310eb9ad0505b02b02",
+      "bytes": 4353
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/conversationState.ts",
+      "sha256": "c064d8d39d9494b273daa3c95170ee8a3baa51e9428566f119215666c4007121",
+      "bytes": 5828
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/format.ts",
+      "sha256": "881250b9e702d0a4bf7909d7ca6cdc7555b7e02c3b0da01224130eb59805dd66",
+      "bytes": 2883
+    },
+    {
+      "path": "apps/frontend/src/features/conversations/inboxLenses.ts",
+      "sha256": "9675ec0eec4e2f2dafb1d60d60c7d3ad11ab14db322c894c189d247511103b35",
+      "bytes": 5537
+    },
+    {
+      "path": "apps/frontend/tests/goal017-a11y.test.tsx",
+      "sha256": "18e9ceca622a58757b59a1c2f37455394ee8617a74efd4bdb62c8ee30559c814",
+      "bytes": 10719
+    },
+    {
+      "path": "apps/frontend/tests/goal017-chat-media.test.tsx",
+      "sha256": "bed3fc11c1c57304ee92dc115579cbd2abbc8d81376be2b1ca569610f74b2643",
+      "bytes": 12084
+    },
+    {
+      "path": "apps/frontend/tests/goal017-contact-profile.test.tsx",
+      "sha256": "1cfcecaadb531abed48f41ef8bbcabc3c18b3e3915346e24e6d6b667e38b96e2",
+      "bytes": 5779
+    },
+    {
+      "path": "apps/frontend/tests/goal017-delivery-state.test.tsx",
+      "sha256": "11c68b1bcf80021a4832d1c0d54b38a837bc061746f624b7519823916ec9a817",
+      "bytes": 7469
+    },
+    {
+      "path": "apps/frontend/tests/goal017-human-handling.test.tsx",
+      "sha256": "b0dbeb1863fafda5926c0e73cb7cfe1c43ea1bba3bc22df4549ea6ede47b9f25",
+      "bytes": 10301
+    },
+    {
+      "path": "apps/frontend/tests/goal017-inbox-tabs.test.tsx",
+      "sha256": "4469b2b0ee4cc67bd67a638436166c5ee8e5006ffd990cef4928f1174f9a33e5",
+      "bytes": 12551
+    },
+    {
+      "path": "apps/frontend/tests/goal017-reachability.test.tsx",
+      "sha256": "70c4b40ce61705e9d6be1bd78be1b80f8084ea5b747b120937a2daac0603a4e2",
+      "bytes": 6477
+    },
+    {
+      "path": "apps/frontend/tests/goal017-schema.test.ts",
+      "sha256": "366d91b8236e601c8f92c889b79f17086232287fb75085318019242c36943a70",
+      "bytes": 2869
+    },
+    {
+      "path": "apps/frontend/tests/goal017-shell-invariant.test.tsx",
+      "sha256": "fd11980708ab5dd884f1a4c4b5a01446503c9aa9a7cf2fcdd968e779aaf8a9d3",
+      "bytes": 7340
+    },
+    {
+      "path": "apps/frontend/tests/goal017-suggestions.test.tsx",
+      "sha256": "13b51db97cec2b7342be3b795da11ee58ebe6805a7371ccd8692794b0da59fa2",
+      "bytes": 7852
+    }
+  ],
+  "contentHash": "732fabecfad350e04ca4880739ff015d087d4ab6ffa0726ad25d4cf3a0a32c49"
+}

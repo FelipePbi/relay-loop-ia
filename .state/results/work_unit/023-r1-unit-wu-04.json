@@ -1,0 +1,52 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T20:45:52.662Z",
+  "attemptId": "023-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-04",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Purga da central de notificações do BFF implementada, com a divergência de janela entre unreadCount e a lista (review022) corrigida ao reusar a mesma HISTORY_WINDOW_DAYS.",
+      "report": "Implementação:\n\n- `apps/bff/src/modules/notifications/routes.ts`: `HISTORY_WINDOW_DAYS` passou a `export`; extraí `historyWindowSince(now?)` como o único ponto que converte a janela em instante. `GET /v1/notifications` passou a usar essa função em vez de recalcular inline. `GET /v1/notifications/summary` ganhou o filtro `occurredAt: { gte: since }` na query de `byLevel` (que alimenta `unreadCount`) — antes essa contagem era irrestrita no tempo enquanto a lista já era janelada, exatamente a divergência do review022. `openConditionsCount` foi deixado sem janela de propósito: continua contando toda condição aberta, por mais antiga que seja, simetricamente à regra de purga de nunca apagar condição aberta.\n- `apps/bff/src/modules/notifications/store.ts`: adicionei `findExpiredNotifications` (candidatas: `EVENT` em qualquer estado OU `CONDITION` com `resolvedAt` preenchido, `occurredAt` antes do corte, ordenadas por `occurredAt asc, id asc`, com `take` de um a mais que o teto) e `deleteNotifications` (delete em lote por `tenantId` + lista de ids).\n- `apps/bff/src/modules/notifications/retention.ts` (novo): `purgeExpiredNotifications(prisma, { tenantId, maxRows, now? })`, com `NOTIFICATION_RETENTION_MAX_ROWS_LIMIT = 5_000` como teto superior. Usa `historyWindowSince` (reexportado de routes.ts) para a mesma janela da lista/contador — nenhuma segunda janela ou constante nova. Lê `limit + 1` candidatas para sinalizar `hasMore` como fato observado, e retorna `{ purged, hasMore }`. Não toca `NotificationPreference` nem `NotificationSyncState`.\n- `apps/bff/tests/goal023-notification-retention.test.ts` (novo): suíte de integração contra PostgreSQL real (padrão `RUN_INTEGRATION`/`registerBusiness` já usado pelos testes goal022/goal023 existentes), cobrindo os cinco critérios de aceite.\n\nComandos executados e resultado:\n- `npx tsc --noEmit -p tsconfig.json` em `apps/bff` → `TypeScript: No errors found`.\n- Provisionei um PostgreSQL 18 descartável local seguindo a receita de `docs/migration/VALIDATION_GATE.md` (initdb + pg_ctl em `127.0.0.1:55432`, banco `atendly_bff_test`), apliquei `npx prisma migrate deploy` (12 migrations, incluindo `20260915150000_goal023_retention` de WU-01) e `npx prisma generate`.\n- `npx vitest run tests/goal023-notification-retention.test.ts tests/goal022-notification-center.integration.test.ts tests/goal022-notification-routes.integration.test.ts tests/goal023-retention-settings.test.ts` com `BFF_RUN_INTEGRATION_TESTS=true` → `Test Files 4 passed (4)`, `Tests 29 passed (29)`. Sem regressão nos testes existentes da central e das configurações de retenção.\n- `npx vitest run` (suíte inteira) → 19 arquivos falharam por `WHATSAPP_CREDENTIAL_KEYS is not configured`, uma lacuna de ambiente pré-existente (eu só exportei `DATABASE_URL`/`DIRECT_DATABASE_URL`, não o conjunto completo de segredos que o app exige para outros módulos); nenhuma dessas falhas toca `modules/notifications` e nenhuma delas é nova em relação ao baseline — confirmado pela mensagem de erro ser sempre sobre a chave de credencial do WhatsApp, module fora do escopo desta unidade.\n- `npm run lint` (`eslint src --max-warnings=0`) em `apps/bff` → sem saída, sem erros.\n- Derrubei o cluster descartável (`pg_ctl stop -m fast`) e removi o diretório temporário; nenhum artefato de teste sobrou.\n\nNenhum arquivo de controle da migração foi tocado; nenhum commit foi criado.",
+      "changedFiles": [
+        "apps/bff/src/modules/notifications/routes.ts",
+        "apps/bff/src/modules/notifications/store.ts",
+        "apps/bff/src/modules/notifications/retention.ts",
+        "apps/bff/tests/goal023-notification-retention.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Evento e condição resolvida fora da janela são apagados; condição aberta nunca é apagada, por mais antiga que seja",
+          "met": true,
+          "detail": "store.ts:findExpiredNotifications filtra shape EVENT (qualquer estado) OU shape CONDITION com resolvedAt not null, occurredAt < corte; teste 'apaga evento e condição resolvida fora da janela; condição aberta nunca é apagada' cobre EVENT antigo, CONDITION resolvida antiga, CONDITION aberta muito antiga (2020) e EVENT recente — só os dois primeiros são removidos, passou em execução real"
+        },
+        {
+          "criterion": "Depois da purga, unreadCount e a lista aplicam a mesma janela; nenhuma segunda janela ou constante duplicada foi criada",
+          "met": true,
+          "detail": "routes.ts: unreadCount (via groupBy byLevel) e a lista usam a mesma historyWindowSince()/HISTORY_WINDOW_DAYS; retention.ts reusa a mesma função. Teste 'depois da purga, unreadCount e a lista aplicam a mesma janela' seeda um evento crítico não lido fora e um dentro da janela e confirma total=1 e unreadCount=1 em ambos endpoints, passou em execução real"
+        },
+        {
+          "criterion": "NotificationPreference e NotificationSyncState permanecem intocados",
+          "met": true,
+          "detail": "retention.ts nunca referencia essas tabelas; teste dedicado cria preferência e syncState, roda a purga e confirma valores inalterados, passou em execução real"
+        },
+        {
+          "criterion": "Purga em lotes com teto e sinalização de resto; segunda passada imediata não apaga nada",
+          "met": true,
+          "detail": "purgeExpiredNotifications lê limit+1 e retorna hasMore; teste com 3 linhas expiradas e maxRows=2 mostra {purged:2,hasMore:true} depois {purged:1,hasMore:false} depois {purged:0,hasMore:false}, passou em execução real"
+        },
+        {
+          "criterion": "Isolamento de tenant verificado com teste",
+          "met": true,
+          "detail": "teste 'é escopada por tenant' purga o tenant A com linha expirada de B presente e confirma que a linha de B permanece intocada, passou em execução real"
+        }
+      ]
+    },
+    "attemptId": "023-r1-unit-wu-04-a1"
+  }
+}

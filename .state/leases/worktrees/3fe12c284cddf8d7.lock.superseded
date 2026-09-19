@@ -1,0 +1,20 @@
+{
+  "worktreePath": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-013",
+  "attemptId": "013-r1-tech_lead-25ce8d06-a1",
+  "jobId": "013-r1-tech_lead-25ce8d06",
+  "agent": "tech_lead",
+  "kind": "worktree",
+  "key": "3fe12c284cddf8d7",
+  "workerInstanceId": "25844-e9bba0aa",
+  "hostname": "Borges",
+  "bootAt": "2026-09-12T17:27:49.372Z",
+  "pid": 25844,
+  "processStartedAt": "2026-09-13T17:44:31.360Z",
+  "status": "SUPERSEDED",
+  "version": 325,
+  "acquiredAt": "2026-09-13T23:29:39.887Z",
+  "heartbeatAt": "2026-09-14T00:23:32.567Z",
+  "expiresAt": "2026-09-14T00:25:02.567Z",
+  "supersededAt": "2026-09-14T01:07:06.324Z",
+  "supersededProof": "DIFFERENT_BOOT"
+}

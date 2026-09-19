@@ -1,0 +1,52 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T11:34:09.004Z",
+  "attemptId": "015-r1-unit-wu-06-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-wu-06",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "WU-06",
+      "status": "COMPLETED",
+      "summary": "Verifiquei que ProductServicesScreen.tsx, ServiceList.tsx e ServiceForm.tsx já entregam integralmente o escopo da WU-06; nenhuma alteração de código foi necessária.",
+      "report": "Ao abrir os três arquivos esperados (apps/frontend/src/features/services/ProductServicesScreen.tsx, ServiceList.tsx, ServiceForm.tsx) constatei que já estavam presentes no worktree (untracked) com implementação completa cobrindo lista de serviços, formulário de criar/editar com progressive disclosure e roteamento pelas páginas em apps/frontend/src/app/(platform)/servicos/{page,novo,editar}.tsx. Conferi cada critério de aceite contra o código: formatPrice() em ServiceList.tsx distingue as quatro semânticas de preço (FIXED, STARTING_AT com prefixo 'A partir de', ON_REQUEST 'Sob consulta', NOT_INFORMED 'Não informado'); formatServiceDuration() mostra 'Não informada' sem inventar zero; o Badge de pendência usa reviewOriginLabel() para renderizar 'Revisar · importado' ou 'Revisar · cadastro manual' com ícone 'alert', não só cor; o <details> em ServiceForm.tsx revela descrição, colorToken com preview (swatch), bufferBeforeMinutes, bufferAfterMinutes, recurrenceIntervalDays e o checkbox ativo/inativo, mantendo nome, duração e tipo/valor de preço sempre visíveis; a validação de priceRequiresValue(FIXED/STARTING_AT) bloqueia o submit com priceError junto ao campo sem resetar os demais valores (formulário não controlado, exceto price/colorToken); não há nenhum campo de modalidade ou regra privada para IA. Cruzei os campos usados (needsReview, reviewOrigin, colorToken, bufferBeforeMinutes, bufferAfterMinutes, recurrenceIntervalDays, editable, source) com serviceSchema/serviceListSchema em apps/frontend/src/data/mappers/publicApiSchemas.ts (linhas 157-172 e 424-428) e todos existem com os tipos usados. Também confirmei docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md (linhas 214-236), que lista 'regras privadas para IA' e 'modalidade por serviço' como itens do documento de produto, mas o Goal015/WU-06 explicitamente os exclui para o Goal018, o que o código respeita. Rodei validação real: `npm run typecheck` (tsc --noEmit) sem erros; `npm run lint` (eslint src --max-warnings=0) sem erros; `npm test` (vitest run) com 14 arquivos e 101 testes passando, incluindo tests/service-schema.test.ts que prova a nível de schema que preço ausente nunca vira zero e duração ausente permanece null com needsReview true. Não criei testes de render (Testing Library) para ServiceList/ServiceForm porque nenhum arquivo de teste equivalente existe ainda para as telas irmãs de Clientes (CustomerList/CustomerForm, produzidas por outra trilha) e o plano do Goal atribui a consolidação de provas à WU-07. Não editei nenhum arquivo: git status confirma que os três arquivos da feature seguem untracked (novos, criados por trabalho anterior já presente no worktree) e os três page.tsx de roteamento seguem com a modificação pré-existente de WU-01, sem diffs meus.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "As quatro semânticas de preço são apresentadas corretamente e distinguem preço não informado de preço sob consulta",
+          "met": true,
+          "detail": "formatPrice() em ServiceList.tsx: NOT_INFORMED -> 'Não informado'; ON_REQUEST/price null -> 'Sob consulta'; STARTING_AT -> 'A partir de R$…'; FIXED -> valor formatado em BRL."
+        },
+        {
+          "criterion": "Duração ausente aparece como ausente, nunca como zero ou valor inventado, e gera pendência",
+          "met": true,
+          "detail": "formatServiceDuration() retorna 'Não informada' quando durationMinutes é null; serviceSchema mantém durationMinutes nullable sem default (publicApiSchemas.ts:161), e tests/service-schema.test.ts prova que duração null combinada com needsReview:true permanece null após o parse."
+        },
+        {
+          "criterion": "needsReview aparece na lista com a origem legível, e o estado não é comunicado só por cor",
+          "met": true,
+          "detail": "ServiceList.tsx renderiza Badge tone='warning' com icon='alert' e label `Revisar · ${reviewOriginLabel(origin)}`, onde reviewOriginLabel mapeia IMPORT/MANUAL para texto em português."
+        },
+        {
+          "criterion": "O formulário revela descrição, colorToken com preview, buffers antes/depois, recorrência e ativo/inativo atrás de progressive disclosure, mantendo nome, duração e preço sempre visíveis",
+          "met": true,
+          "detail": "ServiceForm.tsx: bloco 'Essencial' fora do <details> tem nome, duração e tipo/valor de preço; <details className=\"service-form-advanced\"> contém descrição, select de colorToken com swatch de preview, bufferBefore/bufferAfter, recurrence e checkbox 'Serviço ativo'."
+        },
+        {
+          "criterion": "Preço FIXED sem valor é recusado junto ao campo, preservando os demais valores do formulário",
+          "met": true,
+          "detail": "submit() verifica priceRequiresValue(priceType) && priceCents===null, seta priceError e faz return antes de qualquer submissão ou reset; o campo de preço exibe priceError via role=\"alert\" junto ao CurrencyInput."
+        },
+        {
+          "criterion": "Modalidades e regras privadas para a IA não aparecem: ficam no Goal018",
+          "met": true,
+          "detail": "Nenhum campo de modalidade ou de regra privada para IA existe em ServiceForm.tsx nem em ServiceInput/serviceSchema; docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md lista esses itens no documento de produto geral, mas o Goal015/WU-06 os exclui explicitamente para o Goal018."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-wu-06-a1"
+  }
+}

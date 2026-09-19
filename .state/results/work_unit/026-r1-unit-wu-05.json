@@ -1,0 +1,41 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T22:40:42.253Z",
+  "attemptId": "026-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "As regras novas aparecem no resultado de audit:static",
+          "met": true,
+          "detail": "node scripts/final-production-audit.mjs e node scripts/validate-core.mjs (step audit:static) mostram no_legacy_calendar_migration_routes, no_calendar_migration_service_reference, minha_agenda_origin_has_no_writer e frontend_mocks_directory_is_absent, todas ok:true; total 20 checks, 19 passed, 1 skipped (production_health, esperado), 0 failed."
+        },
+        {
+          "criterion": "Cada regra nova tem caso negativo em scripts/tests/ provando que ela reprova uma árvore com o padrão de volta",
+          "met": true,
+          "detail": "scripts/tests/final-production-audit-legacy-regression.test.mjs: negativo para rota legada (pública e interna), 4 negativos para CalendarMigrationService (arquivo, import, export, declaração de classe, instanciação — 5 sub-casos), 2 negativos para o writer da Minha Agenda (MinhaAgendaCalendarProvider e implements CalendarProvider) e 1 negativo para o diretório de mocks voltar; 14 testes no total, todos verdes."
+        },
+        {
+          "criterion": "A suíte de scripts de gate continua verde",
+          "met": true,
+          "detail": "npm run test:gate: 66/66 passed, 0 failed (52 pré-existentes + 14 novos); node scripts/validate-core.mjs completo também passou (13 passed, 2 skipped declarados, 0 failed)."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "scripts/final-production-audit.mjs",
+        "scripts/tests/final-production-audit-legacy-regression.test.mjs"
+      ],
+      "goal": "026",
+      "jobId": "026-r1-unit-wu-05",
+      "protocolVersion": 2,
+      "report": "Acrescentei a scripts/final-production-audit.mjs quatro checks novos, no formato check(name, ok, details) já usado, e cobri cada um com caso positivo e negativo em scripts/tests/.\n\nImplementação (scripts/final-production-audit.mjs):\n- Importei `isMain` de ./lib/gate.mjs e troquei `main()` por `export async function main()`, guardando a execução de topo com `if (isMain(import.meta.url)) { main().catch(...) }`. Isso é necessário para que os testes possam importar as funções puras novas sem disparar a auditoria inteira como efeito colateral do import (mesmo padrão já usado em validate-core.mjs, validate-integration.mjs e nos scripts goal0NN-*-rehearsal.mjs).\n- Extraí 4 funções puras exportadas — `findLegacyMigrationRouteReferences`, `findCalendarMigrationServiceReferences`, `findMinhaAgendaWriterReferences`, `frontendMocksDirectoryExists` — que recebem conteúdo (arrays de {path, content}) em vez de ler o disco diretamente, exatamente para permitir que os testes construam uma \"árvore\" sintética com o padrão de volta e provem o caso negativo sem depender de repositoryRoot.\n- Quatro checks novos dentro de main(), usando sourceFiles()/read() como os demais:\n  1. `no_legacy_calendar_migration_routes` — nenhuma fonte em apps/ referencia `/v1/calendar/migrations` ou `/internal/calendar/migrations`. Exclui deliberadamente apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts:234, que contém a string literal só dentro de um `expect(...).not.toContain(...)` provando a ausência — mesmo padrão de exceção documentada já usado no check `ai_does_not_access_minha_agenda` para redact.ts.\n  2. `no_calendar_migration_service_reference` — nenhum arquivo chamado calendar-migration-service, nenhum import/export/class/instanciação de CalendarMigrationService. Deliberadamente não reprova menções em prosa/comentário (ex.: o JSDoc de import-execution-service.ts que compara o novo motor com `CalendarMigrationService.importToAtendly` para explicar a diferença de design) — a própria Goal (critério 4) enumera a barra como \"arquivo, export, import\", não \"qualquer menção textual\", e reprovar comentários explicativos legítimos derrubaria o gate atual sem ganho de proteção real.\n  3. `minha_agenda_origin_has_no_writer` — nenhum arquivo em apps/scheduling-service/src/modules/integrations/minha-agenda referencia MinhaAgendaCalendarProvider nem declara `implements CalendarProvider`. Escopei no nível do \"writer remoto\" (MinhaAgendaCalendarProvider, que a própria Goal nomeia e que hoje não existe mais na árvore) em vez de banir qualquer método nomeado createAppointment/getAppointment/etc. em qualquer arquivo do diretório: MinhaAgendaClient (client.ts) ainda expõe métodos de escrita não utilizados (createAppointment, updateAppointment, cancelWithComments, createCustomer) que nenhum caminho do produto chama — isso é debito fora do escopo desta unidade (client.ts não está em relevantFiles/expectedFiles) e não é \"o writer remoto\" que a Goal descreve; reprovar por esses métodos exigiria editar client.ts, ampliando escopo.\n  4. `frontend_mocks_directory_is_absent` — apps/frontend/src/mocks não existe (já removido por outra unidade).\n\nTestes (novo arquivo scripts/tests/final-production-audit-legacy-regression.test.mjs, 14 casos):\n- Rotas legadas: 1 positivo + 2 negativos (rota pública e rota interna).\n- CalendarMigrationService: 1 positivo (menção em prosa não reprova) + 5 negativos (arquivo, import, export, class, new).\n- Writer da Minha Agenda: 1 positivo (leitor sem escrita) + 2 negativos (MinhaAgendaCalendarProvider e implements CalendarProvider).\n- Diretório de mocks: 1 positivo + 1 negativo, usando mkdtempSync/mkdirSync/rmSync em diretório temporário do SO para não tocar o repositório real.\n\nComandos executados e resultado real:\n- `node scripts/final-production-audit.mjs` → exit 0; total 20, passed 19, failed 0, skipped 1 (production_health, esperado sem PRODUCTION_HEALTH_TARGETS); as 4 regras novas aparecem com ok:true.\n- `node --test scripts/tests/final-production-audit-legacy-regression.test.mjs` → 14/14 passed.\n- `npm run test:gate` → 66/66 passed, 0 failed (baseline era 52/52 antes da mudança; validei rodando a suíte antes de editar).\n- `node scripts/validate-core.mjs` (gate completo) → 13 passed, 2 skipped declarados (test:bff, test:health-worker — pré-existentes), 0 failed; inclui test:gate-scripts e audit:static, ambos exit 0.\n\nFora do escopo declarado, não toquei: client.ts (métodos de escrita não usados do MinhaAgendaClient — fora de relevantFiles/expectedFiles) nem os dois comentários de prosa que ainda citam CalendarMigrationService (import-execution-service.ts, legacy-job-reconciliation.ts) — não fazem o documento nem o código mentirem, são explicação histórica legítima.\n\nNota incidental: rodar `node scripts/validate-core.mjs` para verificação gerou como efeito colateral (provavelmente de build:scheduling-service) três arquivos não rastreados — pnpm-lock.yaml, apps/scheduling-service/pnpm-lock.yaml, apps/scheduling-service/pnpm-workspace.yaml — que não fazem parte desta entrega; uma tentativa de removê-los foi bloqueada pelo classificador de permissões da sessão. Como nenhum commit foi criado, eles não entram em nenhum diff revisado, mas ficam na worktree até serem limpos manualmente ou por outra unidade.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Adicionei 4 regras estáticas de regressão do legado em scripts/final-production-audit.mjs, cada uma com caso positivo e negativo em scripts/tests/, mantendo test:gate-scripts e validate:core verdes.",
+      "workUnitId": "WU-05"
+    },
+    "attemptId": "026-r1-unit-wu-05-a1"
+  }
+}

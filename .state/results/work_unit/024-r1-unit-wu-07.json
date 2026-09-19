@@ -1,0 +1,57 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T02:04:38.269Z",
+  "attemptId": "024-r1-unit-wu-07-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r1-unit-wu-07",
+      "goal": "024",
+      "round": 1,
+      "workUnitId": "WU-07",
+      "status": "COMPLETED",
+      "summary": "Conferi a Home contra o vault e os contratos GET /v1/status e GET /v1/dashboard sem achar divergência, e atualizei GAP_ANALYSIS (G-31, G-24), CURRENT_STATE (frontend e rotas de autenticação), REUSE_ANALYSIS e DECISIONS (D-040) para refletir o diff do Goal024.",
+      "report": "Conferência da Home: li `DashboardScreen.tsx` inteiro, a seção \"Início\" do vault (`docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md:72-84`), o checklist pós-onboarding do vault (`docs/product-vault/02-Fluxos/01-Onboarding.md:208-219`) e os contratos reais: `apps/bff/src/modules/dashboard/routes.ts`, `apps/bff/src/modules/status/routes.ts`, `apps/bff/PUBLIC_API_V1.md` (seções \"Status honesto...\", \"Checklist pós-onboarding da Home\" e \"Reconciliação desired/effective\"), `dashboardSchema`/`systemStatusSchema` em `apps/frontend/src/data/mappers/publicApiSchemas.ts` e o hook `useSystemStatus` (`apps/frontend/src/shared/runtime/systemStatus.tsx`). Todo campo que a tela lê (status IA/WhatsApp, agenda de hoje, próximo atendimento, métricas de outcome, conversas com atenção, checklist de quatro itens) corresponde a um campo real dos dois contratos, sem inferência local nem métrica inventada. **Não encontrei divergência real** entre o que a tela afirma e o que os contratos devolvem — não toquei `DashboardScreen.tsx` nem nenhum arquivo de `features/dashboard/`.\n\nDocumentação atualizada, com o menor diff que reflete o que as WU-01 a WU-06 já entregaram (eu não implementei nada de produto nesta WU, só documentei):\n- `docs/migration/GAP_ANALYSIS.md`: linha de **G-31** ganhou \"Configurações no diff024\" no cabeçalho de fechamento e um parágrafo descrevendo a decomposição de `ProductSettingsScreen.tsx` (942→105 linhas, oito módulos de seção, hub com entrada própria de Importação); a lista de reviews na última célula passou a citar a pendência de revisão desta rodada em vez de apontar Configurações como resíduo. Linha de **G-24** ganhou o fechamento do resíduo de tela: `KnowledgeSection`/`KnowledgeDocumentForm`/`OtherInfoSection` como primeiro consumidor de `BffKnowledgeService`, sem mudança de contrato. **G-29 não foi tocada** — continua \"explicitamente aberto na parte de conta\".\n- `docs/migration/CURRENT_STATE.md`: nova seção `## Delta implementado — Goal024 (rodada 1, revisão do Tech Lead pendente)` cobrindo frontend (decomposição de Configurações, módulo de conhecimento) e rotas de autenticação (`POST /v1/auth/logout-all` reusando `revokeAllUserSessions`), mais o resultado da conferência da Home e os limites que continuam abertos (G-29 na parte de conta). Título e linguagem evitam declarar `ACCEPTED`, respeitando a restrição de não declarar o Goal aceito.\n- `docs/migration/REUSE_ANALYSIS.md`: linha `ProductSettingsScreen` corrigida de \"REFACTOR\" (com \"APIs hoje ausentes\", desatualizado) para \"REFACTOR (feito)\" com o estado real pós-decomposição; nova linha para `features/knowledge/` como `CREATE (feito)`, primeiro consumidor de `BffKnowledgeService`.\n- `docs/migration/DECISIONS.md`: registrei **D-040** no formato das anteriores (Status/Contexto/Decisão/Alternativas/Motivo/Consequências), cobrindo os três pontos pedidos — decomposição de Configurações, consumo de conhecimento sem mudar contrato, revogação de sessões —, reusando D-018/D-030/D-031/D-032/D-033/D-034/D-039. O Status não declara `ACCEPTED` (nenhuma revisão do Tech Lead aconteceu ainda nesta rodada); diz explicitamente \"revisão do Tech Lead ainda pendente\".\n- `docs/migration/VALIDATION_GATE.md`: **não alterado** — confirmei em `scripts/validate-integration.mjs` que o passo `test:bff-integration` roda `vitest run` sem filtro de caminho em `apps/bff`, então `goal024-session-revocation.integration.test.ts` já é coberto pelos 28 passos existentes sem exigir passo novo.\n\nNenhum documento novo foi criado; só editei os quatro arquivos esperados. Não toquei `goals/`, `reviews/` nem `MIGRATION_STATUS.md`. Não executei build/lint/teste nesta WU — é trabalho puramente documental sobre um diff já produzido por WU-01–WU-06; não inventei resultado de execução.",
+      "changedFiles": [
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/DECISIONS.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "DashboardScreen.tsx não foi decomposto e nenhuma métrica nova entrou na Home",
+          "met": true,
+          "detail": "git diff não mostra nenhuma alteração em apps/frontend/src/features/dashboard/; a conferência não recomendou nenhuma métrica, card, poller ou decomposição."
+        },
+        {
+          "criterion": "O resultado da conferência da Home está declarado, com cada divergência nomeada e corrigida no menor diff, ou com a declaração de que não houve divergência",
+          "met": true,
+          "detail": "Declarado neste relatório e em docs/migration/CURRENT_STATE.md, seção 'Delta implementado — Goal024', item 'FATO atual (Home, conferência)': nenhuma divergência real foi encontrada entre a tela e GET /v1/status / GET /v1/dashboard."
+        },
+        {
+          "criterion": "GAP_ANALYSIS reflete o estado real de G-31 e de G-24 depois do diff",
+          "met": true,
+          "detail": "Linhas de G-31 (Configurações no diff024, última tela monolítica) e G-24 (tela de conhecimento entregue) atualizadas em docs/migration/GAP_ANALYSIS.md."
+        },
+        {
+          "criterion": "G-29 continua declarado aberto na parte de conta",
+          "met": true,
+          "detail": "Linha de G-29 em GAP_ANALYSIS.md não foi tocada; D-040 e o delta de CURRENT_STATE.md reafirmam explicitamente que a parte de conta segue aberta, redirecionada ao Goal024B."
+        },
+        {
+          "criterion": "DECISIONS tem D-040 registrada no formato das anteriores",
+          "met": true,
+          "detail": "docs/migration/DECISIONS.md ganhou a seção '## D-040 — ...' com Status/Contexto/Decisão/Alternativas/Motivo/Consequências, mesma estrutura de D-035 a D-039."
+        },
+        {
+          "criterion": "Nenhum documento novo foi criado",
+          "met": true,
+          "detail": "git status --porcelain mostra só edição (M) nos quatro arquivos esperados; nenhum arquivo novo em docs/."
+        }
+      ]
+    },
+    "attemptId": "024-r1-unit-wu-07-a1"
+  }
+}

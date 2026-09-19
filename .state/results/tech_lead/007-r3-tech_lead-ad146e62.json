@@ -1,0 +1,386 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T13:43:22.864Z",
+  "attemptId": "007-r3-tech_lead-ad146e62-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "007-r3-tech_lead-ad146e62",
+      "goal": "007",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "008",
+      "nextGoalTitle": "Transações, holds e histórico da agenda",
+      "nextGoalPath": "docs/migration/goals/008-transacoes-holds-historico-agenda.md",
+      "developerProfile": "OPUS_HIGH",
+      "developerProfileReason": "Concorrência real entre writers com locks ordenados e retry serializável, atomicidade efeito/resultado/evento, hold pelo relógio do banco e migração de estados: alto custo de erro.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/007-catalogo-e-acordo-comercial.md",
+        "docs/migration/goals/008-transacoes-holds-historico-agenda.md"
+      ],
+      "summary": "Planejamento após o Goal007 na worktree plan-after-goal-007 (HEAD d20a527). MIGRATION_STATUS: baseline aceita vigente atualizada para d20a52745cf1aae7391faf5688fb8084271ec3d4 (origem cfa562ae…), cadeia anterior preservada; linha 007 → ACCEPTED (três rodadas, snapshot 37 arquivos hash 635551ff…, gates reproduzidos); linha 008 → READY com a baseline exata e perfil OPUS_HIGH; notas administrativas de Implementação007, Review007 R1/R2/R3 e Planejamento após 007. MASTER_PLAN: linha 007 marcada ACCEPTED e histórico v14 registrando reavaliação incremental sem mudança de ordem, IDs ou escopo (o 007 confirmou cancelamento e bloqueio fora da política transacional e resultado idempotente gravado após o commit, exatamente o que o 008 previa). Goal007 com cabeçalho ACCEPTED. Goal008 escrito e único READY: política única de escrita (transação Serializable, locks por dia em ordem estável, revalidação dentro da transação, retry limitado de 40001, cancelamento e bloqueio sob a política, override humano registrado, atendimento manual excepcional só USER), resultado idempotente gravado com o efeito e recuperação por referência de efeito, hold de cinco minutos pelo relógio do banco consumido na confirmação e usado na remarcação, estados CONFIRMED/COMPLETED/CANCELLED/NO_SHOW com bruto preservado e guarda contra valor desconhecido, presença e valor final separados, conclusão automática por loop com lease (D-008), histórico por evento na mesma transação, contratos em Scheduling/BFF/frontend/IA, resíduo do 007 (replay sem totalPriceType), migração aditiva ensaiada, dez critérios de aceite e review DEEP dirigido. Nenhuma decisão nova (D-006 será implementada e avaliada no 008). Parser do IA Loop confirma 008 READY, baseline, perfil e anterior 007 ACCEPTED; git diff --check limpo; nada fora de docs/migration alterado.",
+      "executionPlan": {
+        "goalSummary": "Goal008 faz toda escrita na agenda do Scheduling obedecer a uma política transacional única (Serializable, locks por dia ordenados, revalidação dentro da transação, retry limitado de aborto serializável), grava o resultado idempotente junto com o efeito, introduz hold de cinco minutos validado pelo relógio do banco (consumido na confirmação, usado na remarcação sem soltar o original), normaliza os estados do atendimento para CONFIRMED/COMPLETED/CANCELLED/NO_SHOW com bruto preservado, separa presença e valor final, conclui automaticamente após trinta minutos por loop com lease, registra histórico por evento na mesma transação, permite sobreposição só por decisão humana registrada e atendimento manual excepcional sem serviço, e expõe tudo por operação em Scheduling, BFF, frontend (schemas) e IA (hold ao propor, confirmação com hold, hold vencido → nova consulta). Inclui o resíduo do 007 (replay antigo sem totalPriceType) e gates com ensaio de migration e suíte de concorrência contra PostgreSQL.",
+        "executionStrategy": "Executar de baixo para cima: primeiro schema/migrations/ensaio (WU-01), depois a política transacional e a idempotência atômica no núcleo (WU-02), sobre ela holds (WU-03) e ciclo de vida/histórico/conclusão automática (WU-04), então as rotas internas do Scheduling (WU-05), a partir das quais IA (WU-06) e BFF/frontend (WU-07) evoluem em paralelo; a suíte de integração com concorrência e o registro no gate (WU-08) fecham a parte funcional. Verificações dirigidas (testes unitários e lint por app tocado) antes das globais (validate-core, validate-integration, git-diff-check). Cada unidade recebe apenas os arquivos listados; nenhuma toca docs de controle da migração além de DATA_MIGRATION/GAP_ANALYSIS quando o Goal pede.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "Schema, migrations e ensaio: hold, eventos, estados e referência de efeito",
+            "objective": "Adicionar ao Scheduling as tabelas de hold e de evento do atendimento, as colunas de status bruto, título, conclusão (com origem), falta (com observação), presença e valor final em Appointment, a referência de efeito em CalendarMutationIdempotency, as constraints SQL explícitas (status no conjunto do produto, valor final não negativo, hold com expiresAt posterior ao início, título obrigatório sem itens) e o passo de normalização de status (SCHEDULED→CONFIRMED com bruto preservado) precedido de guarda que aborta diante de valor desconhecido; escrever scripts/goal008-migration-rehearsal.mjs no padrão do goal007 e registrá-lo em validate-integration.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [],
+            "expectedFiles": [
+              "apps/scheduling-service/prisma/schema.prisma",
+              "apps/scheduling-service/prisma/migrations/<timestamp>_goal008_agenda_expand/migration.sql",
+              "apps/scheduling-service/prisma/migrations/<timestamp>_goal008_appointment_status/migration.sql",
+              "scripts/goal008-migration-rehearsal.mjs",
+              "scripts/validate-integration.mjs",
+              "scripts/tests/validate-integration.test.mjs"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/prisma/migrations/20260908170000_goal007_catalog_expand/migration.sql",
+              "apps/scheduling-service/prisma/migrations/20260908171000_goal007_catalog_constraints/migration.sql",
+              "scripts/goal007-migration-rehearsal.mjs",
+              "docs/migration/DATA_MIGRATION.md"
+            ],
+            "acceptanceCriteria": [
+              "Migrations aditivas e retomáveis; nenhum atendimento existente muda de horário, acordo, cliente ou é marcado concluído/falta; nenhum evento retroativo fabricado",
+              "Normalização de status em passo próprio com guarda que aborta se existir valor fora de SCHEDULED/CANCELLED; valor bruto preservado em coluna própria",
+              "Constraints SQL explícitas aceitam todo o conteúdo existente; divergência com o Prisma documentada no cabeçalho",
+              "Ensaio prova preservação linha a linha, mapeamento de status, guarda contra valor desconhecido (fixture negativa em transação revertida ou banco separado), idempotências COMPLETED existentes decodificáveis e repetição sem mudança de estado",
+              "prisma migrate deploy aplica as migrations no banco de teste derivado e o passo rehearse:goal008-agenda-migration aparece no gate e no seu teste"
+            ],
+            "implementationHints": "Seguir a separação expand/constraints do Goal007. Contagens do ensaio devem excluir sondas (lição do review007). Hold com expiresAt TIMESTAMPTZ calculado no banco. Evento com colunas type, source (AI/USER/SYSTEM/INTEGRATION), actor, reason, before/after JSON, occurredAt; FK composta por tenant como nos Goals anteriores."
+          },
+          {
+            "id": "WU-02",
+            "title": "Política única de escrita e resultado idempotente gravado com o efeito",
+            "objective": "Reescrever create/reschedule/cancel do provider Atendly e a criação/remoção de bloqueio para executar dentro de uma transação Serializable com lockCalendarDay em todos os dias afetados em ordem estável, revalidação de disponibilidade dentro da transação, retry limitado e configurável de abortos serializáveis com erro próprio ao exceder; fazer CalendarMutationIdempotency executar a mutação e gravar COMPLETED + referência de efeito na mesma transação, recuperando PENDING vencido pela referência em vez de reexecutar; implementar override de sobreposição só para source USER com flag e motivo, e atendimento manual excepcional com título e duração sem AppointmentItem (total NONE) só para USER; derivar totalPriceType de totalPrice em replays antigos.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-01"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/calendar/idempotency.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+              "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+              "apps/scheduling-service/tests/unit/agenda-write-policy.test.ts",
+              "apps/scheduling-service/tests/unit/support/database-double.ts"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+              "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+              "docs/migration/TARGET_ARCHITECTURE.md"
+            ],
+            "acceptanceCriteria": [
+              "Cancelamento e bloqueio (criar/remover) passam pela mesma transação e lock que confirmar e remarcar; checagem de conflito do bloqueio ocorre dentro da transação",
+              "Remarcação trava o dia original e o novo em ordem estável; retry de 40001/P2034 limitado por configuração com erro próprio ao exceder",
+              "Idempotência: efeito e resultado no mesmo commit; chave repetida devolve o mesmo resultado sem segundo efeito; request diferente recusado; PENDING vencido com efeito existente é recuperado como sucesso; falha antes do commit deixa FAILED",
+              "Override só com source USER, flag e motivo; recusado para AI; atendimento sem serviço aceito só para USER com título e duração, total NONE; nunca constraint SQL de não sobreposição",
+              "Replay antigo sem totalPriceType decodificado por derivação de totalPrice (teste)",
+              "Testes unitários sobre o dublê cobrem transições, recusas e derivação de replay"
+            ],
+            "implementationHints": "Passar o client transacional para o provider (interface interna aceita Prisma.TransactionClient). Ordenar datas antes de adquirir os locks. Tratar aborto serializável por código Prisma P2034 e SQLSTATE 40001. A fonte externa mantém a interface mas recusa override, atendimento sem serviço e demais operações novas."
+          },
+          {
+            "id": "WU-03",
+            "title": "Hold de cinco minutos pelo relógio do banco",
+            "objective": "Criar o serviço de holds do Scheduling: criar hold sob lock com expiresAt = now() do banco + TTL configurável, listar vigentes, liberar; contar hold vigente (não consumido, não liberado, expiresAt > now() avaliado no banco) como ocupação no motor de disponibilidade para todos exceto a confirmação que o consome; consumir o hold dentro da transação de confirmação após validar tenant, vigência e cobertura do slot, informando expiração quando vencido e revalidando normalmente; remarcação com hold no novo horário mantendo o original ocupado até a confirmação, que atualiza o atendimento e libera o hold; fonte externa recusa holds.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-02"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+              "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+              "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+              "apps/scheduling-service/tests/unit/appointment-hold.test.ts",
+              "apps/scheduling-service/tests/unit/support/database-double.ts"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/calendar/idempotency.ts",
+              "docs/product-vault/01-Regras/02-Agenda-e-Agendamentos.md"
+            ],
+            "acceptanceCriteria": [
+              "Hold criado sob o mesmo lock do dia; dois holds concorrentes no mesmo slot → um só vigente",
+              "Hold vigente ocupa para terceiros e não para a confirmação que o consome; vencido é ignorado sem worker; consumido não ocupa mais",
+              "Confirmação com hold vencido ou de outro slot informa expiração e revalida a disponibilidade; nunca confirma silenciosamente em slot ocupado",
+              "Remarcação com hold mantém o original ocupado até a confirmação, que atualiza o atendimento, libera o hold e grava antes/depois",
+              "Vigência sempre avaliada por now() do banco (testes usam fixture que adianta expiresAt, não sleep); Minha Agenda recusa hold com erro próprio"
+            ],
+            "implementationHints": "Excluir da ocupação o hold identificado por holdId passado à confirmação (parâmetro excludeHoldId no motor, análogo a excludeAppointmentId). TTL via variável de ambiente com default 300 s."
+          },
+          {
+            "id": "WU-04",
+            "title": "Estados do atendimento, presença, valor final, histórico por evento e conclusão automática",
+            "objective": "Implementar as operações idempotentes de concluir (manual/automática com origem), marcar falta com observação, registrar valor final (Decimal, data, ator; nunca inferido), confirmar presença (campo separado), com transições inválidas recusadas por erro próprio; gravar um evento por mutação (criar, remarcar, cancelar, concluir, falta, valor final, presença, hold consumido, override) na mesma transação, com origem, ator, motivo e antes/depois, e leitura cronológica; rotina idempotente de conclusão automática (confirmados com término vencido há trinta minutos configuráveis, pelo relógio do banco, nunca cancelados/faltas) executada por loop com lease no Scheduling, desligável por variável e invocável por função/rota para teste.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-02"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/appointments/appointment-lifecycle-service.ts",
+              "apps/scheduling-service/src/modules/appointments/appointment-event-service.ts",
+              "apps/scheduling-service/src/modules/appointments/auto-complete-loop.ts",
+              "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+              "apps/scheduling-service/src/config/env.ts",
+              "apps/scheduling-service/src/index.ts",
+              "apps/scheduling-service/tests/unit/appointment-lifecycle.test.ts",
+              "apps/scheduling-service/tests/unit/support/database-double.ts"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/src/modules/inbox/inbox-worker.ts",
+              "docs/migration/DECISIONS.md"
+            ],
+            "acceptanceCriteria": [
+              "Ciclo confirmado → concluído (manual e automático) → correção para falta; falta com observação; transições inválidas (concluir cancelado, falta em cancelado, remarcar concluído) recusadas com erro próprio",
+              "Valor final registrado sem alterar snapshots nem total do acordo; presença em campo separado",
+              "Cada mutação grava exatamente um evento na mesma transação; falha simulada após o efeito e antes do evento não deixa efeito sem evento; eventos nunca apagados nem reescritos",
+              "Conclusão automática pelo relógio do banco não toca cancelados nem faltas, é idempotente e o loop com lease não duplica trabalho entre duas instâncias; desligável por variável",
+              "Sem backfill de concluído por data"
+            ],
+            "implementationHints": "Reaproveitar o padrão de lease/heartbeat do InboxWorker da IA (Goal004/005) para o loop, com pg_try_advisory_lock ou linha de lease por tenant; a rotina recebe now() do banco como referência."
+          },
+          {
+            "id": "WU-05",
+            "title": "Rotas internas do Scheduling para hold, ciclo de vida, histórico e bloqueio sob a política",
+            "objective": "Expor no Scheduling, seguindo o padrão das rotas existentes: criar/liberar/listar hold; confirmar e remarcar aceitando holdId e overlapOverride (flag+motivo) opcionais; cancelar com motivo; concluir, falta, valor final, presença; histórico por atendimento; bloqueio criado/removido pela política transacional; DTO de agendamento com estado do produto, bruto, valor final, presença e título; erros próprios mapeados (hold vencido, sobreposição sem override, transição inválida, limite de retry).",
+            "type": "MECHANICAL",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-03",
+              "WU-04"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/calendar/routes.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+              "apps/scheduling-service/src/modules/calendar/calendar-provider.ts"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/bff/PUBLIC_API_V1.md"
+            ],
+            "acceptanceCriteria": [
+              "Todas as rotas novas sob requireInternalAuth com tenant do contexto interno; schemas Zod fechados; DTOs aditivos com padrão seguro",
+              "Rotas de bloqueio delegam à política transacional (nenhum prisma.timeBlock.create/deleteMany direto na rota)",
+              "Erros de domínio chegam com código e status HTTP próprios (409 para conflito/hold vencido/transição inválida)"
+            ],
+            "implementationHints": "Manter GET /internal/appointments retornando SCHEDULED nunca mais: o DTO expõe status do produto e rawStatus separado."
+          },
+          {
+            "id": "WU-06",
+            "title": "IA: hold ao propor, confirmação com hold, hold vencido e cancelamento confirmado",
+            "objective": "No client e nas tools da IA: get_availability/prepareSchedule criam hold na opção proposta e guardam holdId no PendingAction; confirmSchedule/confirmReschedule enviam holdId e tratam hold vencido consultando de novo e oferecendo alternativa sem confirmar silenciosamente; remarcação aplica hold no novo horário sem soltar o original; cancelamento só após confirmação clara já existente; nenhuma tool aceita override nem atendimento sem serviço; tipos e schemas do client com estados e campos novos.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-05"
+            ],
+            "expectedFiles": [
+              "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+              "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+              "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+              "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts"
+            ],
+            "relevantFiles": [
+              "docs/product-vault/02-Fluxos/03-Fluxos-de-Agendamento.md"
+            ],
+            "acceptanceCriteria": [
+              "Propor cria hold e o rascunho carrega holdId; confirmar consome o hold; hold vencido → nova consulta e alternativa, sem confirmação silenciosa (testes com dublê)",
+              "Remarcação usa hold no novo horário e o original permanece até a confirmação",
+              "Nenhuma chamada da IA envia overlapOverride ou atendimento sem serviço (asserção por dublê que falha se chamado)",
+              "Suíte assistant-tools cobre os cenários novos e continua verde"
+            ]
+          },
+          {
+            "id": "WU-07",
+            "title": "BFF e frontend: contratos por operação para hold, ciclo de vida e histórico",
+            "objective": "Expor no BFF as rotas públicas equivalentes (holds, confirmar/remarcar com holdId e override humano, cancelar com motivo, concluir, falta, valor final, presença, histórico, bloqueio) sob tenant da sessão e CSRF por cookie, com client e schemas atualizados; documentar em PUBLIC_API_V1.md; atualizar schemas do frontend para aceitar estados do produto (mantendo respostas antigas com SCHEDULED decodificáveis), campos e operações novas sem tela nova, e o mapeamento de estado da tela existente.",
+            "type": "MECHANICAL",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05"
+            ],
+            "expectedFiles": [
+              "apps/bff/src/modules/calendar/routes.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/tests/agenda-lifecycle.integration.test.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/BffCalendarService.ts",
+              "apps/frontend/src/features/calendar/ProductAgendaScreen.tsx",
+              "apps/frontend/tests/appointment-schema.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/tests/customer-identity.integration.test.ts",
+              "apps/frontend/tests/service-schema.test.ts"
+            ],
+            "acceptanceCriteria": [
+              "Mutações públicas recusam cookie sem CSRF antes de chamar o Scheduling; tenant sempre da sessão; override humano só via rota pública com flag e motivo",
+              "PUBLIC_API_V1.md descreve estados, hold, override, ciclo de vida e histórico",
+              "Schemas do frontend aceitam SCHEDULED antigo e os quatro estados novos; tela existente continua compilando e traduzindo estados",
+              "Testes de integração do BFF (skip sem banco, como os existentes) e de schema do frontend cobrem os casos"
+            ]
+          },
+          {
+            "id": "WU-08",
+            "title": "Suíte de integração do Scheduling: concorrência real, relógio do banco, isolamento e histórico",
+            "objective": "Escrever tests/integration/agenda-transactions.test.ts (e arquivos irmãos se necessário) contra PostgreSQL derivado do alvo: duas confirmações do mesmo slot, bloqueio versus confirmação, cancelar versus remarcar, hold concorrente, hold vencido por fixture de expiresAt, queda simulada após commit recuperada pela referência de efeito, conclusão automática pelo relógio do banco e lease entre duas instâncias, um evento por mutação, override registrado, isolamento entre tenants; garantir que o gate validate-integration executa a suíte após o ensaio do Goal008.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-05"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/tests/integration/agenda-transactions.test.ts",
+              "apps/scheduling-service/tests/integration/appointment-lifecycle.test.ts",
+              "scripts/validate-integration.mjs"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/tests/integration/service-catalog.test.ts",
+              "apps/scheduling-service/tests/integration/customer-identity.test.ts",
+              "scripts/provision-scheduling-test-database.mjs"
+            ],
+            "acceptanceCriteria": [
+              "Concorrência exercitada com transações reais em paralelo (Promise.all sobre dois clients), sem sleep como sincronização",
+              "Todos os cenários do critério 2 a 6 do Goal cobertos; cada cenário afirma o estado final e o número de eventos",
+              "Suíte se auto-pula sem SCHEDULING_TEST_DATABASE_URL e roda no gate contra o banco derivado, verde"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/scheduling-service",
+            "pattern": "tests/unit",
+            "objective": "Rodar a suíte unitária do Scheduling após as unidades de domínio e rotas.",
+            "dependencies": [
+              "WU-05"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-10",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/ai-orchestrator",
+            "pattern": "tests/tools",
+            "objective": "Rodar a suíte de tools da IA após a unidade de IA.",
+            "dependencies": [
+              "WU-06"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-11",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/scheduling-service",
+            "objective": "Lint sem warnings no Scheduling.",
+            "dependencies": [
+              "WU-08",
+              "WU-09"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-12",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/ai-orchestrator",
+            "objective": "Lint sem warnings na IA.",
+            "dependencies": [
+              "WU-10"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-13",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "objective": "Typecheck do BFF após os contratos novos.",
+            "dependencies": [
+              "WU-07"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-14",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "objective": "Typecheck do frontend após os schemas novos.",
+            "dependencies": [
+              "WU-07"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-15",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "objective": "Gate core completo: builds, suítes sem banco, gate-scripts e auditoria estática.",
+            "dependencies": [
+              "WU-11",
+              "WU-12",
+              "WU-13",
+              "WU-14"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-16",
+            "type": "DETERMINISTIC",
+            "action": "validate-integration",
+            "objective": "Gate de integração completo contra PostgreSQL descartável, incluindo o ensaio do Goal008 e a suíte de concorrência.",
+            "dependencies": [
+              "WU-15"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          },
+          {
+            "id": "WU-17",
+            "type": "DETERMINISTIC",
+            "action": "git-diff-check",
+            "objective": "Sem erros de whitespace no diff final.",
+            "dependencies": [
+              "WU-16"
+            ],
+            "complexity": "LOW",
+            "risk": "LOW"
+          }
+        ]
+      }
+    },
+    "attemptId": "007-r3-tech_lead-ad146e62-a1"
+  }
+}

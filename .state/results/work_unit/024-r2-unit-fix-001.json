@@ -1,0 +1,72 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T03:10:36.826Z",
+  "attemptId": "024-r2-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 — editar documento de conhecimento não duplica mais a linha na lista (replaceVersion troca o id ao publicar; upsertDocument agora casa pelo id anterior)",
+          "met": true,
+          "detail": "KnowledgeSection.tsx: upsertDocument(document, previousId) substitui a linha no índice do id anterior em vez de só comparar document.id; o call site de edição passa editing?.id. Teste atualizado em goal024-knowledge-section.test.tsx simula o id novo que replaceVersion realmente devolve e afirma container.querySelectorAll('.knowledge-row') com 1 elemento. `npx vitest run tests/goal024-knowledge-section.test.tsx` — 12 testes passaram."
+        },
+        {
+          "criterion": "Blocker 2 — ImportSettingsSection sem consumidor de produção e documentação que afirmava o contrário",
+          "met": true,
+          "detail": "Deletado apps/frontend/src/features/imports/ImportSettingsSection.tsx e seu teste goal020-import-settings-section.test.tsx (órfãos, sem importador em src). Corrigidos: SettingsHub.tsx (docblock), REUSE_ANALYSIS.md, CURRENT_STATE.md (duas ocorrências) e GAP_ANALYSIS.md (G-19 e G-31), que paravam de afirmar que o bloco 'continua sendo montado, agora pelos módulos novos'. Suíte completa (`npx vitest run`) segue verde: 69 arquivos, 649 testes."
+        },
+        {
+          "criterion": "Blocker 3 — documentação alinhada ao código real de useShellConfig (único call site em ProductSettingsScreen.tsx, não um por módulo de seção)",
+          "met": true,
+          "detail": "Corrigidas as frases em REUSE_ANALYSIS.md, CURRENT_STATE.md, GAP_ANALYSIS.md e D-040 (Status e item 1) que descreviam 'cada um com um único call site de useShellConfig' ou 'cada um declarando a configuração de shell uma única vez'; passam a declarar o único call site em ProductSettingsScreen.tsx, idêntico à baseline, como achado registrado em D-040, não como decisão tomada. Nenhuma mudança de código foi feita aqui — é um blocker de documentação, o código já era esse."
+        },
+        {
+          "criterion": "Blocker 4 — parágrafo Revisar se de D-039 estava sob D-040, e D-040 não tinha o seu",
+          "met": true,
+          "detail": "Movido o parágrafo 'Revisar se' (que referencia (9),(10),(6),(7),(5),(1),(12) — itens de D-039 sobre retenção) para logo após o Consequências de D-039, antes do heading ## D-040. Escrito um novo 'Revisar se' próprio de D-040, referenciando os itens (1)-(7) da própria decisão (024B, Lembretes no hub, contrato de conhecimento, reuso administrativo de logout-all, métrica na Home)."
+        },
+        {
+          "criterion": "Blocker 5 — honestidade de tela sobre conteúdo que não pode ser relido, só documentada em docblock",
+          "met": true,
+          "detail": "Adicionada copy visível em OtherInfoSection.tsx ('O conteúdo salvo não é reexibido aqui...') e em KnowledgeDocumentForm.tsx modo edição ('...O conteúdo salvo não é reexibido: escreva o texto completo da nova versão'). Testes em goal024-knowledge-section.test.tsx passaram a afirmar essas duas mensagens na tela, não só o docblock."
+        },
+        {
+          "criterion": "Blocker 6 — falha silenciosa em 'Sair de todos os dispositivos' (catch(() => undefined) navegava para /login mesmo com a chamada falhando)",
+          "met": true,
+          "detail": "AccountSettings.tsx: logoutAllDevices() não engole mais o erro; em falha, mantém a sessão local, não navega, e mostra role=alert no diálogo pedindo nova tentativa; só em sucesso limpa sessão e vai para /login. Novo teste em goal024-account-sessions.test.tsx cobre a falha: setUnauthenticated e replace não são chamados, mensagem de erro aparece, diálogo continua aberto. `npx vitest run tests/goal024-account-sessions.test.tsx` — 7 testes passaram."
+        },
+        {
+          "criterion": "Blocker 7 — goal024-settings-shell-invariant.test.tsx só montava 8 de 16 cenários, faltando hub-external, calendar-external e quatro whatsapp-*",
+          "met": true,
+          "detail": "Adicionados: teste de 'hub-external' (mesmo hub), 'calendar-external' (mesmo CalendarSettings, com fixture de fonte EXTERNAL) e test.each para whatsapp-disconnected/reconnecting/expired/error (mesmo WhatsAppSettings). Cada um prova o heading de nível 1 do módulo correto e sobrevive a cliques repetidos. `npx vitest run tests/goal024-settings-shell-invariant.test.tsx` — 13 testes passaram."
+        }
+      ],
+      "changedFiles": [
+        "apps/frontend/src/features/knowledge/KnowledgeSection.tsx",
+        "apps/frontend/src/features/knowledge/OtherInfoSection.tsx",
+        "apps/frontend/src/features/knowledge/KnowledgeDocumentForm.tsx",
+        "apps/frontend/src/features/settings/AccountSettings.tsx",
+        "apps/frontend/src/features/settings/SettingsHub.tsx",
+        "apps/frontend/src/features/imports/ImportSettingsSection.tsx",
+        "apps/frontend/tests/goal020-import-settings-section.test.tsx",
+        "apps/frontend/tests/goal024-knowledge-section.test.tsx",
+        "apps/frontend/tests/goal024-account-sessions.test.tsx",
+        "apps/frontend/tests/goal024-settings-shell-invariant.test.tsx",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DECISIONS.md"
+      ],
+      "goal": "024",
+      "jobId": "024-r2-unit-fix-001",
+      "protocolVersion": 2,
+      "report": "Corrigi os 7 blockers da rodada 1 do Goal024, um a um, sem tocar em nada fora do escopo listado.\n\n**Blocker 1 (duplicação ao editar conhecimento):** `replaceVersion` no ai-orchestrator cria a versão nova com `id: randomUUID()` (comportamento intencional, documentado no próprio serviço — não mudei o backend). O bug estava em `KnowledgeSection.tsx`: `upsertDocument` só sabia comparar pelo id do documento devolvido, então a linha antiga (id velho) ficava na lista ao lado da nova (id novo). Troquei a assinatura para `upsertDocument(document, previousId?)`, que localiza pelo id anterior quando fornecido; o call site de edição passa `editing?.id`. Reescrevi o teste que cobria esse fluxo para simular o id novo real (antes o dublê mantinha o mesmo id, o que escondia o bug) e adicionei a asserção de que só existe uma `.knowledge-row` depois de editar.\n\n**Blocker 2 (ImportSettingsSection órfã + documentação que negava isso):** confirmei por grep que `ImportSettingsSection.tsx` não tinha nenhum importador de produção — só um comentário em `SettingsHub.tsx` e o próprio teste do Goal020. `CalendarSettings.tsx` já não a montava (extração já tinha acontecido). Removi o componente e seu teste (`goal020-import-settings-section.test.tsx`), e corrigi as quatro passagens de documentação que afirmavam o contrário (\"continua sendo montada... agora pelos módulos novos\"): `SettingsHub.tsx` (docblock), `REUSE_ANALYSIS.md` (duas linhas), `CURRENT_STATE.md` (duas ocorrências, histórica e a FATO atual) e `GAP_ANALYSIS.md` (G-19 e G-31).\n\n**Blocker 3 (useShellConfig — documentação ≠ código):** confirmei por grep que o único call site de `useShellConfig` no módulo de Configurações é `ProductSettingsScreen.tsx:46`, idêntico à baseline — nenhum dos oito módulos de seção chama o hook. Corrigi as afirmações opostas em `REUSE_ANALYSIS.md`, `CURRENT_STATE.md`, `GAP_ANALYSIS.md` e D-040 (Status e item 1 da Decisão) para declarar esse fato, registrando-o como achado do Developer, não como decisão tomada. Nenhuma mudança de código: este blocker era puramente de documentação, o comportamento real já era esse.\n\n**Blocker 4 (Revisar se de D-039 sob D-040):** o parágrafo que ficava logo antes de \"## D-040\" referenciava itens (9),(10),(6),(7),(5),(1),(12) — todos da Decisão de D-039 (retenção/purga) — e citava \"U-01\", \"conta apagada\", \"teto por passada\", coisas que não existem na Decisão de D-040. Movi esse parágrafo para logo depois do Consequências de D-039 (onde ele pertence) e escrevi um \"Revisar se\" novo para D-040, cobrindo os próprios itens (1)-(7): Goal024B/ciclo de vida de conta, Lembretes no hub, mudança de contrato de conhecimento, reuso administrativo de logout-all e métrica nova na Home.\n\n**Blocker 5 (honestidade de tela sobre conteúdo não relido):** o docblock de `KnowledgeSection.tsx` já explicava que o DTO nunca devolve o texto indexado, mas isso não aparecia na tela que o usuário vê. Adicionei copy visível em `OtherInfoSection.tsx` e no modo de edição de `KnowledgeDocumentForm.tsx`, dizendo explicitamente que o campo nasce vazio e não reflete o conteúdo salvo. Testes atualizados para afirmar essas mensagens na tela.\n\n**Blocker 6 (falha silenciosa em 'Sair de todos os dispositivos'):** `AccountSettings.tsx` fazia `.catch(() => undefined)` na chamada e navegava para `/login` de qualquer forma — se a rota falhasse, a profissional achava que tinha derrubado os outros aparelhos, mas as sessões continuavam vivas. Troquei para: em falha, a sessão local não é limpa, não há navegação, e o diálogo mostra um erro recuperável (`role=\"alert\"`) convidando a tentar de novo; só em sucesso real limpa a sessão e navega. Adicionei teste de falha em `goal024-account-sessions.test.tsx`.\n\n**Blocker 7 (prova incompleta no shell invariant):** o arquivo só montava 8 de 16 cenários. Adicionei `hub-external` (mesmo Hub), `calendar-external` (mesmo CalendarSettings, com fixture de fonte EXTERNAL para exercitar o ramo de verdade) e um `test.each` para `whatsapp-disconnected/reconnecting/expired/error` (mesmo WhatsAppSettings, já que o componente não depende do sufixo do cenário). `loading`/`error` ficaram de fora de propósito — não são ramos de `SettingsContent`, são estados internos de `ProductSettingsScreen` antes do dispatch, e o blocker não os cita.\n\n**Comandos executados e resultado real:**\n- `npx vitest run` (apps/frontend) — 69 arquivos, 649 testes, todos verdes.\n- `npx tsc --noEmit -p .` (apps/frontend) — sem erros.\n- `npx eslint src tests` (apps/frontend) — sem erros, sem warnings.\n\nNenhum arquivo de controle da migração foi tocado, nenhum commit foi criado, nenhum trabalho de outra Work Unit foi revertido. `apps/bff` não precisou de mudança — todos os 7 blockers eram de frontend e de documentação.",
+      "round": 2,
+      "status": "COMPLETED",
+      "summary": "Os 7 blockers da rodada 1 do Goal024 foram corrigidos: dedupe de edição de conhecimento, remoção da ImportSettingsSection órfã, documentação alinhada ao call site real de useShellConfig, D-039/D-040 com Revisar se corretos, honestidade de tela no conteúdo não relido, falha não mais silenciosa no logout-all, e cobertura completa dos 16 cenários relevantes no shell invariant.",
+      "workUnitId": "FIX-001"
+    },
+    "attemptId": "024-r2-unit-fix-001-a1"
+  }
+}

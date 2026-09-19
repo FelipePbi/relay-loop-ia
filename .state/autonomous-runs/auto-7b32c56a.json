@@ -1,0 +1,28 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-7b32c56a",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-07T19:14:46.749Z",
+  "currentGoal": "004",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "588b70f575670eeda015750b400a09752ceb5490",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 5,
+  "ownerInstanceId": "1688-b2093109",
+  "recoveredAt": "2026-09-07T22:19:12.134Z",
+  "recoveryCount": 4,
+  "lastRecovery": {
+    "proof": "PROCESS_GONE",
+    "from": "18080-adaf3492",
+    "at": "2026-09-07T22:19:12.134Z"
+  },
+  "humanRequired": {
+    "reason": "POLICY_VIOLATION",
+    "detail": "Goal 004 ended as HUMAN_REQUIRED",
+    "at": "2026-09-07T22:20:53.309Z"
+  },
+  "archivedAt": "2026-09-07T23:14:50.246Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "POLICY_VIOLATION causada pelo bug DUPLICATE_JOB do harness. Bug corrigido no commit 685b0a2. Worktree Goal004 periciada e preservada; trabalho parcial da R2 é legítimo. Retomar Goal004 na correction round 2 sem reexecutar R1."
+}

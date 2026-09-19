@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T01:22:53.184Z",
+  "attemptId": "024-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r1-unit-wu-03",
+      "goal": "024",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Extraí Atendente virtual, WhatsApp, Conversas e Conta de ProductSettingsScreen.tsx para módulos próprios, sem reescrever RetentionSection nem WhatsAppConnectionPanel e preservando a copy de Conversas.",
+      "report": "Li o estado atual de ProductSettingsScreen.tsx (já reduzido por WU-01/WU-02 a Negócio/Agenda/Disponibilidade extraídas, com Atendente virtual, WhatsApp, Conversas e Conta ainda inline) e os módulos já extraídos (BusinessSettings.tsx, AvailabilitySettings.tsx, CalendarSettings.tsx, SettingsHub.tsx) para seguir o mesmo padrão: \"use client\" no topo, imports mínimos, componente exportado sem chamar useShellConfig (o hook continua com único call site em ProductSettingsScreen, confirmado pelo comentário e pela suíte goal021-shell-invariant).\n\nCriei quatro arquivos novos copiando cada função exatamente como estava (nenhuma mudança de comportamento, markup ou copy):\n- AiSettings.tsx — Atendente virtual, com o mesmo diálogo de confirmação de pausa.\n- WhatsAppSettings.tsx — monta WhatsAppConnectionPanel sem alterá-lo.\n- ConversationsSettings.tsx — mantém o docblock original do Goal023 e RetentionSection montada como já era.\n- AccountSettings.tsx — troca de senha, \"Sair da conta\" e bloco \"Excluir conta\" desabilitado preservados; a ação de sessões e a correção da copy ficam para WU-05 conforme o hint.\n\nReescrevi ProductSettingsScreen.tsx: removi as quatro funções extraídas, ajustei os imports (adicionando os quatro novos módulos, removendo Dialog/RetentionSection/WhatsAppConnectionPanel/fields que não são mais usados diretamente ali, e removendo useProductRuntime que ficou sem uso). SettingsContent continua despachando por scenario, incluindo scenario.startsWith(\"whatsapp\") para os cinco cenários.\n\nComandos executados e resultado:\n- `npx tsc --noEmit -p tsconfig.json` (apps/frontend) — sem erros.\n- `npx vitest run tests/goal020-reachability.test.tsx tests/goal021-shell-invariant.test.tsx tests/goal023-conversations-settings.test.tsx` — 3 arquivos, 10 testes, todos passaram.\n- `npx vitest run tests/goal022-notifications-screen.test.tsx tests/goal021-a11y.test.tsx tests/goal018-a11y.test.tsx tests/goal018-business-block.test.tsx` — 4 arquivos, 26 testes, todos passaram.\n- `npx vitest run` (suíte completa) — 66 arquivos, 617 testes, todos passaram.\n- `npx eslint` nos cinco arquivos tocados — sem apontamentos.\n- `git status --porcelain` na worktree — só os arquivos esperados desta e das WUs anteriores (WU-01/WU-02) aparecem; nada fora do escopo foi tocado.\n\nNão toquei em types.ts, RetentionSection.tsx, WhatsAppConnectionPanel.tsx nem em nenhum arquivo de shared/ além de importá-los.",
+      "changedFiles": [
+        "apps/frontend/src/features/settings/AiSettings.tsx",
+        "apps/frontend/src/features/settings/WhatsAppSettings.tsx",
+        "apps/frontend/src/features/settings/ConversationsSettings.tsx",
+        "apps/frontend/src/features/settings/AccountSettings.tsx",
+        "apps/frontend/src/features/settings/ProductSettingsScreen.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Cada uma das quatro seções é um módulo próprio com um único call site de useShellConfig",
+          "met": true,
+          "detail": "AiSettings.tsx, WhatsAppSettings.tsx, ConversationsSettings.tsx e AccountSettings.tsx não chamam useShellConfig; o único call site continua em ProductSettingsScreen.tsx:47-53, confirmado pela suíte goal021-shell-invariant.test.tsx (passou)."
+        },
+        {
+          "criterion": "Os cinco cenários de WhatsApp continuam alcançáveis e discriminados por prefixo",
+          "met": true,
+          "detail": "ProductSettingsScreen.tsx mantém `scenario.startsWith(\"whatsapp\")` roteando para WhatsAppSettings.tsx; types.ts preserva os cinco literais whatsapp-*."
+        },
+        {
+          "criterion": "RetentionSection e o painel de conexão de WhatsApp não foram reescritos",
+          "met": true,
+          "detail": "ConversationsSettings.tsx e WhatsAppSettings.tsx apenas importam e montam <RetentionSection /> e <WhatsAppConnectionPanel onStatusChange={...} /> sem alterar esses componentes (nenhum diff neles)."
+        },
+        {
+          "criterion": "A copy da seção Conversas é idêntica e nenhuma copy promete, sugere ou insinua exclusão de conteúdo não classificado",
+          "met": true,
+          "detail": "ConversationsSettings.tsx copiou título/descrição/docblock literalmente de ProductSettingsScreen.tsx; goal023-conversations-settings.test.tsx passou sem alteração de asserts."
+        },
+        {
+          "criterion": "ProductSettingsScreen.tsx ficou reduzido a despachante e nenhum arquivo de features/settings/ ficou sem importador",
+          "met": true,
+          "detail": "ProductSettingsScreen.tsx só mantém carregamento de dados + useShellConfig + SettingsContent (dispatcher); os quatro novos módulos são importados e usados nele."
+        }
+      ]
+    },
+    "attemptId": "024-r1-unit-wu-03-a1"
+  }
+}

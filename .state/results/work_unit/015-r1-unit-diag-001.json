@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T12:05:13.697Z",
+  "attemptId": "015-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-diag-001",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "DIAG-001",
+      "status": "COMPLETED",
+      "summary": "validate:core falhava porque as dependências npm de packages/contracts e de quatro apps nunca haviam sido instaladas nesta worktree; após `npm install` em cada uma, o gate passa (exit 0) sem qualquer alteração de código.",
+      "report": "Diagnóstico: a falha 'tsc não é reconhecido' em build:contracts não era um problema no script de validação nem no código do pacote — era ausência de node_modules. `packages/contracts/tsconfig.json` e `package.json` estavam corretos (script build: 'tsc -p tsconfig.json', typescript em devDependencies), mas `packages/contracts/node_modules` não existia na worktree. Verifiquei também apps/bff, apps/ai-orchestrator, apps/scheduling-service e apps/health-worker: nenhum tinha node_modules instalado (só apps/frontend tinha, provavelmente de outra Work Unit que já rodou npm install ali). node_modules está no .gitignore (linha 2), então cada workspace precisa de `npm install` independente por worktree — não há workspaces npm nem pnpm configurado na raiz (confirmei ausência de campo 'workspaces' em package.json e de pnpm-lock.yaml/pnpm-workspace.yaml). Correção: rodei `npm install` em packages/contracts, apps/bff, apps/ai-orchestrator, apps/scheduling-service e apps/health-worker (nenhuma mudança em package.json/package-lock.json commitável — apenas node_modules local, ignorado pelo git). Validação: `npm run build` em packages/contracts passou (tsc -p tsconfig.json, exit 0). Rodei `npm run validate:core` completo da raiz da worktree duas vezes: a primeira mostrou o relatório completo com todos os 14 steps executáveis 'passed' e 3 'skipped' (test:bff, test:contracts, test:health-worker — skips declarados no próprio script, não alterados) e nenhum 'failed'/'not_run'; a segunda rodada confirmou exit code 0 explicitamente ('exit code: 0'). Conferi `git status --short` antes e depois: nenhum arquivo rastreado foi alterado por esta unidade e nenhum arquivo novo fora de node_modules foi criado — as modificações e untracked files listados no status já existiam de outras Work Units do plano e não foram tocados nem revertidos. scripts/validate-core.mjs não foi editado.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-core\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "npm run validate:core na raiz da worktree terminou com 'validate:core PASSED', 14 passed / 3 skipped (skips pré-existentes e declarados) / 0 failed / 0 not_run, e exit code confirmado como 0. scripts/validate-core.mjs permanece byte a byte igual (não está em changedFiles)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "git status --short antes e depois da correção é idêntico: mesmas modificações e mesmos arquivos untracked de outras Work Units (features/customers, features/services, testes goal015-*), nenhum revertido, nenhum arquivo rastreado tocado por esta unidade."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-diag-001-a1"
+  }
+}

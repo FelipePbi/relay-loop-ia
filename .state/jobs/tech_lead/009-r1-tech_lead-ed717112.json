@@ -1,0 +1,214 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T21:47:37.560Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "009-r1-tech_lead-ed717112-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "009-r1-tech_lead-ed717112-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_FALLBACK",
+      "startedAt": "2026-09-09T21:47:37.560Z",
+      "endedAt": "2026-09-09T23:35:10.151Z",
+      "role": "tech_lead",
+      "classification": "USAGE_LIMIT",
+      "code": "NON_ZERO_EXIT",
+      "routedTo": {
+        "modelKey": "opus",
+        "model": "claude-opus-5",
+        "family": "opus",
+        "effort": "high",
+        "reason": "CAPACITY_FALLBACK_USAGE_LIMIT",
+        "fallbackAllowed": false
+      },
+      "fromModel": "fable"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "009-r1-tech_lead-ed717112",
+    "role": "tech_lead",
+    "goal": "009",
+    "round": 1,
+    "reviewLevel": "DEEP",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "review",
+      "modelKey": "fable",
+      "model": "claude-fable-5-1",
+      "family": "fable",
+      "effort": "high",
+      "complexity": "CRITICAL",
+      "riskScore": 14,
+      "signals": [
+        "CONCURRENCY",
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "DATA_CONSISTENCY",
+        "RECOVERY",
+        "INFRA",
+        "API_CONTRACT",
+        "BACKWARD_COMPAT",
+        "CROSS_CUTTING",
+        "LARGE_SCOPE",
+        "LARGE_DIFF"
+      ],
+      "reason": "HIGH_RISK_SPECIALIST_REVIEW",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    },
+    "migrationAcceptedBaseline": "1dc170eb8b04d6ee8a706dca089cfe4538175125",
+    "executionBase": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktreeInitialHead": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-009",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\009-disponibilidade-pessoal-recorrencia.md",
+    "changedFiles": [
+      "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+      "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+      "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+      "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+      "apps/bff/PUBLIC_API_V1.md",
+      "apps/bff/src/clients/scheduling/index.ts",
+      "apps/bff/src/modules/calendar/routes.ts",
+      "apps/bff/src/modules/settings/routes.ts",
+      "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+      "apps/frontend/src/data/services/BffCalendarService.ts",
+      "apps/frontend/src/data/services/BffSettingsService.ts",
+      "apps/frontend/tests/goal009-schema.test.ts",
+      "apps/scheduling-service/prisma/migrations/20260909190000_goal009_offer_rules_and_series/migration.sql",
+      "apps/scheduling-service/prisma/schema.prisma",
+      "apps/scheduling-service/src/config/env.ts",
+      "apps/scheduling-service/src/modules/appointments/appointment-series-service.ts",
+      "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+      "apps/scheduling-service/src/modules/calendar/availability-exceptions.ts",
+      "apps/scheduling-service/src/modules/calendar/block-series.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+      "apps/scheduling-service/src/modules/calendar/routes.ts",
+      "apps/scheduling-service/src/modules/calendar/time-blocks.ts",
+      "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+      "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+      "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+      "apps/scheduling-service/src/modules/internal-api/routes.ts",
+      "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+      "apps/scheduling-service/src/shared/auth/internal-auth.ts",
+      "apps/scheduling-service/tests/integration/goal009-occupancy.test.ts",
+      "apps/scheduling-service/tests/integration/support/reset-tenant.ts",
+      "apps/scheduling-service/tests/unit/goal009-occupancy.test.ts",
+      "apps/scheduling-service/tests/unit/support/database-double.ts",
+      "docs/migration/DATA_MIGRATION.md",
+      "docs/migration/GAP_ANALYSIS.md",
+      "scripts/goal009-migration-rehearsal.mjs",
+      "scripts/tests/validate-integration.test.mjs",
+      "scripts/validate-integration.mjs"
+    ],
+    "diffStat": ".../src/modules/scheduling-service/client.ts       |  89 ++++-\n .../src/modules/scheduling-service/types.ts        |  39 ++\n .../src/modules/tools/assistant-tools.ts           | 138 +++++++\n .../tests/tools/assistant-tools.test.ts            | 160 ++++++++\n apps/bff/PUBLIC_API_V1.md                          |  55 ++-\n apps/bff/src/clients/scheduling/index.ts           | 200 +++++++++-\n apps/bff/src/modules/calendar/routes.ts            | 228 ++++++++++-\n apps/bff/src/modules/settings/routes.ts            |   5 +\n apps/frontend/src/data/mappers/publicApiSchemas.ts |  62 +++\n .../src/data/services/BffCalendarService.ts        | 211 ++++++++++\n .../src/data/services/BffSettingsService.ts        |   4 +\n apps/scheduling-service/prisma/schema.prisma       | 118 +++++-\n apps/scheduling-service/src/config/env.ts          |   9 +\n .../modules/availability/atendly-availability.ts   |  95 ++++-\n .../src/modules/calendar/calendar-provider.ts      |  23 +-\n .../src/modules/calendar/calendar-service.ts       |   5 +\n .../src/modules/calendar/routes.ts                 | 151 ++++++--\n .../src/modules/calendar/time-blocks.ts            |  82 ++--\n .../src/modules/holds/appointment-hold-service.ts  |  17 +-\n .../src/modules/integrations/atendly/provider.ts   | 118 ++++--\n .../modules/integrations/minha-agenda/provider.ts  |  10 +-\n .../src/modules/internal-api/routes.ts             | 426 ++++++++++++++++++++-\n .../modules/services/atendly-service-service.ts    |  12 +\n .../src/shared/auth/internal-auth.ts               |  30 ++\n .../tests/integration/support/reset-tenant.ts      |   5 +\n .../tests/unit/support/database-double.ts          | 111 +++++-\n docs/migration/DATA_MIGRATION.md                   |  20 +-\n docs/migration/GAP_ANALYSIS.md                     |   4 +-\n scripts/tests/validate-integration.test.mjs        |   1 +\n scripts/validate-integration.mjs                   |  11 +\n 30 files changed, 2297 insertions(+), 142 deletions(-)",
+    "implementationReport": "## Diff inicial\n\n`git diff 1dc170eb8...HEAD` (baseline aceita) continha apenas os commits de infraestrutura do ia-loop (`tools/ia-loop/**`, docs de migração) já integrados antes desta execução — nenhum código de app tocado. Confirmado antes de começar.\n\n## Diff final (30 arquivos modificados + 8 novos, ~2300 inserções)\n\n**Scheduling** (núcleo do Goal): `prisma/schema.prisma` (+enums `TimeBlockKind`/`BlockSeriesStatus`, `CalendarSettings.{minLeadMinutes,maxLeadDays,granularityMinutes}`, `AvailabilityException.{decidedBy,decidedReason}`, `TimeBlock.{kind,title,seriesId,occurrenceDate}`, models novos `BlockSeries`/`AppointmentSeries`, `Appointment.{bufferBeforeMinutesSnapshot,bufferAfterMinutesSnapshot,seriesId}`, `AppointmentHold.{proposedBufferBeforeMinutes,proposedBufferAfterMinutes}`); migration única `20260909190000_goal009_offer_rules_and_series` (aditiva, sem passo de corte); `src/config/env.ts` (tetos `BLOCK_SERIES_MAX_OCCURRENCES`, `APPOINTMENT_SERIES_MAX_OCCURRENCES`, `APPOINTMENT_SERIES_ADJUST_WINDOW_DAYS`); `modules/availability/atendly-availability.ts` (regras de oferta aplicadas pelo motor — `minLeadMinutes`/`maxLeadDays`/`granularityMinutes` sempre lidos de `CalendarSettings`, nunca do chamador — e ocupação estendida por buffer, com busy pré-extendido pelos snapshots dos vizinhos e o candidato extendido pelo buffer proposto); `modules/calendar/availability-exceptions.ts` (novo: criar extra/indisponibilidade, listar, remover, sob `runCalendarWrite`+`lockCalendarDays`, com conflito contra atendimento confirmado e decisão humana `decidedBy`/`decidedReason`); `modules/calendar/block-series.ts` (novo: `createBlockSeries`, `editBlockSeriesFromDate`, `removeBlockOccurrence`, `moveBlockOccurrence`, `removeBlockSeriesFuture` — ocorrências materializadas na criação, nunca geradas sob demanda, teto configurável, conflito por ocorrência com `skipConflicts`/`forceOverlapReason`); `modules/calendar/time-blocks.ts` (kind/title, `createTimeBlockRow` reutilizável pela série); `modules/appointments/appointment-series-service.ts` (novo: `preview` — um hold por ocorrência via `AtendlyAppointmentHoldService`, busca do horário mais próximo numa janela configurável — e `confirm` — transação única, lock de todos os dias, revalidação e consumo de cada hold, `AppointmentSeries`+`Appointment.seriesId`, nada criado se qualquer ocorrência falhar); `modules/holds/appointment-hold-service.ts` e `modules/integrations/atendly/provider.ts` (buffer proposto/snapshot, `maxServiceBuffer` compartilhado, `toAtendlyAppointment` exportado para reúso pela série); `modules/integrations/minha-agenda/provider.ts` (buffers/série ausentes, DTO completado com `bufferBeforeMinutes:0`/`bufferAfterMinutes:0`/`seriesId:null`, `stepMinutes` continua próprio da fonte externa — D-024); `shared/auth/internal-auth.ts` (`callerSource`: bff→USER, ai-orchestrator→AI; `requireHumanCaller` bloqueia a IA em excecão/bloqueio/série); `modules/calendar/routes.ts` e `modules/internal-api/routes.ts` (rotas novas — exceções, block-series, ocorrência avulsa, série de atendimento — todas com `source` derivado do chamador, nunca do corpo; `stepMinutes` removido do endpoint de disponibilidade).\n\n**IA**: `modules/scheduling-service/types.ts`/`client.ts` (`previewAppointmentSeries`/`confirmAppointmentSeries`, disponibilidade sem `stepMinutes`); `modules/tools/assistant-tools.ts` (`prepare_recurring_appointments`/`confirm_recurring_appointments` — hold por ocorrência, confirmação atômica, hold vencido vira falha de domínio própria, nunca força; nenhuma tool de exceção/bloqueio/compromisso/override existe).\n\n**BFF**: `clients/scheduling/index.ts` (schemas e métodos para todas as rotas novas); `modules/calendar/routes.ts` (rotas públicas equivalentes, sempre `source: USER` via sessão); `modules/settings/routes.ts` (regras de oferta aditivas em `PATCH /v1/settings/availability`); `PUBLIC_API_V1.md` atualizado com as seções novas.\n\n**Frontend**: `data/mappers/publicApiSchemas.ts` (buffers/`seriesId` no agendamento, `kind`/`title`/`seriesId` no bloco, regras de oferta, schemas de exceção/série/preview, todos com default retrocompatível); `data/services/BffCalendarService.ts`/`BffSettingsService.ts` (métodos novos, sem tela — Goal016/018).\n\n## Decisões de escopo\n\n- **Nomes**: `BlockSeries`/`AppointmentSeries` (tabelas), `TimeBlock.kind` (`BLOCK`/`PERSONAL`), `AppointmentEvent` reaproveitado para cada ocorrência da série de atendimento (um `CREATED`+`HOLD_CONSUMED` por ocorrência, igual ao agendamento avulso).\n- **Ajuste ao horário mais próximo**: busca o mesmo horário pedido nas datas da janela (mais perto primeiro: 0, -1, +1, -2, +2...); se nenhuma tiver esse horário, cai para o slot mais próximo por diferença de minutos **na própria data alvo**. Janela configurável por `APPOINTMENT_SERIES_ADJUST_WINDOW_DAYS` (default 3).\n- **Tetos configuráveis**: `BLOCK_SERIES_MAX_OCCURRENCES` (default 104), `APPOINTMENT_SERIES_MAX_OCCURRENCES` (default 52).\n- **Buffers em multi-serviço**: maior `bufferBeforeMinutes`/`bufferAfterMinutes` entre os serviços propostos (nunca soma), centralizado em `maxServiceBuffer` (`atendly-service-service.ts`) e reusado por disponibilidade, hold e confirmação.\n- **`stepMinutes`**: removido apenas do endpoint de **disponibilidade** (IA e BFF) — leitura literal de \"para a oferta\" no texto do Goal. Continua aceito (mas ignorado pela Agenda Atendly) em confirmar/remarcar/criar hold, por compatibilidade e porque é a única forma de que a Minha Agenda ainda precisa.\n- **Série de atendimento e o provider Atendly**: reutiliza `AtendlyAppointmentHoldService` integralmente e as mesmas primitivas de baixo nível do provider (`AtendlyAvailability`, `recordAppointmentEvent`, `consumeHold`, `findHoldForConsumption`, `toAtendlyAppointment` exportado); não reusa o método `createAppointment` do provider diretamente porque ele abre sua própria transação — a confirmação da série precisa de uma única transação cobrindo N ocorrências. `toAtendlyAppointment`/`appointmentInclude` foram extraídos do provider para evitar duplicar ~40 linhas.\n- **IA e recorrência**: só as duas tools (`prepare_recurring_appointments`/`confirm_recurring_appointments`) foram implementadas, sem integração com o `PendingAction` de rascunho (schedule/reschedule/cancel). O próprio Goal confirma essa fronteira: \"de o assistente (011) oferecer recorrência\" é explicitamente do Goal011; aqui só o contrato e a ferramenta de série precisavam existir e funcionar.\n- **`minha-agenda/provider.ts`**: não ganhou métodos novos de exceção/bloqueio/série — essas capacidades nunca foram parte da interface `CalendarProvider` (mesmo padrão de `completeAppointment`/`markNoShow` do Goal008, que também são Atendly-only fora da interface). A recusa para fonte externa acontece na rota (`requireAtendlyCalendar`), antes de qualquer provider ser instanciado.\n\n## Migrações e compatibilidade\n\nMigration única `20260909190000_goal009_offer_rules_and_series`, aditiva, sem passo de corte: todo campo novo nasce com o default que o motor já praticava (`minLeadMinutes=0`, `maxLeadDays=90`, `granularityMinutes=30`, `TimeBlock.kind='BLOCK'`, buffers `0`). Constraints SQL: `CalendarSettings_offer_rules_check` (granularidade múltipla de 5 entre 5–120, `minLeadMinutes < maxLeadDays*1440`), `BlockSeries_termination_check` (data OU contagem, nunca as duas/nenhuma), `BlockSeries_occurrenceCount_check`, `BlockSeries_time_check`, `BlockSeries_daysOfWeek_check`, `AppointmentSeries_check` (intervalo/contagem positivos), `Appointment_bufferSnapshot_check`, `AppointmentHold_bufferProposed_check` (não negativos). `docs/migration/DATA_MIGRATION.md` e `GAP_ANALYSIS.md` (G-13/DATA-11) atualizados com a evidência e o limite de reversão: binário anterior continua seguro enquanto não existir série, exceção criada por rota, buffer≠0 em snapshot ou regra de oferta diferente do default.\n\nEnsaio `scripts/goal009-migration-rehearsal.mjs` escrito no mesmo padrão do `goal008-migration-rehearsal.mjs` (reconstrói o schema ao fim do Goal008, semeia estoque legado com regra/exceção/bloco/atendimento com item/hold real, aplica a migration, reconcilia contagens, prova defaults e constraints, prova retomada) e registrado em `scripts/validate-integration.mjs`/`scripts/tests/validate-integration.test.mjs`.\n\n## RED/GREEN dos casos negativos exigidos\n\n1. **Slot dentro da antecedência mínima**: `tests/unit/goal009-occupancy.test.ts` — \"nao oferece slot antes da antecedencia minima\" (RED antes: motor não filtrava; GREEN: `earliestAllowed = now + minLeadMinutes`).\n2. **Buffer ignorado por vizinho**: \"ocupa o intervalo estendido para terceiros e nao soma buffers intermediarios\" — 11:00 recusado (dentro do buffer), 11:30 aceito.\n3. **Série infinita**: \"recusa serie sem termino (nem data nem contagem)\" → `INVALID_BLOCK_SERIES_TERMINATION`.\n4. **Indisponibilidade sobre atendimento sem decisão humana**: \"recusada sem decisao humana [RED] e aceita com ela [GREEN]\" → `EXCEPTION_APPOINTMENT_CONFLICT` sem decisão, aceita com `decidedBy`/`decidedReason` gravados.\n5. **Série de atendimento parcialmente criada**: \"[RED] hold vencido na confirmacao interrompe a serie com erro proprio\" (unit, com a limitação documentada abaixo) e `tests/integration/goal009-occupancy.test.ts` — \"an occurrence taken between preview and confirmation aborts the whole series, nothing created\" (não executado, ver limitações).\n6. **`source` do corpo aceito**: `callerSource(\"bff\")===\"USER\"`/`callerSource(\"ai-orchestrator\")===\"AI\"` testado; todas as rotas de mutação (Scheduling e BFF) usam `callerSource(context.caller)` em vez de `body.source`.\n\n## Comandos executados e resultado\n\n- `npx prisma generate` + `npx tsc --noEmit` em `scheduling-service`, `ai-orchestrator`, `bff`: limpos.\n- `npm run build` em `scheduling-service`, `ai-orchestrator`, `bff`, `frontend` (Next.js): sucesso.\n- `npm test` em `scheduling-service`: **117/117** (97 pré-existentes + 20 novos de Goal009, `tests/unit/goal009-occupancy.test.ts`).\n- `npm test` em `ai-orchestrator`: **195/195** passed, 39 skipped (pré-existentes), incluindo 4 testes novos de recorrência em `tests/tools/assistant-tools.test.ts`.\n- `npm test` em `frontend`: **24/24** (17 pré-existentes + 7 novos em `tests/goal009-schema.test.ts`).\n- `node scripts/validate-core.mjs`: **PASSED** (14 passed, 3 skips declarados pré-existentes — `test:bff`/`test:contracts`/`test:health-worker`, sem relação com este Goal).\n- `node --test scripts/tests/**/*.test.mjs`: **31/31** (após atualizar a lista hardcoded de steps do `validate-integration.test.mjs` com o novo passo `rehearse:goal009-occupancy-migration`).\n- `node scripts/final-production-audit.mjs`: **15/16 passed, 1 skip declarado** (production_health, não solicitado).\n- `git diff --check`: sem erro (só aviso informativo de LF→CRLF do Git no Windows).\n- `node scripts/validate-integration.mjs`: **REFUSED** — `BFF_TEST_DATABASE_URL` não configurada; ambiente tem PostgreSQL local rodando mas sem credenciais acessíveis (tentativas de autenticação com o usuário `postgres` e o usuário do SO falharam, e não tentei mais adivinhar credenciais de um sistema que não é meu). Não pude executar `validate:integration` nem os testes de concorrência real contra Postgres.\n\n## Limitações\n\n- **`validate:integration` não executado nesta rodada** por falta de um PostgreSQL descartável acessível no ambiente: `scripts/goal009-migration-rehearsal.mjs` e `apps/scheduling-service/tests/integration/goal009-occupancy.test.ts` (2 cenários: série vs. confirmação no mesmo horário produzindo um só efeito; ocorrência tomada entre preview e confirmação abortando a série inteira) foram escritos seguindo rigorosamente o padrão já aceito do Goal008, tipam e sintaxe-checam limpos, mas **não foram exercitados** contra Postgres real. Fica pendente de execução no primeiro ambiente com banco disponível — registrado em `DATA_MIGRATION.md`.\n- **RED de rollback completo da série** (nada criado quando a ocorrência que falha é **posterior** a outras já graváveis) só é prova real de rollback de transação contra Postgres — o dublê de unidade documentadamente não desfaz escrita. O teste unitário cobre o caso equivalente com a ocorrência que falha em primeiro lugar (nada chega a ser criado) e documenta essa fronteira; o caso completo está no teste de integração não executado acima.\n- **Edição \"desta data em diante\" de série**: ao herdar campos não informados do `Partial<BlockSeriesRule>`, o próprio módulo (`editBlockSeriesFromDate`) resolve o fallback para os valores atuais da série (inclusive termino data/contagem); a rota HTTP não aplica `.default()` em `title` sob `.partial()` de propósito (documentado no código) para não confundir \"omitido\" com \"limpo\".\n- Não toquei `docs/migration/CURRENT_STATE.md` nem `MIGRATION_STATUS.md`/`goals/`/`reviews/` — fora do que me é permitido ou do escopo mínimo necessário; a evidência de G-13/DATA-11 ficou em `GAP_ANALYSIS.md`/`DATA_MIGRATION.md`, como o Goal pede explicitamente.\n- Visualizações Dia/Semana/Mês, dias ocultos e telas (Goal016), modalidades e dados do negócio (Goal018), oferta proativa de recorrência pela IA e aviso de cadência na remarcação (Goal011) e feriados (fora do MVP) não foram tocados — conforme delimitado pelo próprio Goal.",
+    "validations": [
+      {
+        "name": "scheduling-service: npx tsc --noEmit",
+        "passed": true,
+        "detail": "Compila sem erros após todas as mudanças de schema e módulos novos."
+      },
+      {
+        "name": "scheduling-service: npm run build (prisma generate + tsc)",
+        "passed": true,
+        "detail": "Build completo passa."
+      },
+      {
+        "name": "scheduling-service: npm test (tests/unit)",
+        "passed": true,
+        "detail": "117/117 testes passam (97 pré-existentes + 20 novos em goal009-occupancy.test.ts)."
+      },
+      {
+        "name": "ai-orchestrator: npx tsc --noEmit",
+        "passed": true,
+        "detail": "Compila sem erros."
+      },
+      {
+        "name": "ai-orchestrator: npm test",
+        "passed": true,
+        "detail": "195/195 passed, 39 skipped (pré-existentes); inclui 4 testes novos de recorrência."
+      },
+      {
+        "name": "bff: npx tsc --noEmit",
+        "passed": true,
+        "detail": "Compila sem erros."
+      },
+      {
+        "name": "bff: npm run build",
+        "passed": true,
+        "detail": "Build completo passa."
+      },
+      {
+        "name": "bff: npm test",
+        "passed": true,
+        "detail": "5 arquivos, 40 testes, todos skipped (suite exige banco; comportamento pré-existente e esperado)."
+      },
+      {
+        "name": "frontend: npm run build (next build)",
+        "passed": true,
+        "detail": "Build de produção completo, 84 rotas geradas."
+      },
+      {
+        "name": "frontend: npm test",
+        "passed": true,
+        "detail": "24/24 testes passam (17 pré-existentes + 7 novos em goal009-schema.test.ts)."
+      },
+      {
+        "name": "validate:core (node scripts/validate-core.mjs)",
+        "passed": true,
+        "detail": "14 passed, 3 skips declarados pré-existentes, 0 failed."
+      },
+      {
+        "name": "node --test scripts/tests/**/*.test.mjs",
+        "passed": true,
+        "detail": "31/31 passam, após atualizar a lista hardcoded de steps em validate-integration.test.mjs."
+      },
+      {
+        "name": "node scripts/final-production-audit.mjs",
+        "passed": true,
+        "detail": "15/16 passed, 1 skip declarado (production_health, não solicitado)."
+      },
+      {
+        "name": "git diff --check",
+        "passed": true,
+        "detail": "Sem erros de espaço em branco (só aviso informativo de LF/CRLF do Git no Windows)."
+      },
+      {
+        "name": "validate:integration (node scripts/validate-integration.mjs)",
+        "passed": false,
+        "detail": "REFUSED por falta de BFF_TEST_DATABASE_URL — não há credencial de PostgreSQL descartável acessível neste ambiente de execução. Não executado; migration rehearsal e testes de concorrência real ficam pendentes de execução em ambiente com banco disponível."
+      }
+    ],
+    "previousBlockers": [],
+    "packetPath": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\artefacts\\009-r1\\review-packet.json"
+  },
+  "statusAt": "2026-09-09T23:42:06.964Z",
+  "reclassifications": [
+    {
+      "originalStatus": "FAILED",
+      "originalAttemptStatus": "FAILED",
+      "originalClassification": "UNKNOWN_FATAL",
+      "correctedSemanticStatus": "WAITING_FOR_CAPACITY",
+      "correctedClassification": "USAGE_LIMIT",
+      "repairReason": "CAPACITY_CLASSIFIER_BUG",
+      "sourceEvidence": {
+        "event": {
+          "at": "2026-09-09T21:48:04.240Z",
+          "diagnostic": "CLI exited with code 1: You've reached your Fable limit. Switch to another model, or manage usage credits at claude.ai/settings/usage?from=cc_cli_limit_message, to continue."
+        },
+        "result": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\results\\tech_lead\\009-r1-tech_lead-ed717112.json"
+      },
+      "resetAt": null,
+      "repairTimestamp": "2026-09-09T22:21:02.281Z",
+      "attemptId": "009-r1-tech_lead-ed717112-a1"
+    }
+  ],
+  "attemptStartedAt": "2026-09-09T23:35:10.151Z",
+  "requeuedAt": "2026-09-09T23:35:10.151Z"
+}

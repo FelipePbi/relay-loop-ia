@@ -1,0 +1,88 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T12:25:33.872Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "015-r3-tech_lead-270ecc18-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "015-r3-tech_lead-270ecc18",
+    "role": "tech_lead",
+    "type": "CLOSURE_DOCUMENTATION",
+    "goal": "015",
+    "round": 3,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-015",
+    "closureContext": {
+      "goal": "015",
+      "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\015-ui-clientes-servicos.md",
+      "decision": "ACCEPTED",
+      "finalRound": 3,
+      "previousMigrationBaseline": "0bbfbf35c6855aca71dc96c986879dec1ed91985",
+      "executionBase": "908c4a1d0ae956831b5c7b604d47d68a999f7dea",
+      "worktreeInitialHead": "908c4a1d0ae956831b5c7b604d47d68a999f7dea",
+      "acceptedSnapshot": {
+        "files": 33,
+        "diffHash": "23148c70f5d9489a5e984bf889f50fe6fd5b06a23168460d617c3cb79a75ed95"
+      },
+      "changedFiles": [
+        "apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/novo/page.tsx",
+        "apps/frontend/src/app/(platform)/clientes/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/editar/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/novo/page.tsx",
+        "apps/frontend/src/app/(platform)/servicos/page.tsx",
+        "apps/frontend/src/app/globals.css",
+        "apps/frontend/src/data/services/BffCalendarService.ts",
+        "apps/frontend/src/features/customers/AuthorizationControl.tsx",
+        "apps/frontend/src/features/customers/CustomerAgenda.tsx",
+        "apps/frontend/src/features/customers/CustomerForm.tsx",
+        "apps/frontend/src/features/customers/CustomerList.tsx",
+        "apps/frontend/src/features/customers/CustomerMemory.tsx",
+        "apps/frontend/src/features/customers/CustomerNotes.tsx",
+        "apps/frontend/src/features/customers/CustomerProfile.tsx",
+        "apps/frontend/src/features/customers/CustomerSummary.tsx",
+        "apps/frontend/src/features/customers/CustomerTags.tsx",
+        "apps/frontend/src/features/customers/PrimaryGuardianPanel.tsx",
+        "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+        "apps/frontend/src/features/customers/types.ts",
+        "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+        "apps/frontend/src/features/services/ProductServicesScreen.tsx",
+        "apps/frontend/src/features/services/ServiceForm.tsx",
+        "apps/frontend/src/features/services/ServiceList.tsx",
+        "apps/frontend/src/mocks/data/directory.ts",
+        "apps/frontend/src/shared/styles/atendly-customers.css",
+        "apps/frontend/src/shared/styles/atendly-services.css",
+        "apps/frontend/src/shared/styles/atendly.css",
+        "apps/frontend/src/shared/ui/ListItem.tsx",
+        "apps/frontend/tests/goal015-customers.test.tsx",
+        "apps/frontend/tests/goal015-services.test.tsx",
+        "apps/frontend/tests/goal015-shell-invariant.test.tsx"
+      ],
+      "roundsRun": [
+        {
+          "round": 1,
+          "decision": "CHANGES_REQUIRED",
+          "blockers": 4,
+          "changedFiles": 32
+        },
+        {
+          "round": 2,
+          "decision": "CHANGES_REQUIRED",
+          "blockers": 2,
+          "changedFiles": 33
+        },
+        {
+          "round": 3,
+          "decision": "ACCEPTED",
+          "blockers": 0,
+          "changedFiles": 33
+        }
+      ],
+      "writeScope": "docs/migration/"
+    }
+  },
+  "statusAt": "2026-09-14T12:29:54.875Z"
+}

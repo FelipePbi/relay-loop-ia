@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T17:02:38.561Z",
+  "attemptId": "021-r2-tech_lead-afbfeea6-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "021-r2-tech_lead-afbfeea6",
+      "goal": "021",
+      "summary": "Fechamento documental do Goal021 (ACCEPTED na rodada 2), escrito apenas em docs/migration/. Criado o review formal 021-review.md: identidade do diff (79 arquivos, hash cfaa00e1…, base 9df7bf7 sobre a baseline 24b744d, sem código de produto entre as duas), o que foi inspecionado e por hash, os dois blockers da rodada 1 (detalhe do agendamento derivando lembrete da configuração do tenant, e a documentação afirmando essa entrega) e o fechamento deles na rodada 2, a evidência que o próprio reviewer executou nesta árvore (validate:integration 25/25, validate:core 14 passos, typecheck/lint/suítes dos três apps), o que o diff entrega e os limites e resíduos do aceite. Registrada D-037 em DECISIONS.md, no formato das anteriores: lembrete como intenção durável do dono, versão do compromisso como identidade do envio, entrega no mínimo uma vez com janela declarada, aviso de alteração explícito e presença com ator derivado do chamador — com alternativas rejeitadas, consequências e gatilhos de revisão. Corrigidos os documentos que ficaram desatualizados pelo aceite: CURRENT_STATE.md (o bloco ainda se dizia \"round 1, ainda sem review\" e subdeclarava a evidência — 9 testes e gate não executado, agora 11 testes e gate 25/25 rodado sobre a árvore aceita), GAP_ANALYSIS.md (G-27 e o resíduo do G-18 marcados como fechados no diff021, com link para o review), DATA_MIGRATION.md (mesma correção de marcador, contagem de testes e ensaio de migration executado). VALIDATION_GATE.md teve a descrição do gate corrigida: a tabela dizia que validate:integration exercita \"um único fluxo (POST /v1/auth/register)\" e o texto dizia \"dez passos\", enquanto o script tem 25 — este Goal acrescentou o 25º. MASTER_PLAN.md ganhou a entrada v39 do histórico de planejamento registrando o ACCEPTED, sem baseline nova e sem preparar o próximo Goal. Não foram tocados MIGRATION_STATUS.md, REUSE_ANALYSIS.md (já atualizado pelo executor), TARGET_ARCHITECTURE.md, nenhum documento de Goal, nem qualquer arquivo fora de docs/migration/ — verificado por git status: os 45 arquivos de código/teste/tooling modificados continuam sendo exatamente os do executor.",
+      "documentsUpdated": [
+        "docs/migration/reviews/021-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/VALIDATION_GATE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "Nada foi commitado. Nenhum Goal foi marcado READY, nenhum baseline novo registrado e MIGRATION_STATUS.md não foi tocado. Duas correções vão além do registro do aceite e ficam declaradas: (1) VALIDATION_GATE.md descrevia o gate com dez passos e cobertura de um único fluxo do BFF — defasagem acumulada desde o Goal004 que este Goal agravou ao acrescentar o 25º passo; corrigido para a contagem real, apontando scripts/validate-integration.mjs como lista autoritativa, sem reescrever a enumeração inteira. (2) MASTER_PLAN.md recebeu a entrada v39 por simetria com v36 (fechamento019) e com o que o commit de fechamento020 fez — é o registro do ACCEPTED, não replanejamento: a reavaliação do roadmap e o Goal seguinte continuam aguardando o SHA de fechamento."
+    },
+    "attemptId": "021-r2-tech_lead-afbfeea6-a1"
+  }
+}

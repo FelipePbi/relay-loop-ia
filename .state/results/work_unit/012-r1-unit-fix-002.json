@@ -1,0 +1,33 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:53:43.355Z",
+  "attemptId": "012-r1-unit-fix-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-integration\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "scripts/validate-integration.mjs ficou intocado (git diff vazio para o arquivo). Provisionei PostgreSQL 18 descartável local (initdb/pg_ctl, porta 55490, banco atendly_bff_test) conforme docs/migration/VALIDATION_GATE.md, exportei BFF_TEST_DATABASE_URL e rodei `npm run validate:integration`: 22/22 passos PASSED, incluindo o passo novo de WU-08; segunda execução confirmou exit code 0."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "Nenhum arquivo do worktree foi alterado por esta unidade: `git status --short` mostra o mesmo conjunto de 59 entradas de antes da investigação, sem diffs adicionais meus."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [],
+      "goal": "012",
+      "jobId": "012-r1-unit-fix-002",
+      "protocolVersion": 2,
+      "report": "Causa raiz: a saída de falha reportada (\"BFF_TEST_DATABASE_URL is not set\") vem de `resolveIntegrationTarget()` em scripts/validate-integration.mjs, que roda antes de qualquer passo e recusa (exit 2) por design sempre que essa variável não está definida — comportamento documentado desde o Goal002 (docs/migration/VALIDATION_GATE.md), intencionalmente sem fallback para `.env` ou banco herdado. Conferi o diff de scripts/validate-integration.mjs contra HEAD: a única mudança pendente nele é a adição do passo \"rehearse:goal012-knowledge-memory-migration\" por WU-08 ao final da lista de `integrationSteps`, um passo que só executa DEPOIS da resolução do alvo. Ou seja, a falha reportada ocorreu antes de qualquer código de WU-08 rodar — não é causada pelas mudanças de WU-08, e sim pela ausência de um banco PostgreSQL descartável e da variável de ambiente na execução anterior da verificação (WU-18 rodou o gate sem provisionar o banco, exatamente como o gate foi desenhado para recusar).\n\nNão havia, portanto, defeito de código para corrigir sem enfraquecer o gate — fazê-lo passar exige o mesmo que sempre exigiu: um PostgreSQL descartável real. Provisionei um localmente (Windows, sem Docker, seguindo a receita documentada): `initdb` + `pg_ctl start` em `C:/tmp/atendly-pgtest-fix002` na porta 55490, usuário `pgtest`, banco `atendly_bff_test` criado via `psql`. Rodei `BFF_TEST_DATABASE_URL=\"postgresql://pgtest@127.0.0.1:55490/atendly_bff_test\" npm run validate:integration` duas vezes: a primeira mostrou os 22 passos (incluindo o novo passo de WU-08 e todos os ensaios de migration goal003–goal012, BFF/Scheduling/AI Orchestrator/Evolution Go) passando e terminou com \"validate:integration PASSED against 127.0.0.1:55490/atendly_bff_test.\"; a segunda confirmou `EXIT_CODE=0` explicitamente. Depois parei o cluster (`pg_ctl stop -m fast`) e removi o diretório temporário — nenhum recurso ficou pendurado.\n\nNenhum arquivo do repositório foi alterado: a verificação em si não foi tocada, afrouxada nem desabilitada, e ela passa quando invocada com o pré-requisito de ambiente que ela sempre exigiu.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "validate:integration falhava só por falta de BFF_TEST_DATABASE_URL na execução anterior (comportamento de recusa por design, anterior a qualquer código de WU-08); provisionei um Postgres descartável local e confirmei exit 0 nos 22 passos sem alterar nenhum arquivo.",
+      "workUnitId": "FIX-002"
+    },
+    "attemptId": "012-r1-unit-fix-002-a1"
+  }
+}

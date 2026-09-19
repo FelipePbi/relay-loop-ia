@@ -1,0 +1,57 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T23:21:08.054Z",
+  "attemptId": "013-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "013-r1-unit-wu-05",
+      "goal": "013",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Adicionada a rota interna de mídia sob demanda, DTO de mensagem com kind/attachment, sugestão com transcrição de áudio, evals nomeados e teste de integração contra PostgreSQL real.",
+      "report": "Escopo: expor GET /internal/conversations/:id/messages/:messageId/media, estender messageDto e fazer generateSuggestions aceitar áudio transcrito, com evals e integração — sem tocar o trabalho já concluído de WU-03/WU-04.\n\nO que mudou e por quê:\n- `src/modules/media/message-media-service.ts` (novo): `MessageMediaService.resolve()` busca a Message+attachment por tenant/conversa/messageId, recusa `MESSAGE_NOT_FOUND`/`MESSAGE_ATTACHMENT_NOT_FOUND`/`MEDIA_TOO_LARGE` sem tentar rede, busca `mediaUrl` hospedada quando existe, e cai para download sob demanda (proto de `Message.rawPayload` + credencial do canal via fábrica injetável) quando não existe, recusando `MEDIA_UNAVAILABLE` em qualquer falha (URL fora do ar, sem proto, sem credencial provisionada, provedor sem `downloadMedia`, download falhou) — nunca 500 genérico.\n- `src/modules/internal/routes.ts`: registrada a rota `GET /internal/conversations/:id/messages/:messageId/media` (escopo `conversations:read`, já coberto pela regra existente de GET sob `/internal/conversations`), servindo bytes crus com `content-type` e `content-disposition` (nome sanitizado contra injeção de header). `messageDto` ganhou `kind` (default `TEXT` para legado) e `attachment` (kind, mimetype, fileName, sizeBytes, durationSeconds, tooLarge, transcript, transcriptStatus, transcriptError, mediaAvailable) nas duas rotas de leitura de mensagem (lista e `lastMessage` da conversa), via `include: { attachments }`. `InternalRoutesOptions.media` permite dublê nos testes.\n- `src/modules/assistant/assistant.service.ts`: `generateSuggestions` agora, quando a última mensagem inbound é `AUDIO` com `body` vazio, busca o `MessageAttachment` e usa a transcrição concluída (`transcriptStatus: DONE`) marcada com `AUDIO_TURN_MARKER` como texto do turno; sem transcrição concluída (pendente/falhou/sem attachment) continua `NO_TEXTUAL_MESSAGE`, igual a imagem/documento sem legenda — comportamento inalterado.\n\nEvals (tests/evals/), cada um com `nota` nomeando a política e checagem de que o roteiro do dublê foi consumido:\n- `audio-and-media-routing.eval.test.ts` (novo): confirmação clara em áudio, transcrição ambígua, falha de transcrição, contato ignorado, sessão pessoal, atendimento humano transcreve sem a IA agir, imagem sem modelo, documento sem modelo, sticker sem resposta — via `InboundMessageProcessor` real com `AudioTranscriptionService` real e um `invokeGraphAgent` dublado com fila de passos que lança se chamado sem roteiro ou se sobra passo.\n- `suggestions.eval.test.ts` (estendido): \"recusa com imagem\" (kind IMAGE, body vazio) e \"sugestão com áudio\" (transcrição DONE vira texto marcado que chega ao modelo; e o caso simétrico sem transcrição concluída continua recusando), usando `createEvalWorld` com pequena extensão aditiva em `tests/evals/harness.ts` (`store.attachments` + `prisma.messageAttachment.findFirst`), sem alterar o comportamento dos outros 8 arquivos de eval (rodei a suíte inteira de evals antes e depois: mesmos 40→47 casos, todos verdes).\n- `proibirRede()` (já existente) garante ausência de rede em todos os cenários.\n\nTestes unitários novos: `tests/media/message-media-service.test.ts` (10 casos cobrindo cada recusa e os dois caminhos de sucesso) e `tests/internal/media.routes.test.ts` (10 casos de contrato HTTP: bytes+headers, 4 recusas com código próprio e status certo, isolamento de tenant, escopo, credencial ausente/errada).\n\nIntegração contra PostgreSQL real (`tests/integration/media.test.ts`, `describe.skipIf(!AI_TEST_DATABASE_URL)`): Message com kind/attachment persistidos e lidos de volta; ProcessedEvent perde o base64 embutido ao concluir em runtime (via `InboxStore.claimNext`/`complete` reais) e também depois de um backfill simulado (mesma operação `#-` da migration) sobre uma linha \"legada\" já DONE, preservando o resto do proto e sem tocar evento ainda pendente; isolamento por tenant da rota de mídia via `MessageMediaService` real contra dados persistidos (tenant certo resolve a `mediaUrl` hospedada, tenant errado — mesmo messageId/conversationId — recebe `MESSAGE_NOT_FOUND` sem chamar fetch).\n\nComandos executados e resultado:\n- `npx tsc -p . --noEmit` → sem erros, repetido após cada mudança relevante.\n- `npx vitest run` (suíte inteira, sem AI_TEST_DATABASE_URL) → 531 passed, 59 skipped (0 falhas), antes e depois de cada mudança.\n- Para a integração real: subi `docker run postgres:15` descartável (`goal013-wu05-pg`, porta 55433), rodei em sequência `node scripts/goal004-migration-rehearsal.mjs`, `goal005-migration-rehearsal.mjs`, `goal006-ai-migration-rehearsal.mjs`, `goal011-ai-style-migration-rehearsal.mjs`, `goal012-knowledge-memory-migration-rehearsal.mjs`, `goal013-media-migration-rehearsal.mjs` (todos PASSED) contra `BFF_TEST_DATABASE_URL`, o que deixou `atendly_bff_test_goal004` com o schema de Goal013 aplicado (sem pgvector, como o resto da suíte de durabilidade). Depois `npx prisma generate` e `AI_TEST_DATABASE_URL=...goal004 npx vitest run tests/integration/media.test.ts` → 4 passed; `npx vitest run tests/integration` → 57 passed, 2 skipped (o pgvector-dependente); removi o container descartável ao final. Nenhuma credencial real usada — tudo sintético/local.\n\nNada em `scripts/validate-integration.mjs` precisou mudar: o passo `rehearse:goal013-media-migration` e `test:ai-orchestrator-transport-durability` (que roda `vitest run tests/integration`, pasta inteira) já existiam e recolhem o novo arquivo automaticamente.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/media/message-media-service.ts",
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+        "apps/ai-orchestrator/tests/evals/harness.ts",
+        "apps/ai-orchestrator/tests/evals/suggestions.eval.test.ts",
+        "apps/ai-orchestrator/tests/evals/audio-and-media-routing.eval.test.ts",
+        "apps/ai-orchestrator/tests/internal/media.routes.test.ts",
+        "apps/ai-orchestrator/tests/media/message-media-service.test.ts",
+        "apps/ai-orchestrator/tests/integration/media.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Rota de mídia devolve bytes e cabeçalhos para mediaUrl e para download sob demanda (Go dublê), recusa com códigos próprios e nunca 500 genérico; isolamento por tenant provado",
+          "met": true,
+          "detail": "MessageMediaService cobre os dois caminhos (mediaUrl e download sob demanda via proto+credencial) e as 4 recusas (MESSAGE_NOT_FOUND, MESSAGE_ATTACHMENT_NOT_FOUND, MEDIA_TOO_LARGE, MEDIA_UNAVAILABLE); tests/internal/media.routes.test.ts prova contrato HTTP e códigos; tests/integration/media.test.ts prova isolamento por tenant contra Postgres real."
+        },
+        {
+          "criterion": "messageDto carrega kind e attachment; mensagens de texto legadas continuam com o mesmo formato",
+          "met": true,
+          "detail": "internal/routes.ts messageDto: kind default TEXT, attachment null quando não há mídia; suíte de rotas internas existente (conversation-controls, suggestions) continua passando sem alteração de expectativa."
+        },
+        {
+          "criterion": "Sugestão com último áudio transcrito funciona; imagem, documento e transcrição indisponível recusam NO_TEXTUAL_MESSAGE",
+          "met": true,
+          "detail": "assistant.service.ts generateSuggestions; provado em tests/evals/suggestions.eval.test.ts (áudio DONE aceita, áudio FAILED recusa, imagem recusa)."
+        },
+        {
+          "criterion": "Cada eval nomeia a política e falha se o roteiro do dublê não for consumido; a bancada continua sem rede",
+          "met": true,
+          "detail": "tests/evals/audio-and-media-routing.eval.test.ts (9 cenários) e extensão de suggestions.eval.test.ts (2 cenários) — 11 no total, cada um com nota/roteiro consumido; proibirRede() ativo."
+        },
+        {
+          "criterion": "Integração contra PostgreSQL prova attachment persistido e ausência de base64 em ProcessedEvent e Message",
+          "met": true,
+          "detail": "tests/integration/media.test.ts, 4 casos, executados contra Postgres 15 real via docker (rehearsals goal004→goal013 aplicados); todos passed."
+        }
+      ]
+    },
+    "attemptId": "013-r1-unit-wu-05-a1"
+  }
+}

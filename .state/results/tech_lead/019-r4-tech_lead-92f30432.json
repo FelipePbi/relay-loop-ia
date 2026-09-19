@@ -1,0 +1,542 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T03:07:08.264Z",
+  "attemptId": "019-r4-tech_lead-92f30432-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "decision": "NEXT_GOAL",
+      "protocolVersion": 2,
+      "jobId": "019-r4-tech_lead-92f30432",
+      "goal": "019",
+      "nextGoalId": "020",
+      "nextGoalTitle": "Importação única na UI e histórico",
+      "nextGoalPath": "docs/migration/goals/020-importacao-na-ui-e-historico.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Interface sobre domínio pronto e sem migration, mas com leitura nova atravessando três serviços e uma decisão irreversível: concluir consome o direito único de importação do negócio.",
+      "summary": "Goal019 registrado como ACCEPTED sobre a baseline cf4cea91b1fa0b321590cbf865aa7a00618b4247. Roadmap reavaliado incrementalmente sem alterar ordem nem IDs: o próximo executável continua sendo o 020 (importação na UI), com uma alteração de superfície justificada por evidência — a leitura da sessão não existe em camada nenhuma, então o Goal atravessa também o Scheduling, e a retirada do protocolo legado MigrationJob da interface entra no escopo. Fatos verificados na baseline: dez métodos de adapter sem consumidor (sete de importação, três de conexão da origem); ProductMigrationScreen com 878 linhas ainda dirigindo o protocolo legado e oferecendo troca de fonte que o backend recusa desde o Goal010; PUBLIC_API_V1.md linha 73 afirmando algo hoje falso; ImportCompletionService.getHistory() sem um único chamador e sem rota; ImportSessionCategory.selected lido pela execução e nunca escrito; e o onboarding prometendo em texto fixo uma importação que o fluxo vigente não entrega. Resíduo administrativo corrigido: ponteiros obsoletos do G-19 no GAP_ANALYSIS remapeados por significado para Goal020 e Goal025. Nenhuma decisão nova registrada — D-026 já cobre os contratos que o 020 expõe.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/goals/019-demonstracao-teste-real-autoativacao.md",
+        "docs/migration/goals/020-importacao-na-ui-e-historico.md"
+      ],
+      "executionPlan": {
+        "executionStrategy": "Primeiro a leitura que falta no domínio (Scheduling), depois o contrato público (BFF), depois a camada de dados do frontend — só então as telas, em quatro fatias de jornada com dependência linear porque compartilham o módulo features/imports/. Os pontos de entrada e a retirada do protocolo legado vêm depois das telas, porque só podem apontar para o que já existe. As provas transversais (shell, axe, alcance) fecham a implementação. Verificação determinística no fim: typecheck por app e lint, depois testes dirigidos, depois os gates globais validate-core, validate-integration e validate-ui (este último após validate-core, que produz o build servido), e git-diff-check por último.",
+        "goalSummary": "Fechar G-19 na parte de experiência: a jornada da importação única existe no domínio desde o Goal010 e não tem um único consumidor. O Goal entrega a jornada que o vault descreve (conectar origem, analisar sem alterar nada, preview por categoria com contagem, importar tudo como caminho principal, escolher categorias, resolver conflitos por item, executar com progresso lido do banco, revisar pendências, concluir com confirmação definitiva, resultado e histórico em Configurações), cria as duas únicas adições de contrato público que faltam — leitura do estado da importação (direito, sessão viva, histórico) e escrita de ImportSessionCategory.selected — e retira da interface o protocolo legado MigrationJob e a direção para-minha-agenda, que o backend recusa desde o corte do writer remoto. As rotas legadas /v1/calendar/migrations permanecem intactas; a remoção delas é do Goal025. Sem migration. O custo de erro concentra-se na conclusão, que consome o direito único e irreversível de importação do negócio.",
+        "workUnits": [
+          {
+            "id": "WU-001",
+            "title": "Leitura do estado da importação no Scheduling",
+            "objective": "Expor, por rota interna, o estado da importação do tenant do contexto: direito (getImportRight), sessão viva quando houver (id, status, previewVersion, contagens e selected por categoria, sourceAccountId/label, marcos de tempo) e histórico quando houver conclusão (getHistory, hoje sem nenhum chamador). É leitura pura: não abre sessão, não muda status, não incrementa previewVersion, não consome direito. Negócio sem conexão, sem sessão e sem histórico é resposta válida e vazia, não erro. A conexão entra só como estado, nunca credencial.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/scheduling-service",
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/migrations/import-completion-service.ts",
+              "apps/scheduling-service/tests/"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/migrations/import-completion-service.ts",
+              "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts"
+            ],
+            "implementationHints": "getHistory() está em import-completion-service.ts:251 e getImportRight() em :265; requireIntegration está em internal-api/routes.ts:1552 e devolve 404 INTEGRATION_CONNECTION_NOT_FOUND quando a conexão MINHA_AGENDA não existe — esse 404 não pode virar a resposta da leitura, que precisa ser válida e vazia. Seguir o padrão internalOnly/currentInternalContext das rotas vizinhas da importação. Suítes de integração contra PostgreSQL real, não dublê de banco.",
+            "acceptanceCriteria": [
+              "A rota devolve direito, sessão viva e histórico para o tenant do contexto autenticado",
+              "getHistory passa a ter chamador",
+              "Negócio sem conexão, sem sessão e sem histórico recebe resposta válida com os três campos vazios, não erro",
+              "A resposta não contém credencial da origem em nenhuma forma, nem cifrada, nem parcial",
+              "A chamada não abre sessão, não altera status, não incrementa previewVersion e não consome direito",
+              "Dois negócios na mesma base não veem o estado um do outro",
+              "Provado por suíte de integração contra PostgreSQL real"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-002",
+            "title": "Escrita de ImportSessionCategory.selected no Scheduling",
+            "objective": "Expor a escrita de selected, hoje lida pela execução (import-execution-service.ts:398-431) e nunca escrita por caminho algum, tornando alcançável a regra do vault de importar tudo por padrão com opção de escolher categorias. Rota interna por sessão e categoria, recusando sessão terminal (COMPLETED, FAILED, SUPERSEDED) com código próprio no vocabulário já existente do módulo, sem invalidar o preview nem mudar previewVersion.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-001"
+            ],
+            "scope": "apps/scheduling-service",
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/migrations/",
+              "apps/scheduling-service/tests/"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+              "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+              "apps/scheduling-service/prisma/schema.prisma"
+            ],
+            "implementationHints": "O único escritor atual de selected é o upsert do preview em import-preview-service.ts:410 — conferir se ele preserva a escolha do negócio numa reanálise em vez de reverter ao default. A prova que importa é o consumidor real: a execução precisa pular a categoria desmarcada.",
+            "acceptanceCriteria": [
+              "selected pode ser escrito por sessão e categoria e a execução honra a escolha, provado pelo consumidor real",
+              "Desmarcar não altera previewVersion nem dispara releitura da origem",
+              "Sessão COMPLETED, FAILED ou SUPERSEDED recusa a decisão com código próprio",
+              "Toda categoria continua nascendo selecionada e importar tudo não exige nenhuma chamada extra",
+              "Isolamento por tenant preservado",
+              "Provado contra PostgreSQL real"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-003",
+            "title": "Rotas públicas novas no BFF e contrato",
+            "objective": "Expor no BFF a leitura do estado da importação e a escrita de selected, com requireTenantContext como as demais rotas do módulo, pelo cliente do Scheduling. Documentar as duas rotas em PUBLIC_API_V1.md na seção da importação única, com os códigos de recusa, e atualizar a linha 73 — que já classifica o protocolo legado como sem consumidor no frontend vigente — para registrar desde quando isso passa a ser verdade.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-001",
+              "WU-002"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/migrations/routes.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/migrations/routes.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/bff/PUBLIC_API_V1.md"
+            ],
+            "implementationHints": "As sete rotas de importação existentes estão em modules/migrations/routes.ts:148-270 e o cliente em clients/scheduling/index.ts:1122-1141 — seguir exatamente esses padrões, inclusive dataResponse e o tratamento de Idempotency-Key onde a mutação exigir. Nenhum corpo aceita tenantId ou userId.",
+            "acceptanceCriteria": [
+              "As duas rotas novas respondem sob /v1/calendar/imports com requireTenantContext",
+              "401 e 403 cobertos por suíte de integração do BFF",
+              "A resposta da leitura não expõe nenhum campo de credencial",
+              "Nenhuma rota pública existente muda de forma ou de significado",
+              "PUBLIC_API_V1.md documenta as duas rotas e a linha 73 fica verdadeira ao fim do Goal"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-004",
+            "title": "Camada de dados do frontend para a importação",
+            "objective": "Completar schemas e serviço do frontend para as respostas novas, no padrão de data/mappers/publicApiSchemas.ts, e dar consumidor aos sete métodos de importação de BffMigrationService e aos três de conexão de BffCalendarService a partir das unidades seguintes. Resolver features/migration/types.ts, que declara MigrationService, ImportStage e ImportSessionService sem nenhum importador.",
+            "type": "MECHANICAL",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-003"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "apps/frontend/src/features/imports/types.ts",
+              "apps/frontend/tests/goal020-schema.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "apps/frontend/src/features/migration/types.ts",
+              "apps/frontend/tests/goal010-import-schema.test.ts"
+            ],
+            "implementationHints": "Os schemas de importação do Goal010 já existem e já têm suíte em tests/goal010-import-schema.test.ts — estender, não duplicar. Os oito valores de ImportCategory, os oito de ImportSessionStatus, os cinco de ImportItemStatus e as cinco decisões de item são o vocabulário fechado.",
+            "acceptanceCriteria": [
+              "Schemas das respostas novas existem e são exercitados por suíte",
+              "BffMigrationService ganha o método de leitura e o de seleção de categoria",
+              "Nenhum tipo ou arquivo novo fica sem importador",
+              "features/migration/types.ts sai ou ganha importador"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-005",
+            "title": "Módulo features/imports: entrada por estado e conexão da origem",
+            "objective": "Criar o módulo da importação com as rotas do App Router, decidindo o ponto de entrada pelo estado lido (direito disponível, sessão viva para retomar, ou conclusão que só rende histórico), e a tela de conexão da origem consumindo POST /v1/calendar/integration/connect. A credencial não sobrevive à navegação e não aparece em storage, URL ou log. Retomar sessão viva é o padrão; substituir é decisão explícita apresentada como descarte.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-004"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/imports/",
+              "apps/frontend/src/app/(platform)/",
+              "apps/frontend/src/shared/styles/",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffCalendarService.ts",
+              "apps/frontend/src/features/migration/ProductMigrationScreen.tsx",
+              "apps/frontend/src/shared/styles/atendly-migration.css",
+              "apps/frontend/src/shared/layout/ShellConfig.ts"
+            ],
+            "implementationHints": "connectIntegration está em BffCalendarService.ts:517 e hoje não tem consumidor. INTEGRATION_WRITES_NOT_SUPPORTED não pode ser alcançável pela UI, porque a interface não oferece escrita de volta. Decompor por módulo como nos Goals 015–018, com uma única chamada de useShellConfig por árvore renderizada.",
+            "acceptanceCriteria": [
+              "O ponto de entrada é decidido pelo estado lido, não por tentativa de criar sessão",
+              "A tela de conexão consome POST /v1/calendar/integration/connect",
+              "A credencial não é guardada em estado persistente, localStorage, query string ou log",
+              "Erro de credencial vira mensagem de produto, não stack",
+              "Retomar sessão viva é o padrão e substituir é decisão explícita apresentada como descarte",
+              "Uma única chamada de useShellConfig por árvore renderizada"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-006",
+            "title": "Análise, preview por categoria e escolha do que importar",
+            "objective": "Entregar a análise que não altera dado operacional e o preview por categoria com contagem real, com importar tudo como CTA principal e escolher o que importar como caminho secundário consumindo a rota de seleção. Categoria não fornecida pela origem exibe a limitação declarada em linguagem de produto (CUSTOMER_DIRECTORY_UNAVAILABLE, NO_SHOW_NOT_MODELED_BY_SOURCE), explicando a ausência sem fabricar número.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-005"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/imports/",
+              "apps/frontend/src/shared/styles/",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "docs/product-vault/02-Fluxos/05-Importacao-Unica.md",
+              "docs/design-reference/claude-design/prototype/project/Onboarding-2-Importacao.dc.html"
+            ],
+            "implementationHints": "A cobertura declarada por categoria vem do preview do Goal010 (sourceSupported, sourceReportedCount, readCount, limitationCode). A copy não pode contradizer a garantia de domínio de que o preview não escreve dado operacional.",
+            "acceptanceCriteria": [
+              "A tela afirma que a análise não altera nada, antes de qualquer confirmação",
+              "Cada categoria mostra a contagem real vinda do preview",
+              "Cada limitação declarada pela origem é explicada em linguagem de produto, sem número fabricado",
+              "Importar tudo é o caminho principal e não exige nenhuma chamada extra",
+              "Escolher o que importar consome a rota de seleção e não altera previewVersion"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-007",
+            "title": "Conflitos resolvidos por item",
+            "objective": "Entregar a resolução de conflito por item com as cinco decisões do contrato (INCLUDE, EXCLUDE, MERGE_WITH_EXISTING, CREATE_NEW, KEEP_EXISTING, com targetInternalId obrigatório nas duas últimas), explicados em linguagem leiga, sem que conflito pendente impeça executar o resto. Segunda decisão sobre item já decidido é recusada pelo contrato com 409 IMPORT_ITEM_ALREADY_DECIDED e a tela trata isso como estado, não como erro genérico.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-006"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/imports/",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/frontend/src/data/services/BffMigrationService.ts"
+            ],
+            "implementationHints": "A listagem de itens é paginada por categoria (status, limit, offset). Poucos conflitos não podem bloquear milhares de registros válidos — é regra explícita do vault.",
+            "acceptanceCriteria": [
+              "As cinco decisões do contrato são alcançáveis pela UI, com targetInternalId onde o contrato exige",
+              "Conflito é explicado em linguagem leiga",
+              "Conflito pendente não impede executar o restante",
+              "Item já decidido não oferece segunda decisão e a recusa vira estado explicado"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-008",
+            "title": "Execução, progresso, pendências e conclusão definitiva",
+            "objective": "Entregar a execução enviando a previewVersion que a tela mostrou ao negócio, o progresso lido de GET .../progress a cada chamada com parada em estado terminal, PARTIAL tratado como estado legítimo com o que faltou visível e reprocessável na sessão, e a conclusão definitiva: confirmação explícita com a copy do vault quando há itens não importados, incluindo a frase sobre ser a única importação, acceptPending derivado apenas dessa confirmação, dupla submissão impedida e nenhuma oferta de nova importação depois de concluída.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-007"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/imports/",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "docs/product-vault/02-Fluxos/05-Importacao-Unica.md",
+              "apps/frontend/src/shared/ui/Dialog.tsx"
+            ],
+            "implementationHints": "previewVersion é obrigatória de propósito: fosse opcional, a recusa de preview obsoleto viraria opt-in. Progresso é fato do banco, nunca contador local. Idempotency-Key estável para a mesma tentativa de conclusão, como as demais mutações do módulo. Esta é a única decisão irreversível da interface do produto.",
+            "acceptanceCriteria": [
+              "A execução envia a previewVersion que a tela de preview mostrou",
+              "Preview obsoleto vira estado de produto explicado, não erro genérico",
+              "O progresso exibido vem de GET .../progress e a leitura para em estado terminal",
+              "PARTIAL é estado legítimo, com o que faltou visível e reprocessável na sessão",
+              "Concluir com itens não importados exige confirmação explícita com a copy do vault, incluindo a frase sobre ser a única importação",
+              "Sem pendências, essa confirmação não aparece",
+              "acceptPending só é enviado a partir dessa confirmação",
+              "Dupla submissão não conclui duas vezes",
+              "Depois de concluída, nenhum caminho da interface oferece nova importação"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-009",
+            "title": "Histórico em Configurações e pontos de entrada",
+            "objective": "Entregar a seção de Importação em Configurações mostrando somente o histórico quando há conclusão (origem, quando, o que entrou por categoria, o que ficou de fora e por quê) e o ponto de entrada quando o direito está disponível, lendo o mesmo estado da WU-001. Tornar real a escolha do cenário agenda-atendly-metodo no onboarding, removendo o texto fixo que promete habilitação futura, e ajustar navegação e Configurações → Agenda.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-008"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/imports/",
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/features/onboarding/blocks/schedule.tsx",
+              "apps/frontend/src/shared/layout/navigation.ts",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/features/onboarding/blocks/schedule.tsx",
+              "apps/frontend/src/shared/layout/navigation.ts",
+              "docs/design-reference/claude-design/prototype/project/Configuracoes-Desktop.dc.html"
+            ],
+            "implementationHints": "ProductSettingsScreen tem 908 linhas e a sua redecomposição é do Goal024: a seção nova entra como bloco do módulo de importação consumido pela tela, não como mais quinhentas linhas dentro dela. CalendarSettings está em ProductSettingsScreen.tsx:569 e o texto do onboarding em blocks/schedule.tsx:73.",
+            "acceptanceCriteria": [
+              "Configurações mostra o histórico da importação concluída e o ponto de entrada quando o direito está disponível, lendo o mesmo estado",
+              "Nenhuma tela inventa estado próprio de importação",
+              "O onboarding oferece a importação como escolha real e o texto que prometia habilitação futura sai",
+              "Navegação e Configurações → Agenda não apontam mais para o fluxo legado",
+              "ProductSettingsScreen não é redecomposta e não recebe a jornada inteira"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-010",
+            "title": "Retirada do protocolo legado da interface",
+            "objective": "Remover ProductMigrationScreen, as rotas migracao/[step] e a direção para-minha-agenda, de modo que nenhuma tela consuma /v1/calendar/migrations nem ofereça troca de fonte — operação que o backend recusa desde o corte do writer remoto. As rotas legadas do BFF e as internas correspondentes permanecem intactas: a remoção delas é do Goal025. Ajustar atendly-migration.css junto do módulo, sem deixar folha importada apontando para diretório vazio.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-009"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/migration/",
+              "apps/frontend/src/app/(platform)/migracao/",
+              "apps/frontend/src/shared/styles/",
+              "apps/frontend/tests/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/migration/ProductMigrationScreen.tsx",
+              "apps/frontend/src/features/migration/MigrationScreen.tsx",
+              "apps/frontend/src/app/(platform)/migracao/[step]/page.tsx",
+              "apps/frontend/src/shared/styles/atendly-migration.css"
+            ],
+            "implementationHints": "Os três consumidores legados estão em ProductMigrationScreen.tsx:118, :150 e :496. O resíduo de folha importada apontando para diretório vazio foi registrado no review015 e não pode se repetir.",
+            "acceptanceCriteria": [
+              "ProductMigrationScreen, as rotas migracao/[step] e a direção para-minha-agenda saem da interface",
+              "Nenhuma tela consome /v1/calendar/migrations",
+              "As rotas /v1/calendar/migrations continuam existindo e respondendo como hoje",
+              "Nenhuma folha de estilo fica importada apontando para diretório vazio",
+              "Nenhum arquivo órfão sobra no módulo retirado"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-011",
+            "title": "Provas transversais: shell, acessibilidade e alcance",
+            "objective": "Fechar as provas que atravessam o módulo: invariante do shell verificada por render, suíte axe das telas novas, alcance das rotas novas e ausência de rota órfã, no padrão das suítes goal016, goal017 e goal019.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-010"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/tests/goal020-shell-invariant.test.tsx",
+              "apps/frontend/tests/goal020-a11y.test.tsx",
+              "apps/frontend/tests/goal020-reachability.test.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/tests/goal017-shell-invariant.test.tsx",
+              "apps/frontend/tests/goal017-a11y.test.tsx",
+              "apps/frontend/tests/goal017-reachability.test.tsx"
+            ],
+            "implementationHints": "jsdom cobre estrutura, papéis, teclado e axe. Largura, contraste computado e foco visível não são decididos aqui: isso é do gate renderizado.",
+            "acceptanceCriteria": [
+              "Uma única chamada de useShellConfig por árvore renderizada, provada por render",
+              "Suíte axe cobre as telas novas",
+              "Todas as rotas novas são alcançáveis e nenhuma rota fica órfã",
+              "Nenhuma suíte afirma que a origem real respondeu"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-012",
+            "title": "Documentação de migração afetada",
+            "objective": "Atualizar CURRENT_STATE (importação e agenda na interface), GAP_ANALYSIS (G-19 na parte de experiência, G-10 na parte de consumidor, G-31) e REUSE_ANALYSIS (o que foi reaproveitado do módulo de migração e o que foi retirado), na medida exata do diff. Não tocar documentos de fechamento, review, MASTER_PLAN, DECISIONS ou MIGRATION_STATUS.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-011"
+            ],
+            "expectedFiles": [
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md"
+            ],
+            "relevantFiles": [
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md"
+            ],
+            "acceptanceCriteria": [
+              "Os três documentos refletem o que o diff efetivamente mudou",
+              "Nenhum documento de fechamento, review, MASTER_PLAN, DECISIONS ou MIGRATION_STATUS é tocado",
+              "Nenhuma afirmação documental fica falsa após o diff"
+            ],
+            "verification": [
+              "git-diff-check"
+            ]
+          },
+          {
+            "id": "WU-013",
+            "title": "Typecheck do Scheduling",
+            "objective": "tsc --noEmit exit 0 em apps/scheduling-service.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/scheduling-service",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-012"
+            ]
+          },
+          {
+            "id": "WU-014",
+            "title": "Typecheck do BFF",
+            "objective": "tsc --noEmit exit 0 em apps/bff.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-012"
+            ]
+          },
+          {
+            "id": "WU-015",
+            "title": "Typecheck do frontend",
+            "objective": "tsc --noEmit exit 0 em apps/frontend.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-012"
+            ]
+          },
+          {
+            "id": "WU-016",
+            "title": "Lint",
+            "objective": "Lint exit 0, cobrindo também tests.",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-013",
+              "WU-014",
+              "WU-015"
+            ]
+          },
+          {
+            "id": "WU-017",
+            "title": "Testes dirigidos do que foi tocado",
+            "objective": "Suítes novas e afetadas da importação nos três apps.",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "pattern": "goal020",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-016"
+            ]
+          },
+          {
+            "id": "WU-018",
+            "title": "Gate core",
+            "objective": "validate:core exit 0.",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-017"
+            ]
+          },
+          {
+            "id": "WU-019",
+            "title": "Gate de integração",
+            "objective": "validate:integration exit 0, com a leitura e o selected exercitados contra PostgreSQL real.",
+            "type": "DETERMINISTIC",
+            "action": "validate-integration",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-018"
+            ]
+          },
+          {
+            "id": "WU-020",
+            "title": "Gate renderizado",
+            "objective": "validate:ui exit 0 nas larguras 360, 390, 768, 1024 e 1440, medindo overflow horizontal, touch target, contraste computado, foco visível e prefers-reduced-motion. Depende do gate core, que produz o build servido. Não decide fidelidade visual à referência aprovada, que segue sendo conferência humana.",
+            "type": "DETERMINISTIC",
+            "action": "validate-ui",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-019"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "019-r4-tech_lead-92f30432-a1"
+  }
+}

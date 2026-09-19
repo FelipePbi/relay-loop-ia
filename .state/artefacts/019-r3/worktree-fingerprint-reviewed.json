@@ -1,0 +1,257 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-15T00:52:12.712Z",
+  "base": "1564c92b62b0a13bac1c4a873f49a086a38ad5d3",
+  "worktreeInitialHead": "1564c92b62b0a13bac1c4a873f49a086a38ad5d3",
+  "head": "1564c92b62b0a13bac1c4a873f49a086a38ad5d3",
+  "branch": "ai-loop/goal-019",
+  "trackedDiffHash": "e80eb663b7b2e1cee26b02ef8999ae669657796f65d9934efcdd095d7b99c90d",
+  "trackedFileCount": 45,
+  "trackedFiles": [
+    "apps/ai-orchestrator/.env.example",
+    "apps/ai-orchestrator/prisma/schema.prisma",
+    "apps/ai-orchestrator/src/config/env.ts",
+    "apps/ai-orchestrator/src/lib/internal-credentials.ts",
+    "apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts",
+    "apps/ai-orchestrator/src/modules/internal/routes.ts",
+    "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+    "apps/ai-orchestrator/src/modules/session/SessionService.ts",
+    "apps/ai-orchestrator/tests/evals/harness.ts",
+    "apps/ai-orchestrator/tests/integration/hold-release.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/prisma/schema.prisma",
+    "apps/bff/src/app.ts",
+    "apps/bff/src/clients/ai-orchestrator/index.ts",
+    "apps/bff/src/lib/errors.ts",
+    "apps/bff/src/modules/conversations/routes.ts",
+    "apps/bff/src/modules/dashboard/routes.ts",
+    "apps/bff/src/modules/settings/routes.ts",
+    "apps/bff/src/modules/status/routes.ts",
+    "apps/bff/tests/goal014-status.integration.test.ts",
+    "apps/bff/tests/goal018-ai-projection.integration.test.ts",
+    "apps/frontend/src/data/index.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffConversationService.ts",
+    "apps/frontend/src/data/services/registry.ts",
+    "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+    "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+    "apps/frontend/src/features/onboarding/OnboardingScreen.tsx",
+    "apps/frontend/src/features/onboarding/blocks.ts",
+    "apps/frontend/src/features/onboarding/blocks/ai.tsx",
+    "apps/frontend/src/features/onboarding/blocks/schedule.tsx",
+    "apps/frontend/src/features/onboarding/blocks/whatsapp.tsx",
+    "apps/frontend/src/features/onboarding/scenarios.ts",
+    "apps/frontend/src/shared/styles/atendly.css",
+    "apps/frontend/tests/goal018-dashboard-status.test.tsx",
+    "apps/frontend/tests/goal018-onboarding-reachability.test.tsx",
+    "apps/scheduling-service/src/modules/calendar/routes.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "docs/migration/CURRENT_STATE.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "docs/migration/REUSE_ANALYSIS.md",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs",
+    "tools/ia-loop/lib/temporary-postgres.mjs",
+    "tools/ia-loop/tests/test-databases.test.mjs"
+  ],
+  "untrackedHash": "d727435a2c83766a83cd4a716af8c84d6801a29687825fba67466e1c0f2f5778",
+  "untrackedFileCount": 39,
+  "untracked": [
+    {
+      "path": "apps/ai-orchestrator/prisma/migrations/20260914120000_goal019_activation_test_run/migration.sql",
+      "sha256": "287f4ec711bc93d9e3a891983b3557fc07fe80e8aa8a1301444b01217c5aad86",
+      "bytes": 5253
+    },
+    {
+      "path": "apps/ai-orchestrator/prisma/migrations/20260914130000_goal019_activation_test_cleanup/migration.sql",
+      "sha256": "ac969a0794f8f98cf44ecdcab3ee3f4527790144cebdb7a262b44c253e6603df",
+      "bytes": 1895
+    },
+    {
+      "path": "apps/ai-orchestrator/prisma/migrations/20260914140000_goal019_activation_test_channel_instance/migration.sql",
+      "sha256": "b7f8fa7ad85504b653e2d5927ccba2b3dc59da8e320687df72df80a5a8cf38b3",
+      "bytes": 905
+    },
+    {
+      "path": "apps/ai-orchestrator/src/config/platform-whatsapp.ts",
+      "sha256": "050ba81e4e4d5b2a767df7f3f40d021ce5db0dc743aa1e4cc38b58247b364759",
+      "bytes": 3320
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts",
+      "sha256": "959cb5e00ca75f4eae0f7abfeed02b395b35436aaaf01552564fd8d028556e42",
+      "bytes": 9814
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/ActivationTestCleanupService.ts",
+      "sha256": "8522e857aedb85d3bf0533917d295e735875937a17895148e091a62505866110",
+      "bytes": 15114
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/ActivationTestReplySender.ts",
+      "sha256": "e34d3b6c90d585295938d91325c1aa4d21d87bd7e0639257999070b25e2f8de5",
+      "bytes": 6564
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/ActivationTestRunStore.ts",
+      "sha256": "5019871ca1ed6cce05fe24d16338bd8487dbf2bcf57744b3b566836bb5825855",
+      "bytes": 26365
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/ActivationTestService.ts",
+      "sha256": "3f888e741b4c3308ac7f135bbc35be05fe5fe8367cbb221560986b3c13d7666e",
+      "bytes": 36154
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/activation-test-cleanup.ts",
+      "sha256": "486c8318ac5937525cdfaee44aa7adec1283df7aa88beb97cdb7c106c651c32b",
+      "bytes": 6195
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/activation-test/activation-test-run.ts",
+      "sha256": "7f070beee2b9f7754e311ca46470c6ef72c489ab4bbedb6db667b9a565996b70",
+      "bytes": 11725
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/channel/platform/PlatformWhatsAppSender.ts",
+      "sha256": "0c6a3a6f6861f25d44304cdd70421e3b1606fce3cdd67735896d27264ead0d3e",
+      "bytes": 4390
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/tenant-config/tenant-execution-context.ts",
+      "sha256": "cf7583ce7defd3307c6f7d52a9580db435ef979fb7543dc22c3f2e21c29b95e6",
+      "bytes": 2272
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts",
+      "sha256": "fc8147cee8e9f314a3595ec533d297c8283e50048a3d267395b646c072e8ccc9",
+      "bytes": 6807
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/activation-test/activation-test-cleanup.test.ts",
+      "sha256": "bf7132194da140c00c926682ca08fd06cde70cbd8546aeecc84fba2ba237ab28",
+      "bytes": 20575
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/activation-test/activation-test-codes-documented.test.ts",
+      "sha256": "ce8dab445e7a462fd771467359112a7dbb714fedf614aa58d7ff4d6ea5bf190a",
+      "bytes": 1824
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/activation-test/activation-test-service.test.ts",
+      "sha256": "d311a73f99a567a4fb1e318df93ec88e2c01a60a928f063e43d7a308d47cf731",
+      "bytes": 36149
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/activation-test/support/in-memory-activation-test-runs.ts",
+      "sha256": "f4eff55f3ad41d3c0afc63e169d2a71ef59884c47f638f60a109c081f6e01096",
+      "bytes": 16675
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/channel/platform-sender.test.ts",
+      "sha256": "3c7ef4658933f345c769c314b934128e8781a9680cb44f02d3e3f3084005fb9d",
+      "bytes": 6967
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/integration/activation-test-cleanup.test.ts",
+      "sha256": "13e1c8fbc1acc6cee1dcddad0ebc357ee4a00d690f2e8ea9536a081dbbd25da2",
+      "bytes": 11704
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/integration/activation-test-run.test.ts",
+      "sha256": "344631afdb9a5620cba55134de49bb42b677dd6e9a718467b440d1d2747bcc45",
+      "bytes": 6950
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/internal/activation-test.routes.test.ts",
+      "sha256": "6cd663b7895e037a1679821ad132f842107861e05e74b6a615fb41e124c5a766",
+      "bytes": 12736
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/internal/ignored-contacts.routes.test.ts",
+      "sha256": "65e050281587ea037cc3783f163c556e23f8365499b4c34b3acc12543a38fadc",
+      "bytes": 6128
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/security/platform-credential-isolation.test.ts",
+      "sha256": "ef5121549647b08e896ce5b53315a47bc9479e5bc13caf7387609c483b2c47d3",
+      "bytes": 12723
+    },
+    {
+      "path": "apps/bff/prisma/migrations/20260914150000_goal019_ai_activated_by_test/migration.sql",
+      "sha256": "cb1af5861adb86fc967410578b4f9d75ae6bc8771af31d63ec88e4fe32809559",
+      "bytes": 1079
+    },
+    {
+      "path": "apps/bff/src/lib/ai-activation.ts",
+      "sha256": "aeecca1993eadcd0b882ef84a417a1a5fd75e69d409333de04f83b100ebc5cd2",
+      "bytes": 6740
+    },
+    {
+      "path": "apps/bff/src/modules/activation-test/routes.ts",
+      "sha256": "e3167ec84941cd9389421ae2a95f1cd2c014b66dd7a6b007e301b7fe5bd63ec6",
+      "bytes": 3379
+    },
+    {
+      "path": "apps/bff/tests/goal019-activation-test-routes.integration.test.ts",
+      "sha256": "db36ef491df8a8e4fa0db727326d4679742e3f333f0818bae901207d4e331821",
+      "bytes": 11828
+    },
+    {
+      "path": "apps/bff/tests/goal019-ai-activation-reconciliation.integration.test.ts",
+      "sha256": "6914efe9476e6f1ba6c252e8a0194f7c4f58c69684f8568f04e409d2e5e43e56",
+      "bytes": 11769
+    },
+    {
+      "path": "apps/bff/tests/goal019-ignored-contacts-phone.integration.test.ts",
+      "sha256": "f7688d51ed2abedd10bbc5a58a15631c4d131220351e29096a3f94996758f37e",
+      "bytes": 6962
+    },
+    {
+      "path": "apps/frontend/src/data/services/BffActivationTestService.ts",
+      "sha256": "37fa35e4a303713c6253b1462c71fbf5edba1b1cc79701c595d48e099c81856e",
+      "bytes": 1473
+    },
+    {
+      "path": "apps/frontend/src/features/onboarding/blocks/activation-test.tsx",
+      "sha256": "79cebf60117dcb04b0d01136d37526b8857e1d6369242028b20718171fef4b12",
+      "bytes": 13246
+    },
+    {
+      "path": "apps/frontend/tests/goal019-a11y.test.tsx",
+      "sha256": "2b9cb1a411675ddd40e8675e6fd47634b6fbdee1f78f291241166a68e91c8634",
+      "bytes": 7892
+    },
+    {
+      "path": "apps/frontend/tests/goal019-activation-test-screens.test.tsx",
+      "sha256": "a63b8fdd2ffd3f208b4a51ffb2009d44638b93066e8aca3a43eff39f5f30a445",
+      "bytes": 16542
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/removal.ts",
+      "sha256": "a3848a06ce825745862d8de57a8cb886c87605a63427cc953295cb3feba739cc",
+      "bytes": 4851
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/goal019-calendar-removal.test.ts",
+      "sha256": "e8b5d4280a35c07f67c1253636f9b97a28df0cbe0454f7d71cf940ade25cfdc6",
+      "bytes": 6492
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/calendar-removal.test.ts",
+      "sha256": "f07a148340273211088b344892b146f4c9fa512f8a5c7fbf28bd57b1e86b3fc3",
+      "bytes": 7795
+    },
+    {
+      "path": "scripts/goal019-activation-test-migration-rehearsal.mjs",
+      "sha256": "7e1bda25125d8a8e22940e2d48dc12b67145df214b108ab87b09d854ce6983ba",
+      "bytes": 18283
+    },
+    {
+      "path": "scripts/tests/goal019-activation-test-migration-rehearsal.test.mjs",
+      "sha256": "15b11c198e9b04d003fccd06d00f4b4a77c6d2673423dd94c02e1952808008a5",
+      "bytes": 2068
+    }
+  ],
+  "contentHash": "f94319e83f9e1259c6e03a9a26b1aac83bb040ca953bbaeb2424de1f5977fa70"
+}

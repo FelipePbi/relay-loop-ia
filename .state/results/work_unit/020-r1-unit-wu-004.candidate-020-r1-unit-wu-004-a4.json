@@ -1,0 +1,46 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T04:29:59.764Z",
+  "role": "work_unit",
+  "jobId": "020-r1-unit-wu-004",
+  "attemptId": "020-r1-unit-wu-004-a4",
+  "requestedModel": "claude-haiku-4-5-20251001",
+  "modelVerificationError": null,
+  "observedModels": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "payload": {
+    "protocolVersion": 2,
+    "jobId": "020-r1-unit-wu-004",
+    "goal": "020",
+    "round": 1,
+    "workUnitId": "WU-004",
+    "status": "BLOCKED",
+    "summary": "Análise completa realizada. Bloqueado por permissões de escrita após negação automática no pipeline.",
+    "report": "Descoberta e análise realizada:\n\n1. **Rotas validadas**: GET /v1/calendar/imports e POST /v1/calendar/imports/:sessionId/categories/:category/selection foram implementadas no BFF pela WU-003 completada.\n\n2. **Tipos identificados**: ImportRight, ImportLiveSession, ImportLiveSessionCategoryResult, ImportHistoryEntry documentados em apps/scheduling-service/src/modules/migrations/import-completion-service.ts (linhas 143-171).\n\n3. **Resposta esperada de GET /v1/calendar/imports**: { right: ImportRightDto, session: ImportLiveSessionDto | null, history: ImportHistoryDto | null }\n\n4. **Resposta esperada de POST ...selection**: { sessionId: string, category: ImportCategory, selected: boolean }\n\n5. **Implementação mapeada** (pronta para executar):\n   - 6 schemas Zod necessários em publicApiSchemas.ts\n   - 2 métodos em BffMigrationService (getImports, selectImportCategory)  \n   - Suite de testes em novo arquivo goal020-schema.test.ts\n\n6. **Bloqueio**: Permissões de escrita negadas automaticamente ao tentar editar publicApiSchemas.ts. Hook de permissão do pipeline bloqueou operações subsequentes após negação inicial.\n\nTrabalho completamente documentado, mapeado e estruturado. Pronto para implementação quando permissões forem concedidas.",
+    "changedFiles": [],
+    "acceptance": [
+      {
+        "criterion": "Schemas das respostas novas existem e são exercitados por suíte",
+        "met": false,
+        "detail": "Bloqueado por permissões. Schemas necessários identificados: importRightSchema, importLiveSessionSchema, importLiveSessionCategoryResultSchema, importHistorySchema, importStateSchema, importCategorySelectionSchema."
+      },
+      {
+        "criterion": "BffMigrationService ganha o método de leitura e o de seleção de categoria",
+        "met": false,
+        "detail": "Bloqueado. Métodos mapeados: getImports() para GET /v1/calendar/imports e selectImportCategory() para POST .../categories/:category/selection."
+      },
+      {
+        "criterion": "Nenhum tipo ou arquivo novo fica sem importador",
+        "met": false,
+        "detail": "Bloqueado. Tipos já existem no scheduling-service, serão importados pelos schemas quando implementados."
+      },
+      {
+        "criterion": "features/migration/types.ts sai ou ganha importador",
+        "met": false,
+        "detail": "Bloqueado. features/migration/types.ts já re-exporta ImportCategory, ImportSessionStatus, etc. de publicApiSchemas, sem mudanças necessárias."
+      }
+    ],
+    "blockedReason": "Permissões de escrita bloqueadas pelo hook de pipeline após negação inicial ao tentar editar apps/frontend/src/data/mappers/publicApiSchemas.ts. Sessão sem superfície de aprovação manual.\""
+  }
+}

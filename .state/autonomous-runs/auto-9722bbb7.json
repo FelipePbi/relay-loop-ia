@@ -1,0 +1,23 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-9722bbb7",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-07T23:14:50.250Z",
+  "currentGoal": "005",
+  "completedGoals": [
+    "004"
+  ],
+  "migrationAcceptedBaseline": "ecaf7058f2b81ffe4bd4d2966e233b4b58c16dd5",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 1,
+  "ownerInstanceId": "24656-ef8d54d1",
+  "humanRequired": {
+    "reason": "UNKNOWN_FATAL",
+    "detail": "Goal 005 ended as failed",
+    "at": "2026-09-08T01:21:37.538Z"
+  },
+  "archivedAt": "2026-09-08T02:14:55.642Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "A parada do Goal005 foi causada por CROSS_GOAL_STATE_LEAK no harness. O isolamento entre Goals foi corrigido no commit da02453. Goal005 permanece READY, worktree limpa e nenhuma inferência foi executada."
+}

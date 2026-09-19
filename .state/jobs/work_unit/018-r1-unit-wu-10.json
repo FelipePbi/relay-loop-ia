@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T20:13:57.930Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "018-r1-unit-wu-10-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "018-r1-unit-wu-10",
+    "role": "work_unit",
+    "goal": "018",
+    "round": 1,
+    "workUnitId": "WU-10",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-018",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\018-negocio-onboarding-quatro-blocos.md",
+    "parentJobId": "018-r1-developer-5dd042fe",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T20:37:44.269Z"
+}

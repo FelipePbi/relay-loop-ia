@@ -1,0 +1,50 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T14:04:55.714Z",
+  "attemptId": "016-r1-unit-wu-08-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r1-unit-wu-08",
+      "goal": "016",
+      "round": 1,
+      "workUnitId": "WU-08",
+      "status": "COMPLETED",
+      "summary": "Added lifecycle actions (complete, no-show with note, presence, final value) and a chronologically-ordered event history to the appointment detail screen, each as an independently testable axis.",
+      "report": "O ciclo de vida e histórico já tinham contrato de dados prontos (BffCalendarService + publicApiSchemas do Goal008/009); faltava a superfície. Extraí `AppointmentDetail` do arquivo monolítico `AppointmentFlowShell.tsx` (produzido pela WU-03) para seu próprio arquivo, conforme os `expectedFiles`, e nele acrescentei duas novas seções:\n\n- `LifecycleActions.tsx`: três linhas independentes — Estado (com botões \"Concluir atendimento\" só quando `status` normalizado é `CONFIRMED`, e \"Marcar falta\" com nota opcional quando `CONFIRMED` ou `COMPLETED`, espelhando as transições reais do `appointment-lifecycle-service.ts`), Presença (botão \"Confirmar presença\" só enquanto `presenceConfirmedAt` é nulo) e Valor final (formulário próprio para `amount`, nunca herdando `totalPrice`). Conclusão automática (`completionOrigin: \"AUTO\"`) é lida à parte e mostrada como \"Concluído automaticamente\", nunca como o rótulo de estado genérico. As três seções só aparecem quando `calendar.source === \"ATENDLY\"`, porque o Goal008/016 restringe ciclo de vida à Agenda Atendly.\n- `AppointmentHistory.tsx`: busca `listAppointmentEvents`, ordena localmente por `occurredAt` e desempata por `sequence` comparado como `BigInt` (o campo é serializado como string de um `BigInt` no Prisma; comparação lexicográfica de string quebraria em números de tamanhos diferentes). Cada item mostra tipo (rótulo em português), origem (`AI` → \"IA\", `USER` → \"Equipe\", `SYSTEM` → \"Automático\", `INTEGRATION` → \"Integração\"), ator quando presente e motivo quando presente.\n\nAjustei `AppointmentFlowShell.tsx` (removendo a função `AppointmentDetail` e `ReadOnlyNotice`, que migraram, e limpando os imports que ficaram sem uso) e `ProductAgendaScreen.tsx` (import do novo arquivo). Adicionei estilos `.agenda-lifecycle*` em `atendly-agenda.css`, reaproveitando `.agenda-history*` que já existia sem uso prévio.\n\nTestado com produto real renderizado, sem mocks de DOM: `apps/frontend/tests/goal016-lifecycle-history.test.tsx` cobre os quatro eixos agindo de forma independente, a distinção de conclusão automática vs. manual, o desempate de histórico por `sequence` com `occurredAt` empatado (invertendo a ordem que uma comparação lexicográfica de string produziria), a leitura de `AI` como \"IA\" com ator e motivo, histórico vazio e axe-core sobre a tela completa.\n\nComandos executados e resultado:\n- `npx tsc --noEmit -p tsconfig.json` → limpo (encontrou e eu corrigi um erro de literal `BigInt` incompatível com o target de TS, trocado por `BigInt(0)`).\n- `npx eslint src/features/agenda tests/goal016-lifecycle-history.test.tsx` → limpo (corrigi um import não usado, um `setState` síncrono dentro de efeito, e ordenação de import via `--fix`).\n- `npx vitest run tests/goal016-lifecycle-history.test.tsx` → 9/9 testes novos passando.\n- `npx vitest run` (suíte inteira do frontend) → 21 arquivos, 165 testes, todos passando — sem regressão nas telas de agenda das outras Work Units.\n\nNão toquei documentos de controle da migração, não commitei nada, e fiquei inteiramente dentro de `apps/frontend/src/features/agenda/`, `apps/frontend/src/shared/styles/atendly-agenda.css` e `apps/frontend/tests/`.",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/AppointmentDetail.tsx",
+        "apps/frontend/src/features/agenda/LifecycleActions.tsx",
+        "apps/frontend/src/features/agenda/AppointmentHistory.tsx",
+        "apps/frontend/src/features/agenda/AppointmentFlowShell.tsx",
+        "apps/frontend/src/features/agenda/ProductAgendaScreen.tsx",
+        "apps/frontend/src/shared/styles/atendly-agenda.css",
+        "apps/frontend/tests/goal016-lifecycle-history.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Concluir, marcar falta com nota, confirmar presença e registrar valor final funcionam e são apresentados como eixos distintos",
+          "met": true,
+          "detail": "LifecycleActions.tsx renderiza três linhas independentes (Estado/Presença/Valor final); testes 'concluir…', 'marcar falta…', 'confirmar presença…' e 'valor final…' em goal016-lifecycle-history.test.tsx provam chamada de rota e que os outros dois eixos permanecem inalterados."
+        },
+        {
+          "criterion": "Conclusão automática (completionOrigin AUTO) é apresentada como automática, não como ação da profissional",
+          "met": true,
+          "detail": "LifecycleActions.tsx mostra 'Concluído automaticamente' quando completionOrigin==='AUTO'; teste 'conclusão automática aparece como automática…' confirma o texto e a ausência do rótulo genérico 'Concluído' na seção de ciclo de vida."
+        },
+        {
+          "criterion": "O histórico aparece em ordem cronológica com desempate por sequence, provado por teste com occurredAt empatado",
+          "met": true,
+          "detail": "AppointmentHistory.tsx ordena por occurredAt e depois por BigInt(sequence); teste 'occurredAt empatado é desempatado por sequence, não pela ordem de chegada' usa sequence '9' e '20' com occurredAt igual e array de entrada fora de ordem, e confere a ordem de saída."
+        },
+        {
+          "criterion": "Cada evento mostra tipo, origem, ator e motivo quando houver, com origem AI apresentada como IA",
+          "met": true,
+          "detail": "AppointmentHistory.tsx renderiza EVENT_TYPE_LABELS + EVENT_SOURCE_LABELS (AI→'IA'), ator ('Por …') e motivo ('Motivo: …') quando presentes; teste 'cada evento mostra tipo, origem, ator e motivo…' verifica os quatro campos para um evento de origem AI."
+        }
+      ]
+    },
+    "attemptId": "016-r1-unit-wu-08-a1"
+  }
+}

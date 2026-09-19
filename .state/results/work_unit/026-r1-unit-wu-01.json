@@ -1,0 +1,54 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T21:21:35.632Z",
+  "attemptId": "026-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "026-r1-unit-wu-01",
+      "goal": "026",
+      "round": 1,
+      "workUnitId": "WU-01",
+      "status": "COMPLETED",
+      "summary": "Removidas as três rotas /internal/calendar/migrations* e CalendarMigrationService no Scheduling, e as duas suítes que a exercitavam foram reescritas semeando MigrationJob direto pelo Prisma do dublê.",
+      "report": "Removi do Scheduling o protocolo antigo de migração de calendário e preservei a prova de que job legado nunca consome o direito de importação única.\n\nO que mudou:\n- `src/modules/internal-api/routes.ts`: removidas as três rotas `POST /internal/calendar/migrations/diagnose`, `POST /internal/calendar/migrations`, `GET /internal/calendar/migrations/:id`; removida a instanciação `const migrations = new CalendarMigrationService(prisma)`; removido o import de `CalendarMigrationService` e o schema `migrationBodySchema`, que só era usado por essas rotas (`sourceSchema` continua em uso por `calendarBodySchema` e ficou intacto).\n- `src/modules/migrations/calendar-migration-service.ts`: deletado por inteiro (939 linhas).\n- `src/modules/migrations/index.ts`: removido o export de `CalendarMigrationService`.\n- `tests/unit/import-completion-service.test.ts`: removido o import de `CalendarMigrationService`; o teste que provava a invariante instanciando o serviço legado (`new CalendarMigrationService(...).start(...)`) foi substituído por um teste em novo describe block (\"protocolo legado de migração não consome o direito\") que semeia um `MigrationJob` `COMPLETED` direto via `database.client.migrationJob.create(...)` e confirma que `getImportRight`/`startSession` seguem disponíveis — a prova de que `getImportRight` nem conhece a tabela `MigrationJob`.\n- `tests/unit/import-lease.test.ts`: removido o import de `CalendarMigrationService`; o teste obsoleto (\"o serviço legado não expõe mais recuperação global no boot\", que checava ausência de um método numa classe que agora não existe mais) foi substituído por um teste que semeia `MigrationJob` `COMPLETED` e confirma que `resumeImportSessions` (que só lê `ImportSession`) nunca o retoma, e que o direito de importação segue disponível.\n- `tests/unit/support/database-double.ts`: adicionada a tabela `migrationJob` ao dublê (mesmo padrão das demais, com defaults espelhando `schema.prisma`), necessária para as duas suítes semearem a linha sem PostgreSQL, como o hint da unidade indicava.\n\n`legacy-job-reconciliation.ts` não foi tocado — continua único leitor de `MigrationJob`, e sua suíte dedicada (`tests/unit/legacy-job-reconciliation.test.ts`, com seu próprio fake independente) permanece passando sem alteração. `schema.prisma` não foi alterado; nenhuma migration foi criada.\n\nComandos executados e resultado:\n- `grep`/leitura dos arquivos-alvo e do grafo (via `graphOrientation` já fornecido) para localizar as três rotas (:1423, :1433, :1445) e a instanciação (:509).\n- `npm run prisma:generate` — gerou o client (necessário para os testes/typecheck rodarem nesta worktree).\n- `npx vitest run tests/unit/import-completion-service.test.ts tests/unit/import-lease.test.ts` — 22/22 testes passaram.\n- `npx vitest run --dir tests/unit` (suíte completa do scheduling-service) — 27 arquivos, 372/372 testes passaram.\n- `npm run typecheck` (scheduling-service) — sem erros.\n- `npm run lint` (scheduling-service) — sem erros/avisos.\n- `grep` repo-wide confirmando que nenhum arquivo do próprio scheduling-service ainda referencia `CalendarMigrationService`/`calendar-migration-service`/as rotas removidas (só comentários de documentação em `import-execution-service.ts` e `legacy-job-reconciliation.ts` mencionam o nome da classe antiga, sem importá-la).\n\nObservação fora do escopo desta unidade: `apps/bff/src/clients/scheduling/index.ts` ainda chama as três rotas removidas — isso é esperado, é o consumidor que a WU da borda pública (BFF) deve tratar; não toquei nele.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+        "apps/scheduling-service/src/modules/migrations/index.ts",
+        "apps/scheduling-service/tests/unit/import-completion-service.test.ts",
+        "apps/scheduling-service/tests/unit/import-lease.test.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "As três rotas /internal/calendar/migrations* não estão mais registradas",
+          "met": true,
+          "detail": "routes.ts: as três definições app.post/app.post/app.get para /internal/calendar/migrations/diagnose, /internal/calendar/migrations e /internal/calendar/migrations/:id foram removidas, junto da instanciação `migrations` e do import de CalendarMigrationService."
+        },
+        {
+          "criterion": "calendar-migration-service.ts não existe mais e nenhum arquivo o importa ou exporta",
+          "met": true,
+          "detail": "Arquivo deletado; migrations/index.ts não exporta mais CalendarMigrationService; grep repo-wide mostra apenas menções em comentário (não import) em import-execution-service.ts e legacy-job-reconciliation.ts."
+        },
+        {
+          "criterion": "MigrationJob, MigrationJobItem e LegacyMigrationJobClass continuam idênticos em schema.prisma e nenhuma migration foi criada",
+          "met": true,
+          "detail": "`git status`/`git diff` não mostram alteração em prisma/schema.prisma nem em prisma/migrations/; nenhum comando de migration foi executado."
+        },
+        {
+          "criterion": "legacy-job-reconciliation.ts continua inventariando e classificando jobs legados já gravados",
+          "met": true,
+          "detail": "Arquivo não foi alterado; sua suíte dedicada tests/unit/legacy-job-reconciliation.test.ts continua passando (incluída nos 372/372 da suíte completa)."
+        },
+        {
+          "criterion": "As duas suítes continuam provando que job legado COMPLETED não consome o direito de importação única, agora semeando a linha pelo Prisma, e falham se a regra sair",
+          "met": true,
+          "detail": "import-completion-service.test.ts e import-lease.test.ts agora semeiam MigrationJob via database.client.migrationJob.create(...) (tabela nova em database-double.ts) e afirmam getImportRight/startSession/resumeImportSessions ignorando o job legado; 22/22 testes passam nas duas suítes, 372/372 na suíte completa."
+        }
+      ]
+    },
+    "attemptId": "026-r1-unit-wu-01-a1"
+  }
+}

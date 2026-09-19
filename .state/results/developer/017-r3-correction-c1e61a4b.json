@@ -1,0 +1,69 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:46:34.184Z",
+  "attemptId": "017-r3-correction-c1e61a4b-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r3-correction-c1e61a4b",
+      "goal": "017",
+      "round": 3,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 017, rodada 3\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 1 blocker(s) registrados pelo Tech Lead na revisão da rodada 2, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (1): docs/migration/GAP_ANALYSIS.md\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: Blocker 4 da rodada 1 entregue pela metade de novo: docs/migration/GAP_ANALYSIS.md:39 (G-09) continua afirmando na coluna de resíduo \"Composição visual do estado pendente/erro no chat ainda não existe\" — e este diff a torna falsa. apps/frontend/src/features/conversations/MessageTimeline.tsx:66-107 compõe os quatro deliveryState no balão (deliveryCopy + DeliveryBadge), com deliveryDetail — Verificado que MessageTimeline.tsx já implementa a composição (deliveryCopy linhas 66-72, DeliveryBadge linhas 74-101, uso em MessageBubble linhas 157-163) e corrigida a célula de resíduo em GAP_ANALYSIS.md:39 para refletir isso, mantendo apenas o resíduo real (reconciliação sem prova com transporte real).\n\nBlocker: docs/migration/GAP_ANALYSIS.md:39 (linha G-09) afirmava na coluna de resíduo \"Composição visual do estado pendente/erro no chat ainda não existe\", o que o diff atual torna falso.\n\nVerifiquei apps/frontend/src/features/conversations/MessageTimeline.tsx (Read do arquivo completo, linhas 1-165): o mapa `deliveryCopy` (linhas 66-72) cobre os quatro estados `FAILED`/`PENDING`/`SENT`/`UNKNOWN` com label e ícone próprios; `DeliveryBadge` (linhas 74-101) renderiza o badge com `deliveryDetail` opcional e botão \"Tentar reenviar\" para `FAILED`; `MessageBubble` (linhas 157-163) só renderiza o badge quando `outgoing && message.deliveryState`, passando `detail={message.deliveryDetail}`. A composição visual existe e cobre exatamente os quatro estados citados no requisito do G-09.\n\nAção: editei a célula de resíduo na linha 39 de docs/migration/GAP_ANALYSIS.md, substituindo a afirmação falsa por uma descrição correta (composição existe, aponta o arquivo) e mantendo o único resíduo real que continua verdadeiro: a reconciliação por `correlationId`/`externalMessageId` depende de o WhatsApp honrar o correlationId, sem prova com transporte real. Também ajustei a nota final de \"UI do estado de entrega é do Goal017\" para \"UI do estado de entrega fechada no Goal017\", coerente com o restante do arquivo (G-22, G-23, G-31 já usam esse padrão de fechamento por diff017 feito por outras Work Units desta rodada).\n\nComandos executados: `grep -n \"G-09\" docs/migration/GAP_ANALYSIS.md`; leitura de MessageTimeline.tsx (linhas 1-130 e 130-180) via sed; `git diff -- docs/migration/GAP_ANALYSIS.md` para conferir que a única mudança nova é a linha G-09 (as demais linhas alteradas no diff — G-22, G-23, G-31 — já vinham de outras Work Units, não foram tocadas por mim); `git status --short docs/migration/GAP_ANALYSIS.md` confirmando um único arquivo modificado.\n\nNão toquei em nenhum outro arquivo, não rodei testes (não havia código de produção alterado, apenas texto de documentação), não commitei.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "docs/migration/GAP_ANALYSIS.md"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 8260,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "017-r3-correction-c1e61a4b-a1"
+  }
+}

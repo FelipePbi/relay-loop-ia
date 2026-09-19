@@ -1,0 +1,26 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T19:37:56.459Z",
+  "attemptId": "005-r2-tech_lead-3a85dbd1-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "005-r2-tech_lead-3a85dbd1",
+      "goal": "005",
+      "summary": "Fechamento documental do Goal005 (ACCEPTED na rodada 2), somente em docs/migration/. Criado reviews/005-review.md com identidade do diff aceito (base 8551717, 41 arquivos, hash f0b7fb16…), rodada 1 CHANGES_REQUIRED com os dois blockers (espelho legado da conversa mantendo a IA bloqueada após a rotação de sessão; /bot on sem liberar a sessão), rodada 2 com o fechamento de cada um (syncLegacyPauseMirror na rotação salvo contato pausado ou ignorado, takeover sem relógio 9999, /bot on via releaseToAi), evidência reproduzida pelo reviewer (validate:core 13/13 com 4 skips, validate:integration 11/11 com 39 testes de integração da IA incluindo os cinco cenários de controle humano entre sessões contra PostgreSQL, lint/tsc, diff --check; registro da falha de infraestrutura do cluster local na primeira execução), sete observações não bloqueantes e limites. CURRENT_STATE ganhou o delta implementado do Goal005 (Contact e ConversationSession, política pura de sessão, grafo com inbox persistida antes de sessionGate e guards antes de tool e envio, controle humano determinístico, classificação como sugestão, contratos por operação, resíduos do 004, gate de onze passos, itens NÃO VERIFICADOS) e marcações de superado nos FATOs de fromMe/takeover e de classificação no JSON. GAP_ANALYSIS: G-07, G-08 e G-22 marcados FECHADO no diff005 e G-06 fechado por completo, com restos direcionados aos Goals 006, 012 e 017. DATA_MIGRATION: registro da migration executada, backfill conservador com contagens do ensaio (6 conversas → 6 contatos e 6 sessões, 0 ignorados, 0 overrides, 2 pausas explícitas), divergências (sessão única por código, fechamento preguiçoso, handoffs OPEN legados, espelho legado sincronizado) e limites. DECISIONS: D-009 passou a ACCEPTED para o diff e D-021 registra os contratos de contato, sessão e controle humano adotados. MASTER_PLAN: linha 005 marcada ACCEPTED e entrada v9 no histórico sem reavaliar o roadmap nem registrar SHA. REUSE_ANALYSIS e TARGET_ARCHITECTURE anotados com o que o Goal005 implementou. Não foi criado próximo Goal, nenhum Goal marcado READY, MIGRATION_STATUS não tocado, nenhum SHA de baseline registrado, nenhum código/teste/tooling alterado. Arquivos em CRLF como os demais da pasta; git diff --check exit 0; HEAD segue 8551717.",
+      "documentsUpdated": [
+        "docs/migration/reviews/005-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md"
+      ],
+      "notes": "Para o planejamento do Goal006 e seguintes: handoffs OPEN legados não são resolvidos pela rotação de sessão e um índice único parcial para sessão aberta por conversa ficam como melhorias (D-021); mensagens não textuais do contato não renovam a sessão nem avançam a versão de entrada, o que interessa ao Goal013 (áudio); Retomar IA e /bot on limpam a pausa explícita /bot off; o Prisma em memória de tests/session/support duplica semântica do banco e deve continuar acompanhado da suíte de integração. Os clusters PostgreSQL descartáveis do reviewer (55437, 55439 e 55440) foram parados; o cluster local em 127.0.0.1:5432 mencionado pelo Developer não foi tocado."
+    },
+    "attemptId": "005-r2-tech_lead-3a85dbd1-a1"
+  }
+}

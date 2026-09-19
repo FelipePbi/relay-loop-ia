@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T12:29:54.874Z",
+  "attemptId": "015-r3-tech_lead-270ecc18-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r3-tech_lead-270ecc18",
+      "goal": "015",
+      "summary": "Fechamento documental do Goal015 (ACCEPTED na rodada 3) registrado dentro de docs/migration/. Criado reviews/015-review.md com a identidade do diff (33 arquivos, base 908c4a1, hash 23148c70…), o histórico das três rodadas (4 e 2 blockers fechados), o que o diff entrega e os limites — incluindo os cinco limites (a)-(e) que o relatório do Developer não repetiu e a observação de fonte externa (minha-agenda/provider.ts ignora customerId; hoje sem vazamento porque requireAtendlyCalendar barra o perfil) dirigida ao Goal016. GAP_ANALYSIS: G-15 fechado na parte de interface, G-17 fechado na parte de tela, G-31 avançado nas duas primeiras telas de módulo, com resíduos reescritos e o histórico de Goal009/011 preservado. REUSE_ANALYSIS: as duas linhas ProductDirectoryScreen passaram a REFACTOR (feito/feito em parte) com o conteúdo real das telas, a linha de testes frontend registra cobertura de tela autenticada em jsdom, e a linha \"REMOVE (feito)\" foi corrigida — MockAuthService.ts, o export em mocks/index.ts e o branch preview do AuthScreen continuam no repositório (divergência exigida pelo critério 9). CURRENT_STATE ganhou a seção \"Delta implementado — Goal015\" com FATOS e LIMITES. DECISIONS ganhou D-031 (decomposição por módulo, uma declaração de useShellConfig por árvore provada por render, identidade por customerId, autorização de IA negada por padrão, tela só mostra o que o read model devolve) e a consequência de D-030 que dizia inexistir gate de tela autenticada foi corrigida. TARGET_ARCHITECTURE e MASTER_PLAN deixaram de descrever como futuro o resíduo do review014, que o 015 cumpriu em jsdom, mantendo aberto o gate de browser com sessão. Nenhum Goal criado ou marcado READY, nenhum SHA de baseline registrado, MIGRATION_STATUS intocado, nenhum arquivo fora de docs/migration/ alterado.",
+      "documentsUpdated": [
+        "docs/migration/reviews/015-review.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "DATA_MIGRATION.md não foi tocado: o diff é inteiramente de frontend, sem migration, dado ou contrato público. O contexto do job apontava reviews/003-review.md como \"o review desta execução\"; esse arquivo é o review do Goal003 e sobrescrevê-lo destruiria registro histórico — o review desta execução foi escrito em reviews/015-review.md, seguindo a convenção NNN-review.md por Goal."
+    },
+    "attemptId": "015-r3-tech_lead-270ecc18-a1"
+  }
+}

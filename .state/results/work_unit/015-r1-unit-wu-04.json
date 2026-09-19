@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T11:41:27.419Z",
+  "attemptId": "015-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-wu-04",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Rebuilt the customer profile as CustomerProfile/PrimaryGuardianPanel/CustomerAgenda, replacing the phone-driven detail view with an id-driven one and a full propose/confirm/remove guardian flow.",
+      "report": "Extracted the old inline `CustomerDetail` function from `ProductCustomersScreen.tsx` (a leftover from the pre-WU-01/03 monolith) into three dedicated files, as required by expectedFiles:\n\n- `CustomerProfile.tsx`: loads `CustomerDetail` by `customerId` via `BffCustomerService.get`, plus `CalendarState` for the external/Atendly source strip. Renders explicit \"não informado\" text for absent name/phone in view mode; an \"Editar dados\" affordance (gated by `calendar.capabilities.manageCustomers`, matching the existing external-readonly convention) switches to a `Field`-based form that calls `BffCustomerService.update` and merges the result back into state. Load failures render a `StatePanel` with a retry action while keeping the header/back-link structure intact (no full-page swallow). Passes `customer.id` (never `phone`) and the calendar timezone down to `CustomerAgenda`.\n- `PrimaryGuardianPanel.tsx`: shows guardian name/phone plus a `directory-timeline` with proveniência (who proposed and when; who confirmed and when, when applicable) and a PROPOSED/CONFIRMED badge. \"Propor responsável\" (or \"Trocar responsável\" when one exists) opens a searchable picker built on `BffCustomerService.list()` filtered client-side (excluding the current customer) and calls `setPrimaryGuardian`; \"Confirmar\" calls `confirmPrimaryGuardian`; \"Remover\" calls `clearPrimaryGuardian` and correctly normalizes the `{deleted:true} | guardian | null` response back to `null`. All actions are gated by the same `editable` flag as the profile.\n- `CustomerAgenda.tsx`: fetches `BffCalendarService.listAppointments({ customerId, ... })` — no `customerPhone` anywhere — for a ±365-day window, then splits the result client-side into \"Próximos atendimentos\" (active status, date ≥ today) and \"Histórico\" (everything else), each with its own empty state, and a shared error state with a retry that only clears local error/reload state (no direct setState-in-effect, to satisfy the `react-hooks/set-state-in-effect` lint rule already enforced in this repo).\n\nRewired `ProductCustomersScreen.tsx` into a thin 3-branch router (`CustomerProfile` / `CustomerForm` / `CustomerList`) since the old inline detail implementation and its private helpers became dead code once extracted — this wiring was necessary for the new by-id behavior to actually take effect for the `/clientes/detalhes` and `/clientes/detalhes/externo` routes, both of which already pass `customerId`/`scenario=\"detail\"` unchanged. Added one small `.guardian-picker` rule to `atendly-customers.css` (existing `directory-*` classes from `atendly-directory.css` covered everything else, including the timeline used for guardian proveniência).\n\nNo notes/tags/memory/summary UI was added — those are out of this unit's scope per expectedFiles and are presumably WU-05's privacy-guardrail unit.\n\nCommands executed from `apps/frontend`:\n- `npm run typecheck` → passes, no errors.\n- `npm run lint` (max-warnings=0) → initially caught 2 `react-hooks/set-state-in-effect` errors (redundant `setState(null)` calls at the top of the fetch effects in `CustomerAgenda`/`CustomerProfile`); removed them (matching the existing `CustomerList.tsx` pattern of only clearing error state from the retry handler) and reran → passes clean.\n- `npm test` (vitest) → 14 files / 101 tests passed, no regressions.\n- `npm run build` (next build) → compiles successfully; `/clientes/detalhes` and `/clientes/detalhes/externo` both list as dynamic routes as before.\n\n`git status` confirms only the expected files plus `ProductCustomersScreen.tsx` and `atendly-customers.css` were touched by this unit; all other pending changes in the tree belong to other work units (WU-02/WU-03/WU-06) and were left untouched.",
+      "changedFiles": [
+        "apps/frontend/src/features/customers/CustomerProfile.tsx",
+        "apps/frontend/src/features/customers/PrimaryGuardianPanel.tsx",
+        "apps/frontend/src/features/customers/CustomerAgenda.tsx",
+        "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+        "apps/frontend/src/shared/styles/atendly-customers.css"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Toda requisição de agenda ou histórico feita pelo perfil usa customerId; nenhuma usa customerPhone",
+          "met": true,
+          "detail": "CustomerAgenda.tsx calls BffCalendarService.listAppointments({ customerId, ... }); customerPhone is never referenced in the new files (verified by reading the final file and by typecheck passing against ListAppointmentsQuery)."
+        },
+        {
+          "criterion": "Cliente sem telefone exibe próximos atendimentos e histórico normalmente",
+          "met": true,
+          "detail": "The fetch in CustomerAgenda no longer branches on customer.phone (the old `if (!nextCustomer.phone) return;` guard was removed); it always fetches by customer.id regardless of phone presence."
+        },
+        {
+          "criterion": "Responsável principal mostra quem propôs, quando e o estado PROPOSED ou CONFIRMED, e permite propor, confirmar e remover",
+          "met": true,
+          "detail": "PrimaryGuardianPanel.tsx renders proposedBy/proposedByActor/proposedAt (and confirmedBy/confirmedByActor/confirmedAt when CONFIRMED) in a directory-timeline plus a PROPOSED/CONFIRMED badge, and offers Propor/Trocar, Confirmar and Remover actions wired to setPrimaryGuardian/confirmPrimaryGuardian/clearPrimaryGuardian."
+        },
+        {
+          "criterion": "Nome e telefone são editáveis e a ausência de cada um é apresentada explicitamente, não como campo vazio",
+          "met": true,
+          "detail": "CustomerProfile view mode renders 'Cliente sem nome' / 'Telefone não informado' text instead of blank fields; edit mode uses Field inputs saved via BffCustomerService.update."
+        },
+        {
+          "criterion": "Erro de carregamento do perfil é recuperável e preserva a estrutura da tela",
+          "met": true,
+          "detail": "CustomerProfile keeps the page header/back-link outside the conditional and renders a StatePanel with a 'Tentar novamente' action (bumping a reload counter) instead of collapsing the whole page on failure."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-wu-04-a1"
+  }
+}

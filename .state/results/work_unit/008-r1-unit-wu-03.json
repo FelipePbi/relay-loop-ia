@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T15:29:13.652Z",
+  "attemptId": "008-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "008-r1-unit-wu-03",
+      "goal": "008",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Hold de confirmação implementado sobre a política única de escrita: criação sob lock com expiresAt do relógio do banco, ocupação na disponibilidade exceto para a confirmação que consome, consumo/liberação transacionais e recusa explícita na fonte externa.",
+      "report": "## O que mudou e por quê\n\n**Novo módulo `src/modules/holds/appointment-hold-service.ts`.** Criar, consumir e liberar hold são escritas de agenda: rodam por `runCalendarWrite` + `lockCalendarDays` (WU-02), com a disponibilidade revalidada dentro da transação. É isso que faz dois holds concorrentes no mesmo slot terminarem com um só vigente — o segundo revalida já enxergando o primeiro como ocupação. `expiresAt` nasce de `now()` do banco + TTL; toda avaliação de vigência compara com `now()` do banco de novo, então não há worker: um hold vencido simplesmente deixa de ser encontrado pelo filtro que decide a disponibilidade. O módulo expõe `createHold`/`listHolds` (só vigentes)/`getHold`/`releaseHold` e as funções transacionais `findHoldForConsumption`, `consumeHold`, `releaseHoldWithin` usadas de dentro da transação da confirmação.\n\n**`calendar/write-policy.ts`: `databaseNow(client)`** (`SELECT now()`). Dentro de uma transação `Serializable`, `now()` é o instante de início e não muda, então ler uma vez e filtrar por ele é equivalente a comparar no `WHERE` — e não depende do relógio do processo. Ficou aqui, e não no módulo de holds, para não criar ciclo `holds → availability → holds`.\n\n**`availability/atendly-availability.ts`:** holds vigentes entram na lista de ocupação junto com atendimentos e bloqueios, com `excludeHoldId` análogo a `excludeAppointmentId` — o hold que está sendo consumido é o único que não ocupa. O `now` usado para descartar horários já passados passou a ser o do banco (era `new Date()`), pelo mesmo motivo.\n\n**`integrations/atendly/provider.ts`:** `createAppointment` e `rescheduleAppointment` aceitam `holdId`. O hold é validado (tenant, vigência, cobertura do intervalo) **antes** da consulta de disponibilidade; se não serve, a disponibilidade é revalidada sem a proteção do hold e a chamada recebe `APPOINTMENT_HOLD_EXPIRED` (409) com `{ holdId, reason, slotStillAvailable }`. Não existe caminho em que hold vencido vire confirmação: ou o hold vale, ou a chamada volta sabendo que expirou e se o horário ainda está livre. Na confirmação o hold é **consumido**; na remarcação é **liberado** (o atendimento já existia e passou a ocupar o horário — ele não virou atendimento), com o horário original intocado até o `update`. Novos `createHold`/`listHolds`/`getHold`/`releaseHold` delegam ao serviço.\n\n**`calendar-service.ts`:** `mutate` ficou genérico com tipo de efeito parametrizado (`APPOINTMENT` vs `APPOINTMENT_HOLD`) — recuperar uma chave lendo a entidade errada seria responder outra coisa como se fosse a mesma. `createHold` é idempotente como as demais mutações; `listHolds`/`releaseHold` não precisam de chave (liberar de novo não tem segundo efeito).\n\n**`integrations/minha-agenda/provider.ts`:** holds recusados com `EXTERNAL_CALENDAR_HOLD_UNSUPPORTED` (409), inclusive `holdId` em confirmação/remarcação — segurar um horário depende da mesma transação, lock e relógio que decidem a disponibilidade, e nada disso atravessa uma chamada HTTP.\n\n**`config/env.ts`:** `CALENDAR_HOLD_TTL_SECONDS` (default 300).\n\n**`tests/unit/support/database-double.ts`:** tabelas `appointmentHold` e `appointmentEvent`, `$queryRaw` do `SELECT now()` com **relógio próprio** movível por `advanceDatabaseClock` (permite provar que o código pergunta a hora ao banco, sem `sleep`) e contador `journal.databaseNowReads`.\n\n## Decisão de escopo a sinalizar ao Tech Lead\n\nO critério 4 exige \"grava antes/depois\", que é histórico — território da WU-04. Implementei o mínimo para satisfazê-lo: evento `RESCHEDULED` com antes/depois em **toda** remarcação (condicionar o evento à presença de hold produziria um histórico inconsistente) e `HOLD_CONSUMED` na confirmação que consome hold, ambos na mesma transação do efeito, via `recordEvent` privado no provider. `CREATED`, `CANCELLED`, `COMPLETED` etc. continuam por fazer — a WU-04 estende a partir daqui.\n\n## Comandos executados\n\n- `npx tsc -p tsconfig.json --noEmit` (apps/scheduling-service) → **exit 0, sem erros**.\n- `npm run lint` (`eslint src --max-warnings=0`) → **exit 0**; verificado também com `node node_modules/eslint/bin/eslint.js src --max-warnings=0 -f json` → 0 problemas em 41 arquivos.\n- `npx prettier --write` nos 10 arquivos tocados.\n- `npx vitest run --dir tests/unit` → **5 arquivos, 77 testes passando** (10 novos em `appointment-hold.test.ts`).\n- **RED verificado**: removendo a linha que injeta holds na lista de ocupação da disponibilidade, 4 testes falham (`cria o hold sob o mesmo lock...`, `ocupa para terceiros...`, `ignora hold vencido sem worker`, `remarca com hold sem soltar o horário original`); arquivo restaurado e suíte de volta a 77/77.\n- `node scripts/validate-core.mjs` → **FALHOU em `build:contracts`** por motivo ambiental, não pelo diff: `packages/contracts/node_modules` não existe nesta worktree (`tsc` não encontrado). Não instalei dependências: está fora do escopo desta unidade e o gate global é da WU-08. Nada além de `apps/scheduling-service` foi tocado.\n- Não executei `validate:integration` (exige PostgreSQL; concorrência real e `now()` do banco são da suíte da WU-08, como o próprio Goal prevê).\n\n## Limitações\n\nConcorrência real (dois holds simultâneos disputando o mesmo slot em transações `Serializable` reais) e o `now()` do PostgreSQL só são provados na suíte de integração — no unit o dublê não desfaz escrita nem executa transações de verdade; o que se prova aqui é a regra (mesmo lock, exclusão apenas do hold consumido, vigência pelo relógio do banco, liberação na remarcação). Não toquei em rotas internas (WU-05) nem em documentação (as rotas e contratos que a documentação descreve ainda não existem nesta unidade).",
+      "changedFiles": [
+        "apps/scheduling-service/src/config/env.ts",
+        "apps/scheduling-service/src/modules/calendar/write-policy.ts",
+        "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+        "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+        "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+        "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+        "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+        "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+        "apps/scheduling-service/tests/unit/appointment-hold.test.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Hold criado sob o mesmo lock do dia; dois holds concorrentes no mesmo slot → um só vigente",
+          "met": true,
+          "detail": "createHold roda em runCalendarWrite + lockCalendarDays([date]) e revalida disponibilidade dentro da transação. Teste `cria o hold sob o mesmo lock do dia e recusa um segundo no mesmo slot`: locks == [tenant:date], write com transaction != null, segundo createHold → SLOT_UNAVAILABLE, listHolds tem 1. Concorrência real fica para a suíte de integração (WU-08)."
+        },
+        {
+          "criterion": "Hold vigente ocupa para terceiros e não para a confirmação que o consome; vencido é ignorado sem worker; consumido não ocupa mais",
+          "met": true,
+          "detail": "Availability soma holds vigentes com excludeHoldId. Testes `ocupa para terceiros, não para a confirmação que o consome, e para de ocupar depois` (slot some; confirmação com holdId passa; consumedAt gravado; após cancelar o atendimento o slot volta) e `ignora hold vencido sem worker` (fixture vence expiresAt; slot volta sem nenhum job rodar)."
+        },
+        {
+          "criterion": "Confirmação com hold vencido ou de outro slot informa expiração e revalida a disponibilidade; nunca confirma silenciosamente em slot ocupado",
+          "met": true,
+          "detail": "claimHold revalida sem a proteção do hold e lança APPOINTMENT_HOLD_EXPIRED com {holdId, reason, slotStillAvailable}. Testes: hold vencido → reason EXPIRED, slotStillAvailable true, zero atendimentos criados; hold de outro horário → reason SLOT_MISMATCH e o hold segue vigente; hold vencido com o slot já tomado → slotStillAvailable false e continua existindo 1 atendimento (o de terceiro), nenhum criado por cima."
+        },
+        {
+          "criterion": "Remarcação com hold mantém o original ocupado até a confirmação, que atualiza o atendimento, libera o hold e grava antes/depois",
+          "met": true,
+          "detail": "Teste `remarca com hold sem soltar o horário original antes da confirmação`: antes da confirmação nem o horário original nem o novo são oferecidos; depois, o atendimento está no novo horário, releasedAt é Date, listHolds vazio, o original volta a ser oferecido e o evento RESCHEDULED traz before {date/startTime originais} e after {novos, holdId}."
+        },
+        {
+          "criterion": "Vigência sempre avaliada por now() do banco (testes usam fixture que adianta expiresAt, não sleep); Minha Agenda recusa hold com erro próprio",
+          "met": true,
+          "detail": "databaseNow() faz SELECT now(); nenhuma decisão de vigência usa Date.now(). Expiração testada por fixture sobre expiresAt (sem sleep) e, adicionalmente, adiantando só o relógio do dublê do banco — o hold vence mesmo com expiresAt e relógio do processo intactos, e databaseNowReads cresce. MinhaAgendaCalendarProvider.createHold/listHolds e confirmação com holdId → EXTERNAL_CALENDAR_HOLD_UNSUPPORTED (409)."
+        }
+      ]
+    },
+    "attemptId": "008-r1-unit-wu-03-a1"
+  }
+}

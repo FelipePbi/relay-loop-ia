@@ -1,0 +1,54 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T20:39:27.437Z",
+  "attemptId": "023-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-03",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Criada a rota interna tenant-scoped de esvaziamento de facts/detail em intenções de notificação terminais no Scheduling, com service, migration aditiva e testes.",
+      "report": "Implementei o esvaziamento de conteúdo das intenções de lembrete terminais (Goal023/WU-03, G-29) no scheduling-service.\n\nArquivos:\n- `src/modules/reminders/notification-retention-service.ts` (novo): `clearExpiredNotificationContent(prisma, { tenantId, settledBefore, maxRows })`. Filtra por `tenantId`, `state IN (SENT, FAILED, DISMISSED, CANCELLED)`, `settledAt < settledBefore` e `(facts IS NOT NULL OR detail IS NOT NULL)` — essa última condição é o que torna uma segunda passada imediata inócua, porque linhas já esvaziadas saem da candidatura. Lê `maxRows+1` para produzir `hasMore` como fato observado, depois `updateMany` só nos ids selecionados, sempre com `tenantId` no where (isolamento de tenant redundante e explícito). `facts` é `Json?`, então usei `Prisma.DbNull` (não `null` puro) tanto no filtro `not` quanto na escrita, como o Prisma exige para coluna JSON nula.\n- `src/modules/internal-api/routes.ts`: nova rota `POST /internal/notification-intents/content-retention`, `internalOnly` + `requireHumanCaller` (só o BFF, no mesmo padrão da central de notificações do Goal022 — a IA nunca decide retenção). Corpo `{ settledBefore: ISO datetime, maxRows: int }` validado com zod (`z.iso.datetime({ offset: true })`, já usado no arquivo).\n- `prisma/schema.prisma`: índice aditivo `@@index([tenantId, state, settledAt])` em `AppointmentNotificationIntent` — nenhum índice existente cobre `settledAt` (só `dueAt`).\n- `prisma/migrations/20260915170000_goal023_notification_content_retention_index/migration.sql`: `CREATE INDEX IF NOT EXISTS`, aditiva e retomável sobre banco já migrado, seguindo o padrão exato da migration do Goal022 (`20260915130000_goal022_notification_center_index`).\n- `tests/unit/notification-retention.test.ts` (novo): 11 casos — esvazia SENT/FAILED/DISMISSED/CANCELLED fora do prazo mantendo a linha; não toca liquidação dentro do prazo; nunca toca PENDING; nunca toca CLAIMED mesmo com `leaseExpiresAt` no passado; respeita `maxRows` e sinaliza `hasMore`; segunda passada imediata não altera nada; isolamento de tenant.\n- `tests/unit/support/database-double.ts`: o dublê não sabia decodificar o marcador `Prisma.DbNull` (usado por Prisma para 'grave NULL' em coluna JSON, diferente de `null` puro) — sem isso, `updateMany({ data: { facts: Prisma.DbNull } })` gravaria o objeto marcador em vez de `null`, e o filtro `{ not: Prisma.DbNull }` casaria com tudo. Adicionei `unwrapJsonNullMarker`, usada em `resolveWrite` (escrita) e no laço de operadores de `matches` (leitura/filtro). Mudança mínima e local, sem alterar semântica de nenhum teste existente.\n\nComandos executados:\n- `npx prisma generate` (necessário para o client existir; não estava gerado no worktree) — OK.\n- `npx vitest run tests/unit` em `apps/scheduling-service`: 25 arquivos, 361 testes, todos verdes (incluindo os 11 novos).\n- `npm run typecheck` (prisma generate + tsc --noEmit): sem erros, após corrigir os dois erros de tipo iniciais (array `readonly` no `in` do Prisma, e `null` puro em campo `Json?`).\n- `npm run lint` (eslint --max-warnings=0): sem saída, limpo.\n\nNão toquei documentos de controle da migração, não commitei, não mudei de branch, e não alterei nada fora do escopo desta Work Unit (BFF, ai-orchestrator e os demais arquivos `M`/`??` no git status são de outras Work Units já em andamento, confirmados por `findingsLedger`).",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/reminders/notification-retention-service.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/prisma/schema.prisma",
+        "apps/scheduling-service/prisma/migrations/20260915170000_goal023_notification_content_retention_index/migration.sql",
+        "apps/scheduling-service/tests/unit/notification-retention.test.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Intenção terminal fora do prazo tem facts e detail esvaziados e a linha permanece",
+          "met": true,
+          "detail": "Testes 'esvazia facts e detail... e a linha permanece' e o loop parametrizado para SENT/FAILED/DISMISSED/CANCELLED, todos verdes; a linha (id, state) é reafirmada intacta após a chamada."
+        },
+        {
+          "criterion": "Intenção PENDING ou CLAIMED não é tocada, nem com lease vencido",
+          "met": true,
+          "detail": "Testes 'nunca toca intenção PENDING' e 'nunca toca intenção CLAIMED, mesmo com lease vencido' (leaseExpiresAt em 2020) verdes; a query só considera os 4 estados terminais, que nunca incluem PENDING/CLAIMED."
+        },
+        {
+          "criterion": "A rota respeita o teto de linhas e sinaliza resto; segunda passada imediata não altera nada",
+          "met": true,
+          "detail": "Teste 'respeita o teto de linhas e sinaliza que resta trabalho' (maxRows=2 de 3 candidatas → cleared:2, hasMore:true) e teste 'uma segunda passada imediata não altera nada' (segunda chamada → cleared:0, hasMore:false), ambos verdes."
+        },
+        {
+          "criterion": "Isolamento de tenant verificado: o negócio A não esvazia intenção do negócio B",
+          "met": true,
+          "detail": "Teste 'é escopada por tenant' verde: intenção do tenant B permanece com facts não nulo ao purgar o tenant A."
+        },
+        {
+          "criterion": "Qualquer migration nova é aditiva e reaplicável sobre banco já migrado",
+          "met": true,
+          "detail": "migration.sql usa CREATE INDEX IF NOT EXISTS, mesmo padrão da migration aditiva do Goal022; nenhuma coluna, tabela ou constraint alterada."
+        }
+      ]
+    },
+    "attemptId": "023-r1-unit-wu-03-a1"
+  }
+}

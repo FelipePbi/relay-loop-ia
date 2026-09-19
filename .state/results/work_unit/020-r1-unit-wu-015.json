@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:17:42.705Z",
+  "attemptId": "020-r1-unit-wu-015-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "020-r1-unit-wu-015",
+      "goal": "020",
+      "round": 1,
+      "workUnitId": "WU-015",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "typecheck",
+      "argv": [
+        "npx",
+        "tsc",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 1609,
+      "summary": "TypeScript typecheck passou (exit 0, 1609ms).",
+      "report": "(sem saída)",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "020-r1-unit-wu-015-a1"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T02:16:53.913Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "009-r2-tech_lead-fc8b1973-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "009-r2-tech_lead-fc8b1973-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_FALLBACK",
+      "startedAt": "2026-09-10T02:16:53.913Z",
+      "endedAt": "2026-09-10T02:19:45.193Z",
+      "role": "tech_lead",
+      "classification": "USAGE_LIMIT",
+      "code": "NON_ZERO_EXIT",
+      "routedTo": {
+        "modelKey": "opus",
+        "model": "claude-opus-5",
+        "family": "opus",
+        "effort": "high",
+        "reason": "CAPACITY_FALLBACK_USAGE_LIMIT",
+        "fallbackAllowed": false
+      },
+      "fromModel": "fable"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "009-r2-tech_lead-fc8b1973",
+    "role": "tech_lead",
+    "type": "NEXT_GOAL_PLANNING",
+    "goal": "009",
+    "round": 2,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\plan-after-goal-009",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "planning",
+      "modelKey": "fable",
+      "model": "claude-fable-5-1",
+      "family": "fable",
+      "effort": "high",
+      "complexity": "HIGH",
+      "riskScore": 5,
+      "signals": [
+        "ARCHITECTURE",
+        "CONCURRENCY",
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "BREAKING_CHANGE",
+        "DATA_CONSISTENCY",
+        "RECOVERY",
+        "INFRA",
+        "API_CONTRACT",
+        "LARGE_REFACTOR",
+        "PREVIOUS_ROUND_REJECTED"
+      ],
+      "reason": "HIGH_RISK_SPECIALIST_REVIEW",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    },
+    "planningContext": {
+      "closedGoal": "009",
+      "closedGoalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\009-disponibilidade-pessoal-recorrencia.md",
+      "closedGoalDecision": "ACCEPTED",
+      "previousMigrationBaseline": "1dc170eb8b04d6ee8a706dca089cfe4538175125",
+      "migrationAcceptedBaseline": "b532ccc21a816c8836bd1ef53a261e92603ff218",
+      "sourceClosureCommit": "a35118fd24b767ad5301e48015cb98a76109ea68",
+      "integratedClosureCommit": "b532ccc21a816c8836bd1ef53a261e92603ff218",
+      "closureDocuments": [
+        "docs/migration/reviews/009-review.md",
+        "docs/migration/goals/009-disponibilidade-pessoal-recorrencia.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md"
+      ],
+      "writeScope": "docs/migration/",
+      "instruction": "Escreva SOMENTE o próximo Goal e marque apenas ele READY.",
+      "priorAttemptFeedback": {
+        "previousJobId": "009-r2-tech_lead-ee6afa61",
+        "code": "PLAN_INVALID",
+        "diagnostic": "Work Unit WU-10 names scope \"apps/scheduling-service apps/bff apps/frontend apps/ai-orchestrator\", which is not a workspace directory (expected apps/<name>, packages/<name>, tools/<name> or scripts/<name>)"
+      }
+    }
+  },
+  "statusAt": "2026-09-10T02:27:26.864Z",
+  "attemptStartedAt": "2026-09-10T02:19:45.193Z",
+  "requeuedAt": "2026-09-10T02:19:45.193Z"
+}

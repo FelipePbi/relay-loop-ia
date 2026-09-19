@@ -1,0 +1,69 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T13:01:01.085Z",
+  "attemptId": "025-r4-correction-10142959-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r4-correction-10142959",
+      "goal": "025",
+      "round": 4,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 025, rodada 4\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 1 blocker(s) registrados pelo Tech Lead na revisão da rodada 3, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (1): docs/migration/DECISIONS.md\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: D-041 não deve mais registrar como rejeitada a guarda que o código implementa (a guarda explícita por chamador em PATCH /v1/settings/ai, complementar à guarda comum em reconcileAiActivation) — docs/migration/DECISIONS.md, item (5) de D-041 reescrito para descrever as duas guardas (reconcileAiActivation em ai-activation.ts e assertAiActivationNotBlockedByDeletion em account/service.ts:377, chamada em settings/routes.ts:152); entrada correspondente em Alternativas ajustada para não rejeitar mais esse caso, apenas o caso genérico de rotas que só leem/projetam o já gravado.\n\nBlocker: D-041 item (5) descrevia apenas a guarda dentro do caminho comum de reconciliação (`reconcileAiActivation`), e a seção Alternativas registrava como REJEITADA a ideia de \"colocar a guarda em cada rota que lê status\" — mas o código (apps/bff/src/modules/account/service.ts:377, `assertAiActivationNotBlockedByDeletion`) implementa exatamente essa segunda guarda por chamador, invocada em apps/bff/src/modules/settings/routes.ts:152 dentro de `PATCH /v1/settings/ai`, porque essa rota grava `AiSettings.enabled = true` e projeta na IA na mesma requisição, sem passar pela reconciliação comum — uma janela que a guarda comum sozinha não cobre.\\n\\nInvestigação: li apps/ai-orchestrator/... (não relevante aqui, era outro serviço) e sobretudo apps/bff/src/lib/ai-activation.ts (guarda comum, linha ~104-108) e apps/bff/src/modules/account/service.ts (guarda explícita, linhas 352-387), confirmando via grep que `isDeletionPending` é chamado em dois lugares distintos e que `assertAiActivationNotBlockedByDeletion` só é usado por `settings/routes.ts:152`.\\n\\nCorreção: reescrevi o item (5) de D-041 para descrever as duas guardas (comum + explícita no único chamador que grava enabled:true fora da reconciliação) e ajustei a entrada correspondente em Alternativas para não registrar mais como rejeitada a guarda que o código de fato implementa, deixando explícito que a rejeição vale para \"rotas que só leem/projetam o já gravado\", não para o caso de PATCH /v1/settings/ai.\\n\\nComandos executados: `grep -n \\\"D-041\\\" -A 30 docs/migration/DECISIONS.md`; `grep -n \\\"AccountDeletion|isDeletionPending|deletion\\\" apps/bff/src/modules/status/routes.ts`; `grep -rn \\\"isDeletionPending\\\" apps/bff/src`; `grep -n \\\"assertAiActivationNotBlockedByDeletion\\\" -r apps/bff/src apps/bff/tests`; `git status --porcelain -- docs/migration/DECISIONS.md`; `git diff -- docs/migration/DECISIONS.md` (confirmou apenas a alteração pretendida, +16/-0 no bloco D-041). Não rodei build/testes porque a mudança é só de texto em documentação, sem alteração de código ou comportamento.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "docs/migration/DECISIONS.md"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 10629,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "025-r4-correction-10142959-a1"
+  }
+}

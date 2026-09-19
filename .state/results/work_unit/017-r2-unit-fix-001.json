@@ -1,0 +1,59 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:40:38.260Z",
+  "attemptId": "017-r2-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r2-unit-fix-001",
+      "goal": "017",
+      "round": 2,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Os quatro blockers da rodada 1 foram corrigidos: ignorar/designorar na tela, player de áudio pelo proxy, 201/202 propagado do ai-orchestrator ao browser com copy honesta, e GAP/REUSE atualizados.",
+      "report": "Ver campo report acima.",
+      "changedFiles": [
+        "apps/frontend/src/features/conversations/MessageAttachment.tsx",
+        "apps/frontend/src/features/conversations/ConversationContextPanel.tsx",
+        "apps/frontend/src/features/conversations/ConversationThread.tsx",
+        "apps/frontend/src/data/services/BffConversationService.ts",
+        "apps/frontend/src/shared/styles/atendly-conversations.css",
+        "apps/frontend/tests/goal017-contact-profile.test.tsx",
+        "apps/frontend/tests/goal017-chat-media.test.tsx",
+        "apps/frontend/tests/goal017-delivery-state.test.tsx",
+        "apps/bff/src/clients/internal-http-client.ts",
+        "apps/bff/src/clients/ai-orchestrator/index.ts",
+        "apps/bff/src/modules/conversations/routes.ts",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/tests/internal-http-client.test.ts",
+        "apps/bff/tests/goal017-send-status.integration.test.ts",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: marcar e desmarcar ignorados existem na tela e setIgnored ganha consumidor",
+          "met": true,
+          "detail": "ConversationContextPanel.tsx ganhou a seção \"Ignorar na IA\" com botão que alterna marcar/desmarcar; ConversationThread.tsx:191 chama conversations.setIgnored(id, !ignored) após confirmação em Dialog que explica o efeito. Provado por goal017-contact-profile.test.tsx (setIgnored com true e com false pela tela real, e cancelar sem efeito)."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: player de áudio consultando getMedia",
+          "met": true,
+          "detail": "AudioAttachment usa o novo hook useAttachmentMedia e renderiza <audio controls> sobre o blob de getMedia quando mediaAvailable; sem bytes na origem explica em vez de oferecer o player. Provado por goal017-chat-media.test.tsx (\"áudio: ouvir o original, não só ler a transcrição\")."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: 202 alcançável pelo stack real e copy de 201 alinhada ao contrato",
+          "met": true,
+          "detail": "InternalHttpClient.requestWithStatus carrega o status; AiOrchestratorClient.sendMessage devolve {message,status}; routes.ts responde 202 quando a IA respondeu 202. Copy de 201 agora diz registro+despacho, não \"confirmada\". PUBLIC_API_V1.md documenta os dois sucessos. Unit tests do cliente rodaram (5 passaram); o teste de rota goal017-send-status.integration.test.ts roda em validate:integration e não pôde ser executado aqui por falta de PostgreSQL descartável."
+        },
+        {
+          "criterion": "Blocker 4 resolvido: GAP_ANALYSIS.md e REUSE_ANALYSIS.md atualizados",
+          "met": true,
+          "detail": "REUSE_ANALYSIS.md: linha do ProductConversationsScreen passou a REFACTOR (feito) com as âncoras obsoletas removidas. GAP_ANALYSIS.md: G-22 (inbox/ignorados na interface), G-23 (player e visualizador entregues, envio de mídia ainda fora) e G-31 (Conversas redesenhada; resíduo de browser inclui Conversas)."
+        }
+      ]
+    },
+    "attemptId": "017-r2-unit-fix-001-a1"
+  }
+}

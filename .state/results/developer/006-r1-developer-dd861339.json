@@ -1,0 +1,85 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T21:42:34.746Z",
+  "attemptId": "006-r1-developer-dd861339-a2",
+  "result": {
+    "ok": true,
+    "result": {
+      "jobId": "006-r1-developer-dd861339",
+      "goal": "006",
+      "round": 1,
+      "protocolVersion": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "Goal006 implementado na worktree: cliente é pessoa por ID com telefone opcional e não exclusivo, criação só na transação de confirmação, responsável/notas/tags com autorização explícita, Contact.customerId na IA, contratos BFF/frontend e resíduos do Goal005 — com validate:core e validate:integration verdes.",
+      "implementationReport": "## 1. Diff inicial (divergência relevante em relação ao Goal)\n\nO Goal previa diff inicial vazio contra a baseline `30fc42f`, salvo artefatos de `graphify-out/`. **Não foi o caso.** A worktree `.ai-worktrees/goal-006` já continha, não commitada, uma implementação extensa do próprio Goal006 (aparentemente de uma execução anterior interrompida): 27 arquivos modificados, 4 migrations novas, 2 scripts de ensaio, suíte nova do Scheduling e teste de resíduos do Goal005. HEAD estava em `8acd4c6` (executionBase), sem commits extras.\n\nEstado inicial verificável: `validate:core` FALHAVA em `test:scheduling-service` (2 de 13 casos vermelhos), porque `AtendlyCustomerService.create` ainda continha um bloco explicitamente marcado `// RED TEMPORARIO: comportamento anterior ao Goal006 (upsert por telefone)` — ou seja, o RED do caso negativo principal estava capturado, mas o GREEN não havia sido fechado.\n\nOptei por auditar, completar e validar esse trabalho em vez de descartá-lo: ele é do próprio Goal, é coerente com o escopo autorizado e descartá-lo destruiria trabalho legítimo. Todo o resultado abaixo foi verificado por mim nesta execução.\n\n## 2. Diff final\n\nHEAD continua em `8acd4c6` (nenhum commit criado). 27 arquivos modificados + 11 caminhos novos, `+3608 / -183` contra `8acd4c6`. `git diff --check` limpo. `graphify-out/` intocado.\n\n## 3. Arquivos e consumers\n\n**Scheduling (fonte da identidade)**\n- `prisma/schema.prisma`: `Customer.phone`/`normalizedPhone` opcionais; `@@unique([tenantId, normalizedPhone])` → `@@index`; `(tenantId,id)` segue sendo a identidade das FKs; novos `CustomerRelation` (PRIMARY_GUARDIAN, com `proposedBy`/`status`/`confirmedBy` e datas), `CustomerNote` e `CustomerTag` (ambos com `aiAuthorized` default false), todos com FK composta por tenant.\n- `modules/customers/atendly-customer-service.ts`: `findByPhone`/upsert eliminados; `findCandidatesByPhone` (zero, um ou vários), `create` explícito (exige nome **ou** telefone, nunca consulta por telefone antes de criar), `update` explícito de nome/telefone, responsável principal com proveniência, notas/tags e `aiAuthorizedContext` que filtra **na consulta**.\n- `modules/integrations/atendly/provider.ts`: `createAppointment` resolve/cria a pessoa **dentro** da transação, depois de validar o slot; `listAppointments` aceita `customerId` e trata `customerPhone` como filtro de candidatos (`customerId in [...]`).\n- `modules/integrations/minha-agenda/provider.ts`: recusa explicitamente agendar por `customerId`; agenda externa segue exigindo nome+telefone.\n- `modules/migrations/calendar-migration-service.ts`: deixou de depender de upsert por telefone; `CUSTOMER_PHONE_DUPLICATED` deixou de ser conflito (telefone repetido virou situação normal). Sem redesenho da importação (Goal010).\n- `modules/calendar/routes.ts`, `modules/calendar/calendar-provider.ts`, `modules/internal-api/routes.ts`: contratos por operação (listar com filtro de candidatos + `filteredByPhone`, obter com guardião/notas/tags, criar sem telefone, PATCH, responsável, notas, tags, `/ai-context`).\n\n**IA**: `scheduling-service/client.ts` e `types.ts` (agendar por `customerId`, buscar candidatos, contexto autorizado), `tools/assistant-tools.ts` (rascunho com `customerId`/`proposedCustomerId`, `CUSTOMER_IDENTITY_AMBIGUOUS` quando há vários, proposta quando há um, criação só na confirmação, `linkContactToCustomer`), `prisma/schema.prisma` (`Contact.customerId`/`customerLinkedAt`), `session/SessionService.ts` (resíduos do 005).\n\n**BFF**: `modules/customers/routes.ts` (13 rotas por operação, tenant da sessão, CSRF nas mutações por cookie), `clients/scheduling/index.ts`, `modules/calendar/routes.ts`, `PUBLIC_API_V1.md`.\n\n**Frontend**: `publicApiSchemas.ts` (`customerDetailSchema`, notas, tags, guardião, `filteredByPhone` — todos opcionais, resposta antiga continua válida) e `BffCustomerService.ts`. Sem tela nova (Goal015).\n\n**Gates**: `validate-core.mjs` (Scheduling deixou de ser skip e entrou no core com `tests/unit`), `validate-integration.mjs` (+3 passos do Goal006 e banco próprio `<alvo>_scheduling`), `final-production-audit.mjs` (nova regra `no_tenant_scoped_phone_unique_constraint`), `scripts/tests/validate-integration.test.mjs`.\n\n## 4. Minhas alterações nesta rodada\n\n1. **GREEN do caso negativo principal**: removi o bloco `RED TEMPORARIO` de `create`, que reaproveitava e renomeava a pessoa quando o telefone já existia. A criação passou a nunca consultar por telefone.\n2. **Aceite 5 (lacuna)**: adicionei em `assistant-tools.test.ts` o caso \"lets one contact point to different people over time without merging anything\" — duas confirmações no mesmo contato para pessoas diferentes, provando que as duas escritas endereçam o **mesmo** contato (`where` idêntico, com tenant/canal/número) e só a pessoa referenciada muda. Ajustei a fixture `createAppointment` para ecoar `input.customerId`, que antes devolvia sempre `\"12345\"` e tornava o caso invisível.\n3. **Aceite 6 (lacuna)**: criei `apps/bff/tests/customer-identity.integration.test.ts` (6 casos) — criação sem telefone com tenant vindo da sessão e `tenantId` de header/body/query ignorado; recusa de cadastro sem nome e sem telefone antes de tocar o Scheduling; busca por telefone devolvendo dois candidatos; recusa por CSRF ausente em `PATCH` e nas rotas de responsável/nota/tag, sempre antes de qualquer efeito upstream; nota nascendo `aiAuthorized: false`.\n\n## 5. Migrations e compatibilidade\n\nQuatro migrations novas, aditivas e retomáveis, em passos separados:\n- `scheduling/20260908160000_goal006_customer_identity_expand` — expansão: `DROP NOT NULL` no telefone, índice **não exclusivo** de candidatos, tabelas de relação/notas/tags com FK composta por tenant. A unicidade antiga **continua de pé** aqui de propósito.\n- `scheduling/20260908161000_goal006_customer_phone_not_unique` — corte: remove constraint/índice `(tenantId, normalizedPhone)` sem tocar em linha alguma, só depois de Scheduling, IA, BFF e frontend já lerem/escreverem por ID.\n- `ai/20260908170000_goal006_contact_customer_link` — `Contact.customerId`/`customerLinkedAt` opcionais, **sem backfill**, sem FK entre bancos.\n- `ai/20260908171000_goal005_single_open_session` — fecha (nunca apaga) sessões abertas excedentes com `endedReason='superseded_duplicate_open_session'` e cria índice único **parcial** de uma sessão aberta por conversa.\n\nNenhuma fusão, renomeação ou deduplicação; `ExternalEntityMap` intocado. Divergências deliberadas registradas em `DATA_MIGRATION.md` e nos cabeçalhos: (a) o índice parcial só existe em SQL — o Prisma não o modela e `migrate diff` vai reportá-lo, anotado no `schema.prisma` da IA; (b) o binário anterior ao corte só é destino seguro enquanto não existir número compartilhado nem cliente sem telefone, e não há rollback por reintrodução do upsert por telefone.\n\n## 6. RED/GREEN dos casos negativos\n\nTodos verificados por mim, revertendo a guarda e restaurando o arquivo em seguida (árvore final confirmada íntegra):\n\n| Caso | RED (guarda revertida) | GREEN |\n| --- | --- | --- |\n| Upsert por telefone renomeando pessoa | Observado no estado herdado: 2 falhas — \"keeps two people with the same phone as two different people\" e \"never renames anyone on creation\" | 13/13 após remover o bloco RED |\n| Cliente criado por consulta/confirmação que falha | Movi a criação para **antes** da transação (forma pré-Goal006): 2 falhas — \"does not create or rename anyone when the confirmation fails on the slot\" e \"schedules for the chosen person and keeps each history separate\" | 10/10 restaurado |\n| Nota/tag não autorizada chegando ao modelo | Removi `aiAuthorizedOnly` de `aiAuthorizedContext`: 3 falhas na suíte de autorização | 13/13 restaurado |\n| Fusão de pessoas por número | Fiz `prepare` escolher `candidates[0]` silenciosamente: falha \"asks who the appointment is for when the number has more than one person\" | 13/13 restaurado |\n| Fusão de contatos por número | Tirei `channelId` do `where` de `linkContactToCustomer`: falha o caso novo de contato | 13/13 restaurado |\n\n## 7. Comandos executados e resultados\n\n- `npm run validate:core` — **inicialmente FAILED** (`test:scheduling-service`, 2/13). Após o GREEN: **PASSED**, 14 passos, 3 skips preexistentes (`test:bff`, `test:contracts`, `test:health-worker`).\n- `BFF_TEST_DATABASE_URL=postgresql://pgtest@127.0.0.1:55432/atendly_bff_test npm run validate:integration` — **PASSED**, 16/16, incluindo `rehearse:goal006-customer-identity-migration`, `rehearse:goal006-ai-migration`, `provision:scheduling-test-database` e `test:scheduling-integration` (10 casos). Precisei subir o cluster descartável documentado em `VALIDATION_GATE.md` (`pg_ctl start` em `/c/tmp/atendly-pgtest`, porta 55432), que estava parado.\n- Suítes isoladas: `apps/scheduling-service` unit 13/13 e integration 10/10; `apps/ai-orchestrator` `assistant-tools` 13/13 e `session-rotation-residuals` 3/3; `apps/bff` `customer-identity.integration` 6/6.\n- Ambos os gates foram **re-executados sobre o estado final** da árvore, depois de todas as demonstrações RED: core PASSED e integration PASSED (16/16).\n- `git diff --check` — limpo. `git log --oneline -1` — `8acd4c6`, nenhum commit criado.\n\n## 8. Limitações\n\n- **Autoria mista**: a maior parte do diff é trabalho herdado da execução anterior nesta worktree, auditado e validado por mim, não escrito do zero nesta rodada. O review deve tratar o diff inteiro como material novo.\n- Sem WhatsApp real, deploy, credenciais reais ou banco implantado: tudo em PostgreSQL descartável em loopback.\n- O gate de integração depende do cluster local em `127.0.0.1:55432` estar de pé; deixei-o rodando.\n- A suíte do BFF cobre a superfície pública com o Scheduling como dobro HTTP; a regra de identidade em si é provada nas suítes do Scheduling contra PostgreSQL real.\n- `packages/contracts/src/customers` continua placeholder (D-011: por consumidor comprovado).\n- Não atualizei `MIGRATION_STATUS.md`, `GAP_ANALYSIS.md` (G-14/G-15) nem qualquer documento de controle da migração — vedado ao executor. `DATA_MIGRATION.md` e `PUBLIC_API_V1.md` foram atualizados porque o próprio Goal os exige como contrato/documentação afetada.\n- Restam três skips preexistentes no core, herdados e fora do escopo deste Goal.",
+      "validations": [
+        {
+          "name": "npm run validate:core (estado final)",
+          "passed": true,
+          "detail": "PASSED — 17 passos: 14 passed, 0 failed, 3 skipped (test:bff, test:contracts, test:health-worker — skips preexistentes). Inclui test:scheduling-service (13/13), test:ai-orchestrator, audit:static com a nova regra no_tenant_scoped_phone_unique_constraint."
+        },
+        {
+          "name": "npm run validate:core (estado herdado, antes do fix)",
+          "passed": false,
+          "detail": "FAILED em test:scheduling-service (2 falhas de 13) por causa do bloco RED TEMPORARIO de upsert por telefone deixado em AtendlyCustomerService.create. Registrado como o RED do caso negativo principal."
+        },
+        {
+          "name": "npm run validate:integration (estado final)",
+          "passed": true,
+          "detail": "PASSED contra 127.0.0.1:55432/atendly_bff_test — 16/16 passos, incluindo rehearse:goal006-customer-identity-migration, rehearse:goal006-ai-migration, provision:scheduling-test-database e test:scheduling-integration (10/10)."
+        },
+        {
+          "name": "apps/scheduling-service tests/unit",
+          "passed": true,
+          "detail": "13/13 — telefone não exclusivo, cliente sem telefone, nenhuma renomeação na criação, update explícito, isolamento por tenant, responsável só confirmado explicitamente, notas/tags não autorizadas fora do contexto da IA."
+        },
+        {
+          "name": "apps/scheduling-service tests/integration",
+          "passed": true,
+          "detail": "10/10 contra PostgreSQL descartável — duas pessoas com o mesmo número no mesmo tenant, mesmo número em dois tenants como pessoas distintas, disponibilidade não cria cliente, confirmação que falha não cria nem renomeia, criação dentro da transação, histórico por pessoa, proveniência do responsável, notas/tags não autorizadas por padrão."
+        },
+        {
+          "name": "apps/ai-orchestrator tests/tools/assistant-tools.test.ts",
+          "passed": true,
+          "detail": "13/13, incluindo o caso novo que adicionei: um contato apontando para pessoas diferentes ao longo do tempo, com where idêntico (tenant/canal/número) e só o customerId mudando — sem fundir contato nem cliente."
+        },
+        {
+          "name": "apps/ai-orchestrator tests/session/session-rotation-residuals.test.ts",
+          "passed": true,
+          "detail": "3/3 — handoff OPEN resolvido quando o espelho legado é limpo, handoff preservado quando não é, e segunda abertura concorrente absorvida sem duplicar sessão."
+        },
+        {
+          "name": "apps/bff tests/customer-identity.integration.test.ts (novo)",
+          "passed": true,
+          "detail": "6/6 — tenant da sessão vence header/body/query; cadastro sem nome e sem telefone recusado antes do upstream; busca por telefone devolve candidatos; CSRF ausente rejeita PATCH e as rotas de responsável/nota/tag com zero efeito upstream; nota nasce aiAuthorized=false."
+        },
+        {
+          "name": "RED: cliente criado antes da transação de confirmação",
+          "passed": true,
+          "detail": "Revertendo a criação para antes da transação (forma pré-Goal006), 2 casos de integração falharam ('does not create or rename anyone when the confirmation fails on the slot' e 'schedules for the chosen person...'); arquivo restaurado e 10/10 de volta."
+        },
+        {
+          "name": "RED: nota/tag não autorizada chegando ao modelo",
+          "passed": true,
+          "detail": "Removendo aiAuthorizedOnly de aiAuthorizedContext, 3 casos de autorização falharam; arquivo restaurado e 13/13 de volta."
+        },
+        {
+          "name": "RED: fusão de pessoas e de contatos por número",
+          "passed": true,
+          "detail": "Fazendo prepare escolher candidates[0] silenciosamente, o caso de ambiguidade falhou; tirando channelId do where de linkContactToCustomer, o caso de contato falhou. Ambos restaurados e 13/13 de volta."
+        },
+        {
+          "name": "git diff --check",
+          "passed": true,
+          "detail": "Limpo, sem erros de whitespace."
+        },
+        {
+          "name": "Ausência de commit/push/branch",
+          "passed": true,
+          "detail": "HEAD permanece em 8acd4c6 (executionBase); nenhum commit, push, merge, PR ou troca de branch. Todas as escritas dentro de .ai-worktrees/goal-006; graphify-out/ intocado; nenhum documento de controle da migração (goals/, reviews/, MIGRATION_STATUS.md) alterado."
+        }
+      ]
+    },
+    "attemptId": "006-r1-developer-dd861339-a2"
+  }
+}

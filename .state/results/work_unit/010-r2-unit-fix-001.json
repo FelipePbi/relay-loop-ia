@@ -1,0 +1,75 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-12T23:30:21.807Z",
+  "attemptId": "010-r2-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r2-unit-fix-001",
+      "goal": "010",
+      "round": 2,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Os 6 blockers da rodada 1 foram corrigidos: efeito único no horário disputado, frontend e asserção da IA entregues, endpoints de integração reescopados, previewVersion obrigatória, e os dois gates rodados e verdes.",
+      "report": "## O que mudou, por quê\n\n### Blocker 1 — efeito único no horário disputado (critério 6)\n`importAppointment` travava o dia mas nunca lia ocupação: sob o lock ela criava um segundo `Appointment` por cima da confirmação USER. Agora, **dentro** da transação de `runCalendarWrite` e depois de `lockCalendarDays`, `findSlotHolder` procura atendimento vigente (status ≠ CANCELLED) que sobreponha o intervalo, ignorando o que a própria importação criou (filtro por `ExternalEntityMap` do provider). Havendo dono, nada é escrito e o item vai para `NEEDS_REVIEW` com `APPOINTMENT_SLOT_TAKEN` — nova variante `ItemOutcome` + `markNeedsReview`. A checagem vale só para `FUTURE_APPOINTMENT` (`OCCUPYING_APPOINTMENT_CATEGORIES`): histórico (passado/cancelado/falta) não ocupa agenda e recusá-lo apagaria registro real. `NEEDS_REVIEW` não está em `DECIDED_ITEM_STATUSES`, então o item continua decidível pelo negócio.\nArquivo: `apps/scheduling-service/src/modules/migrations/import-execution-service.ts`.\n\n### Blocker 2 — frontend (critério 10 / §7)\n`publicApiSchemas.ts`: enums (categoria, status de item, status de sessão, escopo e tipo de decisão) e schemas `importSessionStart`, `importPreview` (+categoria com limitação declarada e `sourceReportedCount` nulo), `importItem`, `importItemsPage`, `importDecision`, `importExecution`, `importProgress`, `importCompletion` (+`pendingAcceptance`), com os tipos exportados. `BffMigrationService.ts`: as 7 operações (`startImport`, `analyzeImport`, `listImportItems`, `decideImportItem`, `executeImport`, `getImportProgress`, `completeImport`), com `idempotency-key` onde há efeito; `diagnose/create/get` do protocolo antigo preservados. `features/migration/types.ts`: reexporta o vocabulário, acrescenta `ImportStage` e a porta `ImportSessionService`, sem tela (Goal019). Teste novo `apps/frontend/tests/goal010-import-schema.test.ts` (7 casos), incluindo resposta fora do contrato recusada e `migrationSchema`/`migrationDiagnosisSchema`/`migrationStartSchema` ainda decodificáveis.\n\n### Blocker 3 — nenhuma tool da IA importa (critério 8)\nNovo `apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts`, com três travas independentes que quebram se alguém acrescentar uma tool de importação: (a) lista literal das 11 tools registradas + nome/descrição sem vocabulário de importação; (b) gateway do Scheduling como **Proxy que lança** em qualquer membro `/import|migrat/i` — todas as tools são executadas contra ele, e a suíte exige `reached.length > 0` para que \"ninguém tocou\" não seja vácuo; (c) `fetch` global dublado, com asserção de que nenhuma URL de importação foi pedida; além disso o código-fonte do client/tools é checado contra `/internal/calendar/imports`, `/v1/calendar/imports` e `/internal/calendar/migrations`. Pedir `start_import`/`execute_import`/`complete_import` ao registro devolve `UNKNOWN_TOOL`.\n\n### Blocker 4 — ciclo de importação alcançável (§6)\n`POST /internal/calendar/integration/connect` não exige mais `calendar.source === \"MINHA_AGENDA\"` (era o que tornava o ciclo inalcançável depois do corte: quem opera na Agenda Atendly nunca conseguiria conectar a origem). Passa a exigir só que o negócio tenha agenda, não muda a fonte operacional, e recusa credencial que se declara de escrita com `409 INTEGRATION_WRITES_NOT_SUPPORTED`. `DELETE /internal/calendar/integration` perdeu a guarda `CALENDAR_MIGRATION_REQUIRED`: desconectar remove a credencial da origem e nunca desativa a agenda. Teste novo `apps/scheduling-service/tests/unit/import-origin-connection.test.ts` prova a fiação ponta a ponta: conectar com agenda ATENDLY grava a `IntegrationConnection` (segredo cifrado) e `POST /internal/calendar/imports` abre a sessão referenciando essa conexão.\n\n### Blocker 5 — recusa de preview obsoleto deixa de ser opt-in (critério 2)\n`previewVersion` virou obrigatória no corpo de `execute` no Scheduling e no BFF, obrigatória no tipo `ImportExecutionOptions` e no `SchedulingClient.executeImport`, e `assertPreviewVersionCurrent` passou a ser chamada **sempre** (o `if (options.previewVersion !== undefined)` saiu). Todos os chamadores (rota + suítes) declaram a versão aprovada; o helper de corrida da integração passa a versão devolvida pela segunda análise. Teste novo em `import-routes.test.ts`: corpo vazio responde `400 VALIDATION_ERROR` com `details.previewVersion`. `PUBLIC_API_V1.md` atualizado (campo obrigatório, `IMPORT_PREVIEW_STALE`, `APPOINTMENT_SLOT_TAKEN` e o reescopo dos três endpoints de integração).\n\n### Blocker 6 — gates executados\n`npm ci` em `packages/contracts`, `apps/ai-orchestrator`, `apps/frontend` e `apps/health-worker` (exit 0 em todos). PostgreSQL descartável provisionado pela receita do `VALIDATION_GATE.md` (`initdb -U pgtest -A trust`, porta 55450, banco `atendly_bff_test`), e parado ao final (`pg_ctl -m fast stop`); o data dir ficou em `C:/tmp/atendly-pgtest-goal010`.\n\n## Comandos e resultados reais (última execução, sobre o código final)\n\n- `npm run validate:core` → **PASSED**, 17 passos: 14 passed, 0 failed, 3 skips declarados (`test:bff`, `test:contracts`, `test:health-worker`). Dentro dele: ai-orchestrator 199 passed | 39 skipped, scheduling unit **242 passed**, frontend **31 passed**, `audit:static` e `test:gate-scripts` verdes.\n- `BFF_TEST_DATABASE_URL=postgresql://pgtest@127.0.0.1:55450/atendly_bff_test npm run validate:integration` → **PASSED contra 127.0.0.1:55450/atendly_bff_test**, 20 passos: 20 passed, 0 failed. Dentro dele: BFF **52 passed**, scheduling integração **55 passed** (inclui os 11 de `goal010-import.test.ts`), IA integração **39 passed**, ensaio `rehearse:goal010-import-session-migration` verde.\n- `npx vitest run tests/integration/goal010-import.test.ts` (scheduling) → **11 passed**, inclusive o antes vermelho \"produces a single effect when the confirmation reaches the day lock first\".\n- `git diff --check` → sem erro de whitespace (só avisos de LF→CRLF).\n- `eslint` nos arquivos que toquei (scheduling, bff, frontend) → limpo. Ficam de fora, **pré-existentes na baseline e sem relação com este diff**, dois erros em `apps/scheduling-service/src/modules/appointments/appointment-series-service.ts` e um em `apps/frontend/src/data/services/BffCalendarService.ts` (arquivos não modificados; lint não faz parte de nenhum gate).\n\n## Uma correção fora dos 6 blockers, declarada\n\nA primeira execução da suíte de integração do Scheduling trouxe 20 falhas em quatro arquivos que **não** são do Goal010 (`goal008-agenda`, `goal009-occupancy`, `customer-identity`, `service-catalog`): todas `SLOT_UNAVAILABLE` vindo de `AtendlyAvailability.assertAvailable`, porque os quatro fixavam `const date = \"2026-09-10\"` — dois dias no passado em relação a hoje (2026-09-12). É apodrecimento de data pré-existente, não regressão deste diff, mas impedia o gate do critério 12 de passar. Troquei a constante por `upcomingDate()` (novo `tests/integration/support/test-date.ts`, dia sempre à frente dentro de `maxLeadDays`); as quatro suítes já semeavam disponibilidade nos sete dias da semana e derivam o dia da semana da própria data. Depois disso: 6 arquivos, **55 testes, todos verdes**. Nenhuma regra de produto foi alterada — se o Tech Lead preferir essa reparação em outro Goal, ela está isolada nesses cinco arquivos.\n\n## Limitações\n\n- A prova do corte contra a API real do Minha Agenda continua fora (sem credencial autorizada), como o Goal determina; a origem é sempre dublê/fixture.\n- Um item que ficou em `NEEDS_REVIEW` por `APPOINTMENT_SLOT_TAKEN` e receba decisão `INCLUDE` volta a `PENDING` e, se o horário seguir ocupado, é marcado de novo na próxima passada — a importação nunca força sobreposição.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/bff/src/modules/migrations/routes.ts",
+        "apps/bff/src/clients/scheduling/index.ts",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/tests/goal010-import-routes.integration.test.ts",
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffMigrationService.ts",
+        "apps/frontend/src/features/migration/types.ts",
+        "apps/frontend/tests/goal010-import-schema.test.ts",
+        "apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts",
+        "apps/scheduling-service/tests/unit/import-origin-connection.test.ts",
+        "apps/scheduling-service/tests/unit/import-routes.test.ts",
+        "apps/scheduling-service/tests/unit/import-execution-service.test.ts",
+        "apps/scheduling-service/tests/unit/import-lease.test.ts",
+        "apps/scheduling-service/tests/unit/import-completion-service.test.ts",
+        "apps/scheduling-service/tests/integration/goal010-import.test.ts",
+        "apps/scheduling-service/tests/integration/support/test-date.ts",
+        "apps/scheduling-service/tests/integration/customer-identity.test.ts",
+        "apps/scheduling-service/tests/integration/goal008-agenda.test.ts",
+        "apps/scheduling-service/tests/integration/goal009-occupancy.test.ts",
+        "apps/scheduling-service/tests/integration/service-catalog.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 — efeito único no horário disputado (critério 6), teste vermelho em goal010-import.test.ts",
+          "met": true,
+          "detail": "`findSlotHolder` lê ocupação dentro do lock de dia em `importAppointment`; horário tomado por atendimento que não é da importação marca o item NEEDS_REVIEW/APPOINTMENT_SLOT_TAKEN sem escrever. `npx vitest run tests/integration/goal010-import.test.ts` → 11 passed, incluindo 'produces a single effect when the confirmation reaches the day lock first' (['USER:CONFIRMED'] e item ≠ IMPORTED)."
+        },
+        {
+          "criterion": "Blocker 2 — critério 10 e §7 (Frontend) entregues",
+          "met": true,
+          "detail": "publicApiSchemas.ts com schemas/tipos da importação; BffMigrationService.ts com as 7 operações e idempotency-key; features/migration/types.ts com vocabulário e porta ImportSessionService; teste novo apps/frontend/tests/goal010-import-schema.test.ts (7 casos) cobre respostas novas, recusa fora do contrato e a decodificação das respostas antigas de migração. `npx vitest run` (frontend) → 31 passed; `tsc --noEmit` limpo."
+        },
+        {
+          "criterion": "Blocker 3 — asserção por dublê de que nenhuma tool da IA importa (critério 8)",
+          "met": true,
+          "detail": "apps/ai-orchestrator/tests/tools/import-out-of-reach.test.ts: lista literal das 11 tools, gateway Proxy que lança em membro de importação (com reached>0 para não ser vácuo), fetch dublado sem URL de importação, UNKNOWN_TOOL para nomes de importação e varredura do fonte do client/tools. 4 passed; roda dentro de test:ai-orchestrator no validate:core (199 passed | 39 skipped)."
+        },
+        {
+          "criterion": "Blocker 4 — §6: endpoints de integração reescopados e ciclo de importação alcançável",
+          "met": true,
+          "detail": "connect não exige mais calendar.source === MINHA_AGENDA e recusa enableWrites com 409 INTEGRATION_WRITES_NOT_SUPPORTED; disconnect perdeu a guarda CALENDAR_MIGRATION_REQUIRED e não toca a agenda. Teste novo import-origin-connection.test.ts (3 passed) prova connect com agenda ATENDLY → IntegrationConnection gravada → POST /internal/calendar/imports abre a sessão com connectionId."
+        },
+        {
+          "criterion": "Blocker 5 — critério 2: recusa de preview obsoleto deixa de ser opt-in",
+          "met": true,
+          "detail": "previewVersion obrigatória no corpo do Scheduling (routes.ts) e do BFF, no tipo ImportExecutionOptions e no SchedulingClient.executeImport; assertPreviewVersionCurrent passou a ser chamada sempre. Teste novo em import-routes.test.ts: corpo vazio → 400 VALIDATION_ERROR com details.previewVersion; o caso de preview obsoleto (409 IMPORT_PREVIEW_STALE) segue verde. PUBLIC_API_V1.md atualizado."
+        },
+        {
+          "criterion": "Blocker 6 — critério 12: validate:core e validate:integration executados com saída real",
+          "met": true,
+          "detail": "npm ci em contracts/ai-orchestrator/frontend/health-worker (exit 0). `npm run validate:core` → PASSED (14 passed, 0 failed, 3 skips declarados). `BFF_TEST_DATABASE_URL=postgresql://pgtest@127.0.0.1:55450/atendly_bff_test npm run validate:integration` → PASSED (20/20). Para isso foi preciso reparar apodrecimento de data pré-existente em 4 suítes de integração de goals anteriores (const date fixo em 2026-09-10), declarado no relatório."
+        }
+      ]
+    },
+    "attemptId": "010-r2-unit-fix-001-a1"
+  }
+}

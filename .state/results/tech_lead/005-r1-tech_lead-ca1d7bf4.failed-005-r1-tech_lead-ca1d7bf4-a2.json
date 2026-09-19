@@ -1,0 +1,26 @@
+{
+  "storeVersion": 1,
+  "archivedAt": "2026-09-08T15:04:57.131Z",
+  "reason": "RETRY_AUTHORIZED_AFTER_HARNESS_FIX",
+  "original": {
+    "storeVersion": 1,
+    "publishedAt": "2026-09-08T14:41:57.700Z",
+    "result": {
+      "ok": false,
+      "code": "UNKNOWN_FATAL",
+      "message": "Unrecoverable failure; a human must look at it.",
+      "escalation": "HUMAN_REQUIRED"
+    }
+  },
+  "authorization": {
+    "sourceAttemptId": "005-r1-tech_lead-ca1d7bf4-a2",
+    "successorAttemptId": "005-r1-tech_lead-ca1d7bf4-a3",
+    "reason": "HARNESS_BUG_FIXED",
+    "detail": "buildArgs now passes --verbose with stream-json; pre-spawn CLI arg validation added",
+    "fixCommit": "c198f43",
+    "originalClassification": "UNKNOWN_FATAL",
+    "correctedClassification": "HARNESS_ERROR",
+    "originalError": "CLI exited with code 1: Error: When using --print, --output-format=stream-json requires --verbose",
+    "authorizedAt": "2026-09-08T15:04:57.131Z"
+  }
+}

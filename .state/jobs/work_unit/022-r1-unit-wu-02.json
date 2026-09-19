@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T17:26:53.820Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "022-r1-unit-wu-02-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "022-r1-unit-wu-02",
+    "role": "work_unit",
+    "goal": "022",
+    "round": 1,
+    "workUnitId": "WU-02",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "LOW",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-022",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\022-central-de-notificacoes-e-alertas-persistentes.md",
+    "parentJobId": "022-r1-developer-f2a82ad4",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_LOW"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-15T17:34:13.400Z"
+}

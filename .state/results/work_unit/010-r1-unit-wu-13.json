@@ -1,0 +1,61 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T04:11:19.702Z",
+  "attemptId": "010-r1-unit-wu-13-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-wu-13",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "WU-13",
+      "status": "COMPLETED",
+      "summary": "Added the Goal010 import-session migration rehearsal script, wired it into validate:integration and its gate test, and verified it end-to-end against a real disposable PostgreSQL.",
+      "report": "Escrevi scripts/goal010-migration-rehearsal.mjs no padrão do ensaio do Goal009: reconstrói o schema legado (IntegrationConnection, ExternalEntityMap, MigrationJob, MigrationConflict) como era ao fim do Goal009, semeia MigrationJob em cinco estados (COMPLETED com/sem prova de importação, FAILED, PARTIAL, um estado não terminal RUNNING) em dois tenants, mais um MigrationConflict e dois ExternalEntityMap. Aplica a migration 20260910100000_goal010_import_session (aditiva, passo único) e prova via fingerprint que nenhuma linha de MigrationJob/MigrationConflict/ExternalEntityMap muda ou é apagada, e que o default legacyClass=UNCLASSIFIED vale para todo o estoque preexistente.\n\nEm seguida o ensaio roda uma classificação (reafirmando em SQL puro a mesma decisão de classifyLegacyJob de legacy-job-reconciliation.ts, já coberta em unidade pela suite de WU-07 — o ensaio não importa TypeScript, só valida o comportamento de banco) e prova: (a) COMPLETED com prova vira TECHNICAL_COMPLETED, sem prova vira NEEDS_REVIEW/COMPLETED_WITHOUT_IMPORT_PROOF, FAILED→TECHNICAL_FAILED, PARTIAL→TECHNICAL_INCOMPLETE, RUNNING→NEEDS_REVIEW/STALE_NON_TERMINAL_STATUS; (b) classificar não cria nenhuma ImportSession; (c) a conclusão REAL de importação do mesmo tenant continua aceita depois da classificação (o direito não foi consumido), e uma segunda conclusão para o mesmo tenant é recusada pelo índice único parcial. Por fim prova que tanto a migration quanto a classificação são retomáveis (reaplicar não muda nada). Todas as contagens usadas nas asserções excluem IDs 'probe-%'. Nenhuma credencial real aparece: bytes de credencial na fixture são sintéticos (decode(...,'hex') literal) e o alvo logado nunca inclui usuário/senha.\n\nLiguei o ensaio a scripts/validate-integration.mjs (novo step \"rehearse:goal010-import-session-migration\", posicionado depois de rehearse:goal009-occupancy-migration e antes de generate:scheduling-prisma-client, já que os demais rehearsals SQL puros não dependem do client Prisma) e atualizei a asserção de ordem de steps em scripts/tests/validate-integration.test.mjs.\n\nComandos executados com resultado real:\n- `node --check scripts/goal010-migration-rehearsal.mjs` → OK.\n- `npm ci --prefix apps/bff --no-audit --no-fund` (necessário: apps/bff/node_modules não existia no worktree e o próprio validate-integration.mjs recusa sem pg-connection-string) → 349 pacotes instalados.\n- `node --test scripts/tests/validate-integration.test.mjs` → 23/23 (antes do npm ci, 9 falhavam por dependência ausente, nada relacionado à minha mudança; depois, todas passaram, incluindo a que verifica a ordem exata dos steps com o novo nome).\n- `node --test scripts/tests/*.test.mjs` → 31/31 pass.\n- Como não havia Postgres descartável acessível sem adivinhar credenciais (o servidor local em 127.0.0.1:5432 exige senha que eu não tinha e não tentei forçar), criei meu próprio cluster Postgres descartável via `initdb`/`pg_ctl` no diretório de scratchpad (porta 55499, usuário pgtest, trust auth, isolado, destruído ao final) e rodei `BFF_TEST_DATABASE_URL=postgresql://pgtest@127.0.0.1:55499/atendly_wu13_test node scripts/goal010-migration-rehearsal.mjs` duas vezes → PASSED nas duas, exit 0. Na primeira execução encontrei e corrigi um bug real no ensaio (o snapshot \"before\" da checagem de retomada da migration era tirado antes da classificação, então comparar contra o snapshot pós-classificação sempre falhava); corrigido tirando o snapshot de comparação imediatamente antes da reaplicação da migration. Cluster temporário parado e apagado ao final (`pg_ctl stop -m fast` + rm -rf do datadir).",
+      "changedFiles": [
+        "scripts/goal010-migration-rehearsal.mjs",
+        "scripts/validate-integration.mjs",
+        "scripts/tests/validate-integration.test.mjs"
+      ],
+      "acceptance": [
+        {
+          "criterion": "O ensaio roda em banco descartável e prova preservação linha a linha de MigrationJob, MigrationConflict e ExternalEntityMap legados",
+          "met": true,
+          "detail": "jobFingerprint/conflictFingerprint/mapFingerprint comparados antes/depois da migration em scripts/goal010-migration-rehearsal.mjs; execução real contra cluster descartável próprio confirmou PASSED."
+        },
+        {
+          "criterion": "Job legado COMPLETED é classificado sem virar conclusão de importação e sem consumir o direito",
+          "met": true,
+          "detail": "Após classifyPending, asserta ImportSession count=0 para tenant-a, depois insere uma ImportSession COMPLETED real para o mesmo tenant (aceita) e uma segunda (rejeitada pelo índice único parcial)."
+        },
+        {
+          "criterion": "Defaults e constraints novas aceitam o conteúdo legado existente; a execução repetida não muda estado",
+          "met": true,
+          "detail": "legacyClasses.UNCLASSIFIED === total logo após a migration; UPDATE no-op em job existente aceito; reaplicação da migration e da classificação comparadas contra snapshot tirado imediatamente antes, sem mudança."
+        },
+        {
+          "criterion": "Gates M0-M3 são exercitados em banco descartável; M4 contra a origem real não é exercitado e nenhum tenant real é importado",
+          "met": true,
+          "detail": "Cabeçalho do script documenta M0 (inventário)/M1 (expand)/M2-M3 (classificação/reconciliação) exercitados via pg contra banco descartável; nenhuma chamada de rede à origem real existe no script."
+        },
+        {
+          "criterion": "As contagens reportadas pelo ensaio excluem sondas",
+          "met": true,
+          "detail": "Todas as queries de inventário e fingerprint filtram WHERE \"id\" NOT LIKE 'probe-%'."
+        },
+        {
+          "criterion": "O ensaio está incorporado ao validate:integration e coberto pelo teste dos scripts de gate",
+          "met": true,
+          "detail": "Novo step em scripts/validate-integration.mjs e assert de ordem atualizado em scripts/tests/validate-integration.test.mjs; node --test scripts/tests/validate-integration.test.mjs → 23/23 pass."
+        },
+        {
+          "criterion": "Nenhum segredo ou credencial real aparece em fixture ou output",
+          "met": true,
+          "detail": "credentialsEncrypted usa decode('00112233','hex') sintético; console.log só imprime target.label (host:port/db, sem usuário/senha) e contagens."
+        }
+      ]
+    },
+    "attemptId": "010-r1-unit-wu-13-a1"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-2353a60b",
+  "status": "RUNNING",
+  "startedAt": "2026-09-19T22:14:37.138Z",
+  "currentGoal": "026",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "bd5990abf0869821a35d67c9f9a775831d53cb75",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 1,
+  "ownerInstanceId": "22880-7c4cf7de"
+}

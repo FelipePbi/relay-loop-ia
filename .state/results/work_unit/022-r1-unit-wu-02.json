@@ -1,0 +1,51 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T17:34:13.399Z",
+  "attemptId": "022-r1-unit-wu-02-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "022-r1-unit-wu-02",
+      "goal": "022",
+      "round": 1,
+      "workUnitId": "WU-02",
+      "status": "COMPLETED",
+      "summary": "Adicionada leitura interna GET /internal/handoffs/awaiting-human na IA, com uma entrada por conversa, excluindo takeover do dono, identificação no padrão das telas de Conversas, teto e ordenação por abertura.",
+      "report": "O que mudou e por quê:\n\n- `apps/ai-orchestrator/src/modules/handoff/HandoffService.ts`: nova função exportada `listConversationsAwaitingHuman(prisma, tenantId, limit)` e tipo `ConversationAwaitingHuman`. Ela busca `Handoff` com `status: OPEN`, `conversationId` não nulo e `reason` diferente de `OWNER_TAKEOVER` (constante nova `OWNER_TAKEOVER_REASON`), ordenado por `createdAt` ascendente, e colapsa por `conversationId` mantendo a primeira ocorrência (a mais antiga) — isso cobre o caso de `pauseForHuman` gravar mais de uma linha OPEN para a mesma conversa (motivo e instante de abertura vêm da linha mais antiga não excluída). A identificação do contato/cliente usa `contactIdentification`: nome (`conversation.customerName` trimado) quando existe, senão telefone formatado (`formatPhone`, replicando exatamente o algoritmo de `apps/frontend/src/features/conversations/format.ts` — `conversationLabel`/`formatPhone`), nunca o `externalContactId` cru. Nenhum cliente HTTP de saída foi adicionado; a função só usa o `PrismaClient` já injetado.\n- `apps/ai-orchestrator/src/modules/internal/routes.ts`: nova rota `GET /internal/handoffs/awaiting-human`, com schema de query `awaitingHumanQuerySchema` (`limit`, 1–100, default 50, mesmo padrão de `conversationQuerySchema`), DTO `awaitingHumanDto` (id da conversa, `contactName`, `reason`, `openedAt` ISO), e mapeamento de escopo em `requiredScope`: reaproveita `conversations:read` (é uma leitura de conversas, não escrita), evitando criar escopo novo.\n- Teste novo `apps/ai-orchestrator/tests/internal/awaiting-human.routes.test.ts` (6 casos): colapso de duas linhas OPEN da mesma conversa em uma entrada pela mais antiga; exclusão de handoff `OWNER_TAKEOVER`; identificação por telefone formatado quando não há nome (nunca o telefone cru); isolamento por tenant e ordenação por abertura entre múltiplas conversas/tenants; teto de resultados via query `limit`; escopo exigido (`conversations:read`).\n\nComandos executados e resultado real:\n- `npx prisma generate` — OK, gerou `src/generated/prisma`.\n- `npx vitest run tests/internal/awaiting-human.routes.test.ts` — 6/6 testes passaram.\n- `npm run typecheck` (inclui `prisma generate && tsc --noEmit`) — sem erros.\n- `npm run lint` (`eslint src --max-warnings=0`) — sem erros/avisos.\n- `npm run test` (suíte completa do app) — 75 arquivos passados, 9 skipped (preexistente), 706 testes passados, 69 skipped (preexistente); nenhuma regressão.\n- `git status --porcelain` na worktree — confirmado que só `HandoffService.ts`, `internal/routes.ts` e o novo teste foram tocados por esta unidade; as mudanças em `apps/scheduling-service/**` já estavam no diff, atribuídas à WU-01 pelo `findingsLedger`, e não foram tocadas por mim.\n\nNenhum arquivo de migration foi necessário: o índice `(tenantId, status, createdAt)` em `Handoff` já existe no schema atual, como indicado em `implementationHints`.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/handoff/HandoffService.ts",
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/tests/internal/awaiting-human.routes.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Duas linhas Handoff OPEN na mesma conversa produzem exatamente uma entrada",
+          "met": true,
+          "detail": "listConversationsAwaitingHuman colapsa por conversationId mantendo a primeira ocorrência (mais antiga) na ordenação ascendente; provado no teste 'colapsa duas linhas OPEN da mesma conversa em uma entrada, pela mais antiga'."
+        },
+        {
+          "criterion": "Handoff de takeover do dono não aparece na leitura",
+          "met": true,
+          "detail": "where.reason: { not: OWNER_TAKEOVER_REASON } filtra a linha antes do agrupamento; provado no teste 'exclui handoff de takeover do dono'."
+        },
+        {
+          "criterion": "A entrada traz id da conversa, identificação do contato/cliente, motivo e instante de abertura",
+          "met": true,
+          "detail": "awaitingHumanDto expõe conversationId, contactName (nome ou telefone formatado, nunca cru), reason e openedAt (ISO); provado nos testes de colapso e de identificação por telefone."
+        },
+        {
+          "criterion": "A leitura é escopada por tenant, tem teto e ordena por instante de abertura",
+          "met": true,
+          "detail": "where.tenantId no findMany, query.limit (1-100, default 50) aplicado via slice, orderBy createdAt asc preservado pela ordem de inserção no Map; provado no teste 'escopa por tenant e ordena pelo instante de abertura' e no teste de teto via query."
+        },
+        {
+          "criterion": "Nenhum cliente HTTP de saída é adicionado à IA",
+          "met": true,
+          "detail": "A implementação usa somente o PrismaClient já injetado nas rotas internas; nenhum import de cliente HTTP novo em HandoffService.ts ou routes.ts, confirmado pelo diff revisado."
+        }
+      ]
+    },
+    "attemptId": "022-r1-unit-wu-02-a1"
+  }
+}

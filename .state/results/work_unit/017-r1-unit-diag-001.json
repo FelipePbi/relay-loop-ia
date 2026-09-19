@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:28:20.795Z",
+  "attemptId": "017-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r1-unit-diag-001",
+      "goal": "017",
+      "round": 1,
+      "workUnitId": "DIAG-001",
+      "status": "COMPLETED",
+      "summary": "validate-core falhava por node_modules ausentes/inválidos na worktree, não por código; reinstalados a partir dos lockfiles existentes e o gate agora passa.",
+      "report": "Diagnóstico: a falha original ('tsc' não reconhecido em build:contracts) não tinha origem em código. `packages/contracts`, `apps/scheduling-service` e `apps/health-worker` não tinham `node_modules` instalado nesta worktree (root do repo também não tem node_modules — não há workspaces npm, cada pacote instala isoladamente). Corrigido com `npm ci` em cada um, usando os package-lock.json já existentes (sem alterar nenhuma dependência declarada). Isso destravou build:contracts, build:scheduling-service e build:ai-orchestrator/build:bff.\n\nApós essa correção, build:frontend passou a falhar com um erro diferente do Turbopack: 'Symlink [project]/apps/frontend/node_modules is invalid, it points out of the filesystem root'. Investigação mostrou que `apps/frontend/node_modules` era uma junction do Windows apontando para `E:\\Projetos\\atendly-ia\\apps\\frontend\\node_modules` (o checkout principal, fora da árvore desta worktree). `next.config.ts` já define `turbopack.root` como a raiz da worktree (`../..` a partir de `apps/frontend`), e o Turbopack recusa por segurança um symlink que escapa desse root. Não há nenhum script no repositório (`tools/ia-loop`, `scripts/`) que crie essa junction — foi um artefato de setup externo à worktree, não algo introduzido por uma Work Unit. Removi apenas a junction (`rm node_modules`, sem -r, preservando o node_modules original do checkout principal, verificado intacto depois) e rodei `npm ci` dentro de `apps/frontend` para materializar uma instalação real e autocontida dentro da worktree, a partir do package-lock.json existente.\n\nCom isso, rodei o gate completo: `node scripts/validate-core.mjs`. Resultado: 14 passed, 3 skipped (test:bff, test:contracts, test:health-worker — skips já declarados explicitamente no próprio script, não introduzidos por mim), 0 failed, 0 not_run. Saída final: 'validate:core PASSED'.\n\nNenhum arquivo rastreado pelo git foi alterado — `git diff --stat` mostra exatamente o mesmo conjunto de mudanças de código de Work Units anteriores (WU-01 a WU-08), sem nada novo. `node_modules` é ignorado pelo git (`.gitignore` linha 2) em todos os pacotes afetados, então a correção não aparece em `git status`. `scripts/validate-core.mjs` não foi tocado — nenhum step foi desabilitado, pulado ou afrouxado; os 3 skips já existiam no arquivo original (linhas 74-88) antes desta unidade.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-core\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "Rodei `node scripts/validate-core.mjs` após corrigir node_modules ausentes/inválidos (packages/contracts, apps/scheduling-service, apps/health-worker, apps/frontend). Saída final: 'validate:core PASSED — 3 step(s) skipped...'; JSON de resumo: total 17, passed 14, failed 0, skipped 3, notRun 0. scripts/validate-core.mjs não foi editado (git diff vazio para esse arquivo)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "`git diff --stat` mostra exatamente o mesmo conjunto de arquivos e mudanças de código presentes antes desta unidade (WU-01 a WU-08); nenhum arquivo de código foi tocado, apenas node_modules (ignorado pelo git) foi reinstalado/corrigido."
+        }
+      ]
+    },
+    "attemptId": "017-r1-unit-diag-001-a1"
+  }
+}

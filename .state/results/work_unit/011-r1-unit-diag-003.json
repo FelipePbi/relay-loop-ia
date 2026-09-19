@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T07:42:30.752Z",
+  "attemptId": "011-r1-unit-diag-003-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "011-r1-unit-diag-003",
+      "goal": "011",
+      "round": 1,
+      "workUnitId": "DIAG-003",
+      "status": "COMPLETED",
+      "summary": "Diagnosticado: a falha de lint vinha de apps/scheduling-service rodar eslint sem gerar antes o Prisma Client (gitignored); o fix já estava presente no worktree e o lint passa hoje em todos os escopos, exit 0, sem alteração minha.",
+      "report": "Diagnóstico: a ação determinística \"lint\" roda `npm run lint` por SCOPE (workspace). Os quatro workspaces com script de lint são apps/ai-orchestrator, apps/bff, apps/frontend e apps/scheduling-service (verificado via grep em package.json; health-worker e os pacotes em packages/ não têm script \"lint\").\n\nRodei `npm run lint` (via `rtk proxy npm run lint`, que executa o comando cru, exatamente como o orquestrador faz via spawn de argv — sem passar pelo meu hook interativo de Bash) em cada um dos quatro workspaces: todos retornaram exit 0, sem erros. Uma tentativa inicial minha usando o wrapper interativo padrão do Bash (que reescreve `npm run lint` para um formato JSON compactado do RTK) mostrou uma avalanche de erros em `tests/**` e arquivos de config na raiz do ai-orchestrator — mas isso era um artefato do hook do RTK linhando arquivos fora de `src` (o script real é `eslint src --max-warnings=0`, restrito a `src`), não uma falha real da verificação. Confirmei isso rodando `rtk proxy npm run lint`, que reproduziu fielmente `eslint src --max-warnings=0` e passou limpo.\n\nPara achar a causa raiz real do WU-15, testei apps/scheduling-service, cujo package.json já está com uma mudança não commitada: `\"lint\": \"prisma generate && eslint src --max-warnings=0\"` (antes seria `\"lint\": \"eslint src --max-warnings=0\"`, conforme `git diff`). O eslint.config.mjs desse app usa `projectService: true` (typescript-eslint com type-aware linting). `src/generated/` está no .gitignore do app (`apps/scheduling-service/.gitignore:4`), ou seja, em um worktree/checkout onde `prisma generate` ainda não rodou, o import do Prisma Client não resolve. Reproduzi isso deliberadamente: mudei `src/generated` para fora, rodei `npx eslint src --max-warnings=0` sem gerar o client antes, e obtive dezenas de erros reais `@typescript-eslint/no-unsafe-*`/`no-redundant-type-constituents` em arquivos que usam o Prisma Client (`src/infrastructure/database/prisma.ts`, `appointment-event-service.ts`, `appointment-lifecycle-service.ts`), sem nenhum erro atribuível a uma única linha de código alterada — exatamente o padrão \"origem não atribuível com segurança\" descrito no objetivo. Restaurei `src/generated` e rodei `npm run lint` de novo: passou limpo (o script já gera o Prisma Client antes de lintar).\n\nConclusão: a causa raiz — script de lint do scheduling-service rodando eslint type-aware antes de gerar o Prisma Client (artefato gitignored) — já havia sido corrigida no worktree compartilhado por outra unidade do plano (WU-09, \"resíduo de lint do scheduling\", conforme a executionStrategy do Goal). Não fiz nenhuma edição de arquivo: apenas diagnostiquei, reproduzi a falha isoladamente para confirmar a causa, restaurei o estado original e revalidei. `git status --porcelain` antes e depois é idêntico.\n\nComandos executados (principais): `npm run lint` e `rtk proxy npm run lint` em apps/ai-orchestrator, apps/bff, apps/frontend, apps/scheduling-service (todos exit 0); `git diff -- apps/scheduling-service/package.json`; `git check-ignore -v apps/scheduling-service/src/generated/prisma`; reprodução isolada com `mv src/generated ... && npx eslint src --max-warnings=0` (falhou com dezenas de erros type-aware) seguida de restauração e `npm run lint` (exit 0); `git status --porcelain` antes/depois (idêntico).",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"lint\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "npm run lint (via rtk proxy, comando cru) retornou exit 0 nos quatro workspaces com script de lint (ai-orchestrator, bff, frontend, scheduling-service). Nenhum script de lint, config de eslint ou verificação foi tocado por mim; o único ajuste relevante (prefixar 'prisma generate &&' no lint do scheduling-service) já existia no worktree, feito por outra unidade (WU-09)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "git status --porcelain no início e no fim da execução é idêntico; nenhuma edição de arquivo foi feita, apenas comandos de diagnóstico e uma reprodução isolada revertida na sequência."
+        }
+      ]
+    },
+    "attemptId": "011-r1-unit-diag-003-a1"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:14:56.928Z",
+  "role": "work_unit",
+  "jobId": "012-r1-unit-wu-07",
+  "attemptId": "012-r1-unit-wu-07-a1",
+  "requestedModel": "claude-haiku-4-5-20251001",
+  "modelVerificationError": null,
+  "observedModels": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "payload": {
+    "protocolVersion": 2,
+    "jobId": "012-r1-unit-wu-07",
+    "goal": "012",
+    "round": 1,
+    "workUnitId": "WU-07",
+    "status": "BLOCKED",
+    "summary": "Bloqueado por falta de permissão de escrita em arquivos do frontend; implementação requer alterações em 5 arquivos.",
+    "report": "Análise concluída com sucesso. O contrato do BFF (WU-06) foi documentado em PUBLIC_API_V1.md (linhas 336-371) com 4 categorias de endpoints: conhecimento (GET/POST /v1/knowledge/documents, PUT /v1/knowledge/other-info), memória do cliente (GET/POST /v1/customers/:id/memory, PATCH/DELETE), resumo (POST /v1/customers/:id/summary) e sugestões (POST /v1/conversations/:id/suggestions).\n\nPadrão de implementação identificado em BffCustomerService.ts: classe com construtor recebendo BffHttpClient, métodos que chamam this.http.request() com path, schema Zod, method, body e signal.\n\nAlterações necessárias preparadas:\n1. publicApiSchemas.ts: adicionar 11 schemas (knowledgeDocumentType/Status/Chunk/Document/List, customerMemoryKind/Origin/List, customerSummary, suggestions)\n2. BffKnowledgeService.ts: criar novo serviço com 6 métodos (list, get, create, update, delete, setOtherInfo)\n3. BffCustomerService.ts: adicionar 5 métodos (listMemory, createMemory, updateMemory, deleteMemory, generateSummary)\n4. BffConversationService.ts: adicionar método getSuggestions()\n5. goal012-knowledge-memory-schema.test.ts: criar teste com validação de vocabulário e campos opcionais\n\nBloqueio: Tentativa de Edit em publicApiSchemas.ts foi negada (sem permissão de escrita). A sessão não tem approval surface ativa, logo nenhuma escrita de arquivo pode prosseguir.",
+    "changedFiles": [],
+    "acceptance": [
+      {
+        "criterion": "Schemas decodificam as respostas do BFF documentadas e recusam vocabulário desconhecido",
+        "met": false,
+        "detail": "Schemas não foram criados devido a bloqueio de permissão. Implementação identificada e documentada, requer escrita em publicApiSchemas.ts."
+      },
+      {
+        "criterion": "Serviços de dados expõem as operações sem tela e sem hardcode de valores",
+        "met": false,
+        "detail": "Serviços não foram criados. BffKnowledgeService e extensões ao BffCustomerService/BffConversationService requerem escrita em 3 arquivos."
+      },
+      {
+        "criterion": "Lint e testes do frontend verdes",
+        "met": false,
+        "detail": "Testes não foram criados. Arquivo goal012-knowledge-memory-schema.test.ts não foi escrito devido a bloqueio de permissão."
+      }
+    ],
+    "blockedReason": "Permissão de escrita negada automaticamente. Esta sessão não tem approval surface, logo tool calls que requerem permissão (Edit, Write) são bloqueados sem chance de aprovação. Impossível alterar frontend/src/data/mappers/publicApiSchemas.ts e criar novos arquivos de serviço e teste."
+  }
+}

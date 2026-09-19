@@ -1,0 +1,4012 @@
+diff --git a/apps/ai-orchestrator/src/modules/prompts/system.ts b/apps/ai-orchestrator/src/modules/prompts/system.ts
+index 1e8ab46..beb1914 100644
+--- a/apps/ai-orchestrator/src/modules/prompts/system.ts
++++ b/apps/ai-orchestrator/src/modules/prompts/system.ts
+@@ -90,8 +90,12 @@ const MAIN_RULES = [
+  * v3 (Goal013/WU-03): o template ganhou a secao de audio transcrito. O turno
+  * passa a poder chegar como voz virada em texto por maquina, e o que o modelo
+  * pode concluir dela — inclusive aceitar confirmacao — mudou de significado.
++ *
++ * v4 (Goal018/WU-02): os dados do negocio ganharam segmento, modalidades de
++ * atendimento e endereco. O modelo passa a poder responder com base nesses
++ * campos, cada um dizendo explicitamente quando nao esta configurado.
+  */
+-const PROMPT_TEMPLATE_VERSION = "v3";
++const PROMPT_TEMPLATE_VERSION = "v4";
+ 
+ /**
+  * Amostra fixa, nunca usada no prompt real: existe so para que o hash em
+diff --git a/apps/ai-orchestrator/src/modules/prompts/tenant-context.ts b/apps/ai-orchestrator/src/modules/prompts/tenant-context.ts
+index 6fd4df9..5fcf88d 100644
+--- a/apps/ai-orchestrator/src/modules/prompts/tenant-context.ts
++++ b/apps/ai-orchestrator/src/modules/prompts/tenant-context.ts
+@@ -1,12 +1,27 @@
+-import type { BusinessContext } from "../tenant-config/business-context.js";
++import {
++  BUSINESS_MODALITY_LABELS,
++  type BusinessContext,
++} from "../tenant-config/business-context.js";
+ 
+ export function buildTenantContextPrompt(
+   businessContext: BusinessContext,
+ ): string[] {
++  // So lista as modalidades escolhidas; nunca afirma que o negocio nao
++  // atende de um jeito que ele simplesmente nao configurou ainda.
++  const modalities =
++    businessContext.modalities.length > 0
++      ? businessContext.modalities
++          .map((modality) => BUSINESS_MODALITY_LABELS[modality])
++          .join(", ")
++      : "[nao configurado]";
++
+   return [
+     "Dados do negocio:",
+     `Nome: ${businessContext.businessName || "[nao configurado]"}`,
+     `Timezone do negocio: ${businessContext.timezone}`,
++    `Segmento: ${businessContext.segment || "[nao configurado]"}`,
++    `Modalidades de atendimento: ${modalities}`,
++    `Endereco: ${businessContext.address || "[nao configurado]"}`,
+     "Politicas textuais devem vir de conhecimento tenant-scoped; se nao houver fonte, nao invente regra.",
+   ];
+ }
+diff --git a/apps/ai-orchestrator/src/modules/tenant-config/business-context.ts b/apps/ai-orchestrator/src/modules/tenant-config/business-context.ts
+index 145f7e1..ed7f24f 100644
+--- a/apps/ai-orchestrator/src/modules/tenant-config/business-context.ts
++++ b/apps/ai-orchestrator/src/modules/tenant-config/business-context.ts
+@@ -1,15 +1,36 @@
+ import { z } from "zod";
+ 
++export const BUSINESS_MODALITIES = ["ON_SITE", "AT_HOME", "ONLINE"] as const;
++export type BusinessModality = (typeof BUSINESS_MODALITIES)[number];
++
++// Rotulos usados no prompt (tenant-context.ts); vocabulario alinhado ao enum
++// "BusinessModality" do Postgres (Goal018/WU-01).
++export const BUSINESS_MODALITY_LABELS: Record<BusinessModality, string> = {
++  ON_SITE: "atendimento presencial no endereco do negocio",
++  AT_HOME: "atendimento a domicilio",
++  ONLINE: "atendimento online",
++};
++
+ export const businessContextSchema = z.object({
++  // Incrementado a cada mudanca de dado de negocio no BFF; usado para saber
++  // se a projecao gravada em AiTenantConfig.settings esta atrasada.
++  version: z.number().int().nonnegative().default(1),
+   businessName: z.string().trim().default(""),
+   timezone: z.string().trim().default("America/Sao_Paulo"),
++  segment: z.string().trim().default(""),
++  modalities: z.array(z.enum(BUSINESS_MODALITIES)).default([]),
++  address: z.string().trim().default(""),
+ });
+ 
+ export type BusinessContext = z.infer<typeof businessContextSchema>;
+ 
+ export const DEFAULT_BUSINESS_CONTEXT: BusinessContext = {
++  version: 1,
+   businessName: "",
+   timezone: "America/Sao_Paulo",
++  segment: "",
++  modalities: [],
++  address: "",
+ };
+ 
+ export function normalizeBusinessContext(value: unknown): BusinessContext {
+diff --git a/apps/ai-orchestrator/tests/prompts/system.test.ts b/apps/ai-orchestrator/tests/prompts/system.test.ts
+index f28058f..9b7c8f9 100644
+--- a/apps/ai-orchestrator/tests/prompts/system.test.ts
++++ b/apps/ai-orchestrator/tests/prompts/system.test.ts
+@@ -79,12 +79,12 @@ describe("prompt montado: sem persona, identidade transparente e versao por esti
+ 
+   it("a versao e um hash estavel do conteudo montado: um teste que muda sozinho aqui sinaliza que o prompt mudou sem bump consciente da versao semantica", () => {
+     expect(derivePromptVersion("PROFESSIONAL")).toBe(
+-      "prompt-v3-professional-8a08266b6e",
++      "prompt-v4-professional-ff40f676f9",
+     );
+     expect(derivePromptVersion("BALANCED")).toBe(
+-      "prompt-v3-balanced-04995d48b1",
++      "prompt-v4-balanced-91e9d792a4",
+     );
+-    expect(derivePromptVersion("CASUAL")).toBe("prompt-v3-casual-64e9afb011");
++    expect(derivePromptVersion("CASUAL")).toBe("prompt-v4-casual-89cf7a5560");
+   });
+ 
+   it("o prompt montado embute exatamente a versao retornada para o estilo usado", () => {
+@@ -129,7 +129,7 @@ describe("prompt montado: modo sugestao (Goal012/WU-04)", () => {
+ 
+   it("a secao do modo sugestao entra no hash estavel: mudar o template de sugestao muda a versao do prompt normal tambem", () => {
+     expect(derivePromptVersion("BALANCED")).toBe(
+-      "prompt-v3-balanced-04995d48b1",
++      "prompt-v4-balanced-91e9d792a4",
+     );
+   });
+ 
+@@ -185,7 +185,7 @@ describe("prompt montado: audio transcrito (Goal013/WU-03)", () => {
+     // poder chegar como voz virada em texto; o hash abaixo muda sozinho se
+     // alguem mexer na secao sem decidir isso de novo.
+     expect(derivePromptVersion("BALANCED")).toBe(
+-      "prompt-v3-balanced-04995d48b1",
++      "prompt-v4-balanced-91e9d792a4",
+     );
+   });
+ });
+diff --git a/apps/bff/PUBLIC_API_V1.md b/apps/bff/PUBLIC_API_V1.md
+index 4932a3d..ef0aa3e 100644
+--- a/apps/bff/PUBLIC_API_V1.md
++++ b/apps/bff/PUBLIC_API_V1.md
+@@ -93,6 +93,54 @@ A entrada aceita qualquer um dos cinco valores; a saída — em `GET/PATCH /v1/s
+ 
+ Os dois valores antigos saem do vocabulário aceito no Goal024.
+ 
++## Negócio: modalidades de atendimento, endereço e versão do contexto (Goal018/WU-01)
++
++`GET/PATCH /v1/settings/business` e a seção `business` de `GET/PATCH /v1/onboarding` ganharam três campos aditivos, sempre presentes na leitura e opcionais na escrita:
++
++| Campo | Valores | Significado |
++| --- | --- | --- |
++| `modalities` | array de `ON_SITE`, `AT_HOME`, `ONLINE` (seleção múltipla) | modalidades de atendimento do negócio; `[]` é escolha válida, distinta de "ainda não escolheu" |
++| `address` | texto ou `null` | endereço do local próprio; `null` enquanto o negócio não tem `ON_SITE` |
++| `contextVersion` | inteiro, começa em `1` | contador incrementado a cada gravação de negócio (nome, categoria, timezone, modalidade, endereço); nunca timestamp, só leitura pelo contrato público |
++
++`category` continua sendo o único campo de segmento — os três campos acima não criam uma segunda forma de classificar o negócio.
++
++Regra de gravação, igual nas duas rotas: `modalities` ausente no corpo preserva o que já está gravado, e nunca grava conjunto vazio só por omissão — um array vazio só é gravado quando enviado explicitamente. `address` segue a mesma distinção: chave ausente preserva o valor gravado; `null` ou uma string apagam/substituem. `ON_SITE` presente em `modalities` (seja o valor enviado, seja o já gravado quando `modalities` está ausente) exige `address` não vazio; corpo que viole isso é recusado com `400 BUSINESS_ADDRESS_REQUIRED` e `error.details.field: "address"`, sem gravar nada. Retirar `ON_SITE` de um perfil que já tem endereço não apaga o endereço — só um corpo que envie `address` explicitamente muda o que está gravado.
++
++A migration que introduziu essas colunas é aditiva: nenhuma linha existente teve modalidade, endereço, nome ou categoria fabricados a partir de dado já gravado. Toda linha — nova ou pré-existente — nasce com `modalities: []`, `address: null` e a versão do contexto ainda não projetada para a IA.
++
++Nenhum dos três campos é enviado ao Scheduling: o negócio (`BusinessProfile`) e a agenda operacional continuam sem esse acoplamento.
++
++### Estado de projeção do contexto para a IA (Goal018/WU-03)
++
++O objeto `business` em `GET/PATCH /v1/settings` e na seção `business` de `GET/PATCH /v1/onboarding` traz mais dois campos, só leitura:
++
++| Campo | Valores | Significado |
++| --- | --- | --- |
++| `contextProjectedVersion` | inteiro, começa em `0` | última `contextVersion` que a IA efetivamente confirmou ter recebido |
++| `contextProjectionStatus` | `PROJECTED`, `PENDING` | `PROJECTED` quando `contextProjectedVersion === contextVersion`; `PENDING` quando a versão gravada é mais nova que a última projetada com sucesso |
++
++A projeção acontece nos mesmos pontos que já enviam configuração para a IA (gravação de negócio ou de IA em `/v1/settings`; seção `ai` de `PATCH /v1/onboarding`). Uma tentativa de projeção que falhe **não** vira erro da requisição: o dado do negócio já foi gravado antes dessa chamada, a resposta continua `200`/`201` com `contextProjectionStatus: "PENDING"` como aviso explícito, e nada é retentado automaticamente — só uma gravação de negócio ou de IA subsequente tenta projetar de novo.
++
++## Onboarding: conclusão não exige mais WhatsApp (Goal018/WU-04)
++
++**Mudança subtrativa:** até esta versão, `POST /v1/onboarding/complete` consultava `WhatsAppInstance` e o status do Evolution nesta própria requisição, recusando com `WHATSAPP_NOT_CONFIGURED` (sem instância vinculada) ou `WHATSAPP_NOT_CONNECTED` (vinculada mas não conectada). Essa exigência foi **removida**: os dois códigos não existem mais e concluir o onboarding não olha para WhatsApp em nenhuma forma. Concluir também não conecta, não liga IA e não projeta nada — só registra `onboardingCompletedAt`. WhatsApp continua configurável por `GET/POST/DELETE /v1/whatsapp`, e se a IA está de fato ativa continua sendo o que `GET /v1/status` responde (ver "Status honesto do WhatsApp e da IA", Goal014), não o que `complete` decide.
++
++`error.details.issues` (array de códigos, resposta `409 CONFLICT`) hoje pode trazer qualquer um destes, em qualquer combinação:
++
++| Código | Significado | Como se resolve |
++| --- | --- | --- |
++| `BUSINESS_PROFILE_INCOMPLETE` | nome ou categoria do negócio ainda vazios | gravar `name`/`category` (`PATCH /v1/settings/business` ou seção `business` de `PATCH /v1/onboarding`) |
++| `BUSINESS_MODALITY_NOT_SELECTED` | `modalities` do negócio ainda é `[]` (Goal018/WU-01) | gravar ao menos uma modalidade em `modalities` |
++| `BUSINESS_ADDRESS_REQUIRED` | `modalities` inclui `ON_SITE` sem `address` preenchido (Goal018/WU-01) | gravar `address` |
++| `CALENDAR_NOT_SELECTED` | negócio ainda não escolheu fonte de agenda | escolher `calendar.source` em `PATCH /v1/onboarding` |
++| `AI_TONE_NOT_SELECTED` | `ai.tone` ainda é `null` | gravar `tone` (`PATCH /v1/settings/ai` ou seção `ai` de `PATCH /v1/onboarding`) |
++| `ACTIVE_SERVICE_REQUIRED` | catálogo sem nenhum serviço `active`; só avaliado com fonte já escolhida | ativar ou cadastrar serviço em `POST/PATCH /v1/services` |
++| `AVAILABILITY_REQUIRED` | fonte `ATENDLY` sem nenhuma regra de disponibilidade ativa | gravar regra em `PATCH /v1/settings/availability` |
++| `CALENDAR_INTEGRATION_NOT_CONNECTED` | fonte `EXTERNAL` cuja integração (Minha Agenda) não está `CONNECTED` | conectar em `POST /v1/calendar/integration/connect` |
++
++`ACTIVE_SERVICE_REQUIRED`, `AVAILABILITY_REQUIRED` e `CALENDAR_INTEGRATION_NOT_CONNECTED` só entram depois que uma fonte foi escolhida — sem fonte, a área de agenda aparece só como `CALENDAR_NOT_SELECTED`. `AVAILABILITY_REQUIRED` é exclusivo de `ATENDLY`; `EXTERNAL` dispensa disponibilidade própria e cobra `CALENDAR_INTEGRATION_NOT_CONNECTED` no lugar. Nenhuma avaliação tem efeito colateral no banco — a rota só grava algo depois que a lista de `issues` está vazia.
++
+ ## Clientes: identidade por ID
+ 
+ O cliente é uma **pessoa**, identificada pelo ID dentro do negócio. O telefone é contato, não identidade:
+@@ -294,6 +342,19 @@ Uma vez concluída (`POST .../complete`), a sessão é o único registro definit
+ 
+ Indisponibilidade de qualquer dependência vira `UNKNOWN` (nunca um valor otimista) e nunca `500`: o erro é registrado e a resposta segue `200` com `degraded: true`. O tenant é sempre o da sessão autenticada, como em `GET /v1/dashboard`; não é possível ler ou influenciar o status de outro negócio.
+ 
++## Checklist pós-onboarding da Home (Goal018/WU-10)
++
++`GET /v1/dashboard` acrescenta dois booleanos a `scheduling.data.calendar.capabilities`, ambos leitura real, nunca configuração local:
++
++| Campo | Significado |
++| --- | --- |
++| `capabilities.aiActivationReady` | ao menos um serviço operacional (já existia no Scheduling — usado por `PATCH /v1/settings/ai`, ver "Catálogo" acima — e passa a ser devolvido também aqui) |
++| `capabilities.hoursConfigured` | fonte `ATENDLY` com ao menos uma regra de disponibilidade ativa, ou fonte `EXTERNAL` com integração `CONNECTED`; sem fonte escolhida é `false`. Mesmo predicado de `AVAILABILITY_REQUIRED`/`CALENDAR_INTEGRATION_NOT_CONNECTED` em `POST /v1/onboarding/complete` |
++
++Os dois campos, somados a `whatsapp.status` de `GET /v1/status`, alimentam o checklist de `/inicio` ("Cadastrar um serviço", "Definir horários de atendimento", "Conectar o WhatsApp"): enquanto a IA não estiver efetivamente ativa (`GET /v1/status`.`ai.state` diferente de `ACTIVE`), a Home mostra o que falta, com item concluído marcado. O quarto item do vault, "teste concluído", não está aqui: não existe produtor em camada nenhuma até o Goal018B.
++
++`ai.state: "PENDING"` ganhou apresentação própria na Home e no shell — antes caía sob "IA desligada" (resíduo do [review014](../../docs/migration/reviews/014-review.md)), agora é visualmente distinto tanto de `OFF` quanto de `UNKNOWN`.
++
+ ## Vínculo WhatsApp: estados ambíguos
+ 
+ `GET /v1/whatsapp` também reprojeta a credencial da instância na IA. É idempotente e não altera o estado do número; existe para que um vínculo criado antes da projeção cifrada se restabeleça sozinho, sem o negócio precisar reconectar o número na mão. Falha nessa projeção é registrada e não impede a leitura de status.
+diff --git a/apps/bff/prisma/schema.prisma b/apps/bff/prisma/schema.prisma
+index 5be7ad7..85da0c7 100644
+--- a/apps/bff/prisma/schema.prisma
++++ b/apps/bff/prisma/schema.prisma
+@@ -43,6 +43,15 @@ enum TenantRole {
+   OWNER
+ }
+ 
++/// Modalidade de atendimento do negocio (Goal018/WU-01). Selecao multipla,
++/// gravada como lista de enum no Postgres — vazio e distinto de nulo por
++/// constraint de coluna (NOT NULL DEFAULT '{}'), nunca por convencao de JSON.
++enum BusinessModality {
++  ON_SITE
++  AT_HOME
++  ONLINE
++}
++
+ model User {
+   id           String   @id @default(cuid())
+   email        String   @unique
+@@ -116,16 +125,29 @@ model TenantMember {
+ }
+ 
+ model BusinessProfile {
+-  id                    String    @id @default(cuid())
+-  tenantId              String    @unique
+-  businessName          String    @default("")
++  id                    String             @id @default(cuid())
++  tenantId              String             @unique
++  businessName          String             @default("")
+   category              String?
+-  timezone              String    @default("America/Sao_Paulo")
+-  language              String    @default("pt-BR")
+-  currency              String    @default("BRL")
++  timezone              String             @default("America/Sao_Paulo")
++  language              String             @default("pt-BR")
++  currency              String             @default("BRL")
++  /// Selecao multipla, nunca fabricada por backfill; vazia por default.
++  modalities            BusinessModality[] @default([])
++  /// Nulo enquanto o negocio nao tem local proprio. So exigido (nao vazio)
++  /// quando `modalities` contem ON_SITE; retirar ON_SITE nao apaga o valor.
++  address               String?
++  /// Contador simples incrementado a cada mudanca de dado de negocio (nome,
++  /// categoria, timezone, modalidade, endereco) — nunca timestamp, que empata
++  /// sob relogio grosso.
++  businessContextVersion          Int      @default(1)
++  /// Ultima versao efetivamente projetada para a IA por outra Work Unit deste
++  /// Goal. Nasce atras da corrente (default 0 contra 1) para toda linha, nova
++  /// ou existente: o contexto ganhou campos que ainda nao foram projetados.
++  businessContextProjectedVersion Int      @default(0)
+   onboardingCompletedAt DateTime?
+-  createdAt             DateTime  @default(now())
+-  updatedAt             DateTime  @updatedAt
++  createdAt             DateTime           @default(now())
++  updatedAt             DateTime           @updatedAt
+ 
+   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+ }
+diff --git a/apps/bff/src/lib/dto.ts b/apps/bff/src/lib/dto.ts
+index 20be865..8d4e470 100644
+--- a/apps/bff/src/lib/dto.ts
++++ b/apps/bff/src/lib/dto.ts
+@@ -35,6 +35,8 @@ export function businessProfileDto(profile: BusinessProfile | null) {
+     timezone: profile.timezone,
+     language: profile.language,
+     currency: profile.currency,
++    modalities: profile.modalities,
++    address: profile.address,
+     createdAt: toIso(profile.createdAt),
+     updatedAt: toIso(profile.updatedAt),
+   };
+diff --git a/apps/bff/src/lib/errors.ts b/apps/bff/src/lib/errors.ts
+index ae40a16..be497dc 100644
+--- a/apps/bff/src/lib/errors.ts
++++ b/apps/bff/src/lib/errors.ts
+@@ -20,6 +20,9 @@ export type ErrorCode =
+   // produto ou os dois alias legados). Erro proprio para nao se confundir com
+   // VALIDATION_ERROR generico.
+   | "AI_CONVERSATION_STYLE_UNKNOWN"
++  // Modalidade ON_SITE exige endereco nao vazio (Goal018/WU-01). Erro proprio
++  // para o frontend apontar o campo, em vez de um VALIDATION_ERROR generico.
++  | "BUSINESS_ADDRESS_REQUIRED"
+   | "INTERNAL_ERROR";
+ 
+ export class AppError extends Error {
+diff --git a/apps/bff/src/modules/dashboard/routes.ts b/apps/bff/src/modules/dashboard/routes.ts
+index 9bbcb42..fc8e31b 100644
+--- a/apps/bff/src/modules/dashboard/routes.ts
++++ b/apps/bff/src/modules/dashboard/routes.ts
+@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
+ 
+ import { AiOrchestratorClient } from "../../clients/ai-orchestrator/index.js";
+ import { EvolutionClient } from "../../clients/evolution/index.js";
++import type { InternalRequestContext } from "../../clients/internal-http-client.js";
+ import { SchedulingClient } from "../../clients/scheduling/index.js";
+ import { dataResponse } from "../../lib/http.js";
+ import { getPrisma } from "../../lib/prisma.js";
+@@ -28,9 +29,7 @@ export async function registerV1DashboardRoutes(
+         await Promise.all([
+           platformSummary(tenant.tenantId),
+           settled(ai.dashboard(context)),
+-          settled(
+-            scheduling.dashboard(context).then(publicSchedulingDashboard),
+-          ),
++          settled(schedulingDashboardWithReadiness(context, scheduling)),
+           settled(whatsappSummary(tenant.userId, request.id, evolution)),
+         ]);
+       return dataResponse(request, {
+@@ -66,6 +65,41 @@ function publicSchedulingDashboard<
+   };
+ }
+ 
++/**
++ * Acrescenta `calendar.capabilities.hoursConfigured` ao dashboard do
++ * Scheduling: mesmo predicado de `POST /v1/onboarding/complete`
++ * (`AVAILABILITY_REQUIRED`/`CALENDAR_INTEGRATION_NOT_CONNECTED`) — fonte
++ * ATENDLY exige ao menos uma regra de disponibilidade ativa, fonte EXTERNAL
++ * exige integração `CONNECTED`, sem fonte é `false`. Alimenta o checklist
++ * pós-onboarding da Home (Goal018/WU-10), que não pode inferir de
++ * configuração local, só de leitura real.
++ */
++async function schedulingDashboardWithReadiness(
++  context: InternalRequestContext,
++  scheduling: SchedulingClient,
++) {
++  const raw = await scheduling.dashboard(context);
++  const hoursConfigured =
++    raw.calendar.source === "ATENDLY"
++      ? (await scheduling.availabilitySettings(context)).rules.some(
++          (rule) => rule.active,
++        )
++      : raw.calendar.source === "MINHA_AGENDA"
++        ? raw.calendar.integration?.status === "CONNECTED"
++        : false;
++  const dashboard = publicSchedulingDashboard(raw);
++  return {
++    ...dashboard,
++    calendar: {
++      ...dashboard.calendar,
++      capabilities: {
++        ...dashboard.calendar.capabilities,
++        hoursConfigured,
++      },
++    },
++  };
++}
++
+ async function platformSummary(tenantId: string) {
+   const [tenant, profile] = await Promise.all([
+     getPrisma().tenant.findUnique({ where: { id: tenantId } }),
+diff --git a/apps/bff/src/modules/onboarding/routes.ts b/apps/bff/src/modules/onboarding/routes.ts
+index 872eb1f..bae305c 100644
+--- a/apps/bff/src/modules/onboarding/routes.ts
++++ b/apps/bff/src/modules/onboarding/routes.ts
+@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
+ import { z } from "zod";
+ 
+ import { AiOrchestratorClient } from "../../clients/ai-orchestrator/index.js";
+-import { EvolutionClient } from "../../clients/evolution/index.js";
+ import { SchedulingClient } from "../../clients/scheduling/index.js";
+ import {
+   type AiConversationStyle,
+@@ -10,6 +9,13 @@ import {
+   normalizeStoredAiConversationStyle,
+   parseBodyWithAiConversationStyle,
+ } from "../../lib/ai-conversation-style.js";
++import {
++  businessAddressSchema,
++  businessContextPayload,
++  businessContextProjectionState,
++  businessModalitySchema,
++  resolveBusinessProfileFields,
++} from "../../lib/business-profile.js";
+ import { AppError } from "../../lib/errors.js";
+ import { dataResponse } from "../../lib/http.js";
+ import { getPrisma } from "../../lib/prisma.js";
+@@ -30,6 +36,10 @@ const patchSchema = z
+         name: z.string().trim().min(2).max(160),
+         category: z.string().trim().min(1).max(120),
+         timezone: z.string().trim().min(1).max(100),
++        // Ausente preserva o que esta gravado; nunca grava conjunto vazio so
++        // por omissao (Goal018/WU-01).
++        modalities: z.array(businessModalitySchema).optional(),
++        address: businessAddressSchema.optional(),
+       })
+       .optional(),
+     calendar: z
+@@ -72,7 +82,6 @@ export async function registerV1OnboardingRoutes(
+ ): Promise<void> {
+   const scheduling = new SchedulingClient();
+   const ai = new AiOrchestratorClient();
+-  const evolution = new EvolutionClient();
+ 
+   app.get(
+     "/v1/onboarding",
+@@ -92,6 +101,13 @@ export async function registerV1OnboardingRoutes(
+ 
+       if (body.business) {
+         assertTimezone(body.business.timezone);
++        const currentProfile = await prisma.businessProfile.findUnique({
++          where: { tenantId: tenant.tenantId },
++        });
++        const { modalities, address } = resolveBusinessProfileFields(
++          currentProfile,
++          body.business,
++        );
+         await prisma.$transaction([
+           prisma.tenant.update({
+             where: { id: tenant.tenantId },
+@@ -104,11 +120,16 @@ export async function registerV1OnboardingRoutes(
+               businessName: body.business.name,
+               category: body.business.category,
+               timezone: body.business.timezone,
++              modalities,
++              address,
+             },
+             update: {
+               businessName: body.business.name,
+               category: body.business.category,
+               timezone: body.business.timezone,
++              modalities,
++              address,
++              businessContextVersion: { increment: 1 },
+             },
+           }),
+         ]);
+@@ -157,25 +178,27 @@ export async function registerV1OnboardingRoutes(
+       const tenant = currentTenantContext(request);
+       const context = internalContext(request);
+       const prisma = getPrisma();
+-      const [profile, settings, instance, calendar] = await Promise.all([
++      const [profile, settings, calendar] = await Promise.all([
+         prisma.businessProfile.findUnique({
+           where: { tenantId: tenant.tenantId },
+         }),
+         prisma.aiSettings.findUnique({ where: { tenantId: tenant.tenantId } }),
+-        prisma.whatsAppInstance.findUnique({
+-          where: { userId: tenant.userId },
+-        }),
+         scheduling.calendar(context),
+       ]);
+       const issues: string[] = [];
+       if (!profile?.businessName.trim() || !profile.category?.trim()) {
+         issues.push("BUSINESS_PROFILE_INCOMPLETE");
+       }
++      if (!profile?.modalities.length) {
++        issues.push("BUSINESS_MODALITY_NOT_SELECTED");
++      }
++      if (profile?.modalities.includes("ON_SITE") && !profile.address?.trim()) {
++        issues.push("BUSINESS_ADDRESS_REQUIRED");
++      }
+       if (!calendar.source) issues.push("CALENDAR_NOT_SELECTED");
+       if (!normalizeStoredAiConversationStyle(settings?.tone)) {
+         issues.push("AI_TONE_NOT_SELECTED");
+       }
+-      if (!instance) issues.push("WHATSAPP_NOT_CONFIGURED");
+ 
+       if (calendar.source) {
+         const services = await scheduling.listServices(context);
+@@ -192,13 +215,6 @@ export async function registerV1OnboardingRoutes(
+         }
+       }
+ 
+-      if (instance) {
+-        const status = await evolution.getStatus(
+-          instance.evolutionInstanceToken,
+-          request.id,
+-        );
+-        if (!status.connected) issues.push("WHATSAPP_NOT_CONNECTED");
+-      }
+       if (issues.length > 0) {
+         throw new AppError(
+           "CONFLICT",
+@@ -249,6 +265,11 @@ async function onboardingState(
+           name: profile.businessName,
+           category: profile.category,
+           timezone: profile.timezone,
++          modalities: profile.modalities,
++          address: profile.address,
++          contextVersion: profile.businessContextVersion,
++          contextProjectedVersion: profile.businessContextProjectedVersion,
++          contextProjectionStatus: businessContextProjectionState(profile),
+         }
+       : null,
+     calendar: {
+@@ -269,6 +290,12 @@ async function onboardingState(
+   };
+ }
+ 
++/**
++ * Falha de projecao nunca vira erro da requisicao: o dado do negocio ja foi
++ * gravado antes desta chamada, e o estado projetado/pendente exposto em
++ * `onboardingState` e o unico aviso — sem retentativa automatica, sem 500
++ * (Goal018/WU-03).
++ */
+ async function syncAiConfig(
+   request: FastifyRequest,
+   ai: AiOrchestratorClient,
+@@ -281,14 +308,30 @@ async function syncAiConfig(
+     create: { tenantId: tenant.tenantId },
+     update: {},
+   });
+-  await ai.updateTenantConfig(internalContext(request), {
+-    enabled,
+-    tone,
+-    businessContext: {
+-      businessName: businessProfile.businessName,
+-      timezone: businessProfile.timezone,
+-    },
+-  });
++  try {
++    await ai.updateTenantConfig(internalContext(request), {
++      enabled,
++      tone,
++      businessContext: businessContextPayload(businessProfile),
++    });
++    if (
++      businessProfile.businessContextProjectedVersion !==
++      businessProfile.businessContextVersion
++    ) {
++      await getPrisma().businessProfile.update({
++        where: { tenantId: tenant.tenantId },
++        data: {
++          businessContextProjectedVersion:
++            businessProfile.businessContextVersion,
++        },
++      });
++    }
++  } catch (error) {
++    request.log.warn(
++      { err: error, tenantId: tenant.tenantId },
++      "AI tenant config projection failed; business context stays pending.",
++    );
++  }
+ }
+ 
+ function internalSource(source: "ATENDLY" | "EXTERNAL") {
+diff --git a/apps/bff/src/modules/settings/routes.ts b/apps/bff/src/modules/settings/routes.ts
+index 66ebe93..c0a3473 100644
+--- a/apps/bff/src/modules/settings/routes.ts
++++ b/apps/bff/src/modules/settings/routes.ts
+@@ -9,6 +9,13 @@ import {
+   parseBodyWithAiConversationStyle,
+   resolveAiConversationStyle,
+ } from "../../lib/ai-conversation-style.js";
++import {
++  businessAddressSchema,
++  businessContextPayload,
++  businessContextProjectionState,
++  businessModalitySchema,
++  resolveBusinessProfileFields,
++} from "../../lib/business-profile.js";
+ import { AppError } from "../../lib/errors.js";
+ import { dataResponse, parseBody } from "../../lib/http.js";
+ import { getPrisma } from "../../lib/prisma.js";
+@@ -22,6 +29,10 @@ const businessSchema = z.object({
+   name: z.string().trim().min(2).max(160),
+   category: z.string().trim().min(1).max(120),
+   timezone: z.string().trim().min(1).max(100),
++  // Ausente preserva o que esta gravado; nunca grava conjunto vazio so por
++  // omissao (Goal018/WU-01).
++  modalities: z.array(businessModalitySchema).optional(),
++  address: businessAddressSchema.optional(),
+ });
+ const aiSchema = z.object({
+   enabled: z.boolean(),
+@@ -67,6 +78,13 @@ export async function registerV1SettingsRoutes(
+       assertTimezone(body.timezone);
+       const tenant = currentTenantContext(request);
+       const prisma = getPrisma();
++      const current = await prisma.businessProfile.findUnique({
++        where: { tenantId: tenant.tenantId },
++      });
++      const { modalities, address } = resolveBusinessProfileFields(
++        current,
++        body,
++      );
+       await prisma.$transaction([
+         prisma.tenant.update({
+           where: { id: tenant.tenantId },
+@@ -79,11 +97,16 @@ export async function registerV1SettingsRoutes(
+             businessName: body.name,
+             category: body.category,
+             timezone: body.timezone,
++            modalities,
++            address,
+           },
+           update: {
+             businessName: body.name,
+             category: body.category,
+             timezone: body.timezone,
++            modalities,
++            address,
++            businessContextVersion: { increment: 1 },
+           },
+         }),
+       ]);
+@@ -166,6 +189,11 @@ async function settingsState(
+           timezone: profile.timezone,
+           language: profile.language,
+           currency: profile.currency,
++          modalities: profile.modalities,
++          address: profile.address,
++          contextVersion: profile.businessContextVersion,
++          contextProjectedVersion: profile.businessContextProjectedVersion,
++          contextProjectionStatus: businessContextProjectionState(profile),
+         }
+       : null,
+     ai: {
+@@ -185,6 +213,12 @@ async function settingsState(
+   };
+ }
+ 
++/**
++ * Falha de projecao nunca vira erro da requisicao: o dado do negocio ja foi
++ * gravado antes desta chamada, e o estado projetado/pendente exposto em
++ * `settingsState` e o unico aviso — sem retentativa automatica, sem 500
++ * (Goal018/WU-03).
++ */
+ async function syncAi(
+   request: FastifyRequest,
+   ai: AiOrchestratorClient,
+@@ -202,14 +236,30 @@ async function syncAi(
+       update: {},
+     }),
+   ]);
+-  await ai.updateTenantConfig(internalContext(request), {
+-    enabled: settings.enabled,
+-    tone: resolveAiConversationStyle(settings.tone),
+-    businessContext: {
+-      businessName: businessProfile.businessName,
+-      timezone: businessProfile.timezone,
+-    },
+-  });
++  try {
++    await ai.updateTenantConfig(internalContext(request), {
++      enabled: settings.enabled,
++      tone: resolveAiConversationStyle(settings.tone),
++      businessContext: businessContextPayload(businessProfile),
++    });
++    if (
++      businessProfile.businessContextProjectedVersion !==
++      businessProfile.businessContextVersion
++    ) {
++      await getPrisma().businessProfile.update({
++        where: { tenantId: tenant.tenantId },
++        data: {
++          businessContextProjectedVersion:
++            businessProfile.businessContextVersion,
++        },
++      });
++    }
++  } catch (error) {
++    request.log.warn(
++      { err: error, tenantId: tenant.tenantId },
++      "AI tenant config projection failed; business context stays pending.",
++    );
++  }
+ }
+ 
+ function assertTimezone(value: string): void {
+diff --git a/apps/frontend/src/data/mappers/publicApiSchemas.ts b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+index 4fc8127..fd6588e 100644
+--- a/apps/frontend/src/data/mappers/publicApiSchemas.ts
++++ b/apps/frontend/src/data/mappers/publicApiSchemas.ts
+@@ -1,6 +1,15 @@
+ import { z } from "zod";
+ 
+ export const calendarSourceSchema = z.enum(["ATENDLY", "EXTERNAL"]);
++// Modalidades de atendimento do negócio (Goal018/WU-01), seleção múltipla.
++export const businessModalitySchema = z.enum(["ON_SITE", "AT_HOME", "ONLINE"]);
++// Estado de projeção do contexto de negócio para a IA (Goal018/WU-03):
++// `PROJECTED` quando a última versão gravada já chegou na IA, `PENDING`
++// quando a gravação é mais nova que a última projeção bem-sucedida.
++export const businessContextProjectionStatusSchema = z.enum([
++  "PROJECTED",
++  "PENDING",
++]);
+ // Três estilos do produto (Goal011): Profissional, Equilibrada e
+ // Descontraída. O BFF aceita os dois valores antigos como alias de entrada
+ // mas nunca os devolve — o schema de leitura só precisa do vocabulário novo.
+@@ -65,6 +74,13 @@ export const calendarCapabilitiesSchema = z.object({
+   manageCustomers: z.boolean(),
+   createAppointments: z.boolean(),
+   migrate: z.boolean(),
++  // Leitura real, nunca de configuração local (Goal018/WU-10): ao menos um
++  // serviço operacional (já existia no BFF, só passa a ser decodificado) e ao
++  // menos uma regra de disponibilidade ativa / integração conectada. Ausente
++  // em respostas de `/v1/settings` e `/v1/onboarding`, que não computam o
++  // segundo — a Home é a única leitora.
++  aiActivationReady: z.boolean().optional(),
++  hoursConfigured: z.boolean().optional(),
+ });
+ 
+ export const calendarStateSchema = z.object({
+@@ -98,6 +114,14 @@ export const onboardingStateSchema = z.object({
+       name: z.string(),
+       category: z.string().nullable(),
+       timezone: z.string().min(1),
++      // Modalidades, endereço e versionamento do contexto de negócio
++      // (Goal018/WU-01, WU-03). Opcionais: resposta anterior a este Goal
++      // continua decodificando sem eles.
++      modalities: z.array(businessModalitySchema).optional(),
++      address: z.string().nullable().optional(),
++      contextVersion: z.number().int().nonnegative().optional(),
++      contextProjectedVersion: z.number().int().nonnegative().optional(),
++      contextProjectionStatus: businessContextProjectionStatusSchema.optional(),
+     })
+     .nullable(),
+   calendar: z.object({
+@@ -135,6 +159,14 @@ export const settingsStateSchema = z.object({
+       timezone: z.string().min(1),
+       language: z.string().min(1),
+       currency: z.string().min(1),
++      // Modalidades, endereço e versionamento do contexto de negócio
++      // (Goal018/WU-01, WU-03). Opcionais: resposta anterior a este Goal
++      // continua decodificando sem eles.
++      modalities: z.array(businessModalitySchema).optional(),
++      address: z.string().nullable().optional(),
++      contextVersion: z.number().int().nonnegative().optional(),
++      contextProjectedVersion: z.number().int().nonnegative().optional(),
++      contextProjectionStatus: businessContextProjectionStatusSchema.optional(),
+     })
+     .nullable(),
+   ai: z.object({
+@@ -799,6 +831,10 @@ export type ConversationSuggestions = z.infer<
+ >;
+ 
+ export type AiTone = z.infer<typeof aiToneSchema>;
++export type BusinessModality = z.infer<typeof businessModalitySchema>;
++export type BusinessContextProjectionStatus = z.infer<
++  typeof businessContextProjectionStatusSchema
++>;
+ export type Appointment = z.infer<typeof appointmentSchema>;
+ export type AppointmentLifecycle = z.infer<typeof appointmentLifecycleSchema>;
+ export type AppointmentEvent = z.infer<typeof appointmentEventSchema>;
+diff --git a/apps/frontend/src/data/services/BffOnboardingService.ts b/apps/frontend/src/data/services/BffOnboardingService.ts
+index 458f275..21f93bf 100644
+--- a/apps/frontend/src/data/services/BffOnboardingService.ts
++++ b/apps/frontend/src/data/services/BffOnboardingService.ts
+@@ -1,5 +1,9 @@
+ import { type BffHttpClient } from "../http/BffHttpClient";
+-import type { AiTone, CalendarSource } from "../mappers/publicApiSchemas";
++import type {
++  AiTone,
++  BusinessModality,
++  CalendarSource,
++} from "../mappers/publicApiSchemas";
+ import { onboardingStateSchema } from "../mappers/publicApiSchemas";
+ 
+ export interface OnboardingPatch {
+@@ -17,6 +21,10 @@ export interface OnboardingPatch {
+     category: string;
+     name: string;
+     timezone: string;
++    /** Ausente preserva o que já está gravado (Goal018/WU-01). */
++    modalities?: BusinessModality[];
++    /** Chave ausente preserva o valor gravado; `null` apaga. */
++    address?: string | null;
+   };
+   calendar?: {
+     source: CalendarSource;
+diff --git a/apps/frontend/src/data/services/BffSettingsService.ts b/apps/frontend/src/data/services/BffSettingsService.ts
+index 79b5139..775d8f4 100644
+--- a/apps/frontend/src/data/services/BffSettingsService.ts
++++ b/apps/frontend/src/data/services/BffSettingsService.ts
+@@ -1,5 +1,5 @@
+ import { type BffHttpClient } from "../http/BffHttpClient";
+-import type { AiTone } from "../mappers/publicApiSchemas";
++import type { AiTone, BusinessModality } from "../mappers/publicApiSchemas";
+ import {
+   availabilitySettingsSchema,
+   settingsStateSchema,
+@@ -9,6 +9,10 @@ export interface BusinessSettingsInput {
+   category: string;
+   name: string;
+   timezone: string;
++  /** Ausente preserva o que já está gravado (Goal018/WU-01). */
++  modalities?: BusinessModality[];
++  /** Chave ausente preserva o valor gravado; `null` apaga. */
++  address?: string | null;
+ }
+ 
+ export interface AiSettingsInput {
+diff --git a/apps/frontend/src/features/agenda/sourceGuard.ts b/apps/frontend/src/features/agenda/sourceGuard.ts
+index 3d81e60..7c5e2b6 100644
+--- a/apps/frontend/src/features/agenda/sourceGuard.ts
++++ b/apps/frontend/src/features/agenda/sourceGuard.ts
+@@ -1,6 +1,16 @@
+ import type { CalendarState } from "@/data";
+ 
+-export type CalendarCapabilityKey = keyof CalendarState["capabilities"];
++/**
++ * Só as capabilities de escrita, nunca os sinais de leitura de prontidão
++ * (`aiActivationReady`, `hoursConfigured` — Goal018/WU-10, consumidos pelo
++ * checklist da Home, não por um guard de operação).
++ */
++export type CalendarCapabilityKey =
++  | "createAppointments"
++  | "manageAvailability"
++  | "manageCustomers"
++  | "manageServices"
++  | "migrate";
+ 
+ /**
+  * Rótulo da operação por capability — nunca um "operação indisponível"
+diff --git a/apps/frontend/src/features/customers/CustomerAgenda.tsx b/apps/frontend/src/features/customers/CustomerAgenda.tsx
+index a15eab3..a6f51ce 100644
+--- a/apps/frontend/src/features/customers/CustomerAgenda.tsx
++++ b/apps/frontend/src/features/customers/CustomerAgenda.tsx
+@@ -148,6 +148,7 @@ function AgendaRow({ appointment }: { appointment: Appointment }) {
+ function AgendaLoading() {
+   return (
+     <div
++      role="status"
+       aria-busy="true"
+       aria-label="Carregando agenda"
+       className="directory-loading-shell"
+diff --git a/apps/frontend/src/features/dashboard/DashboardScreen.tsx b/apps/frontend/src/features/dashboard/DashboardScreen.tsx
+index c21f3a7..d6175d3 100644
+--- a/apps/frontend/src/features/dashboard/DashboardScreen.tsx
++++ b/apps/frontend/src/features/dashboard/DashboardScreen.tsx
+@@ -4,7 +4,7 @@ import clsx from "clsx";
+ import Link from "next/link";
+ import { useEffect, useState } from "react";
+ 
+-import { BffHttpError, type Dashboard } from "@/data";
++import { BffHttpError, type CalendarState, type Dashboard } from "@/data";
+ import { Icon } from "@/shared/icons/Icon";
+ import { useShellConfig } from "@/shared/layout/ShellConfig";
+ import { getProductServices } from "@/shared/runtime/ProductRuntime";
+@@ -242,6 +242,7 @@ function StatusStrip({ status }: { status: UseSystemStatusResult }) {
+           activeCopy="IA ativa"
+           label="IA"
+           offCopy="IA desligada"
++          pendingCopy="IA em ativação"
+           view={status.aiView}
+         />
+       </div>
+@@ -253,11 +254,13 @@ function StatusPoint({
+   activeCopy,
+   label,
+   offCopy,
++  pendingCopy,
+   view,
+ }: {
+   activeCopy: string;
+   label: string;
+   offCopy: string;
++  pendingCopy?: string;
+   view: StatusView;
+ }) {
+   const copy =
+@@ -267,13 +270,16 @@ function StatusPoint({
+         ? `${label} não confirmado`
+         : view === "active"
+           ? activeCopy
+-          : offCopy;
++          : view === "pending"
++            ? (pendingCopy ?? `${label} em ativação`)
++            : offCopy;
+   return (
+     <span className="status-line" role="status">
+       <span
+         className={clsx(
+           "status-dot",
+           view === "off" && "danger",
++          view === "pending" && "warning",
+           (view === "loading" || view === "unknown") && "neutral",
+         )}
+         aria-hidden="true"
+@@ -321,6 +327,12 @@ function RealDashboard({
+       : aiUnavailable
+         ? "ai"
+         : null;
++  /**
++   * Checklist pós-onboarding (Goal018/WU-10): só aparece com uma leitura
++   * confirmada de `GET /v1/status` (nunca durante `loading`, para não afirmar
++   * pendência antes de saber) e some assim que a IA está efetivamente ativa.
++   */
++  const checklistVisible = status.phase !== "loading" && status.aiView !== "active";
+   const today = new Intl.DateTimeFormat("pt-BR", {
+     day: "numeric",
+     month: "long",
+@@ -417,6 +429,7 @@ function RealDashboard({
+               activeCopy="IA ativa"
+               label="IA"
+               offCopy="IA desligada"
++              pendingCopy="IA em ativação"
+               view={status.aiView}
+             />
+             <span className="status-line">
+@@ -441,6 +454,13 @@ function RealDashboard({
+           </div>
+         )}
+ 
++        {checklistVisible && (
++          <PostOnboardingChecklist
++            capabilities={scheduling?.calendar.capabilities ?? null}
++            whatsappActive={status.whatsappView === "active"}
++          />
++        )}
++
+         <div className="dashboard-grid">
+           <article id="agenda-today" className="card dashboard-card today-card">
+             <header className="dashboard-card-head">
+@@ -671,6 +691,69 @@ function RealDashboard({
+   );
+ }
+ 
++type ChecklistItem = { done: boolean; key: string; label: string };
++
++/**
++ * Checklist pós-onboarding do vault (`docs/product-vault/02-Fluxos/01-Onboarding.md`):
++ * cada item vem de uma leitura real de `GET /v1/dashboard`/`GET /v1/status`,
++ * nunca de configuração local. "Teste concluído" — o quarto item do vault —
++ * não entra: não existe produtor em camada nenhuma até o Goal018B.
++ */
++function PostOnboardingChecklist({
++  capabilities,
++  whatsappActive,
++}: {
++  capabilities: CalendarState["capabilities"] | null;
++  whatsappActive: boolean;
++}) {
++  const items: ChecklistItem[] = [
++    {
++      done: Boolean(capabilities?.aiActivationReady),
++      key: "service",
++      label: "Cadastrar um serviço",
++    },
++    {
++      done: Boolean(capabilities?.hoursConfigured),
++      key: "hours",
++      label: "Definir horários de atendimento",
++    },
++    {
++      done: whatsappActive,
++      key: "whatsapp",
++      label: "Conectar o WhatsApp",
++    },
++  ];
++  const doneCount = items.filter((item) => item.done).length;
++
++  return (
++    <section
++      className="card dashboard-card checklist-card"
++      aria-labelledby="checklist-heading"
++    >
++      <header className="dashboard-card-head">
++        <h2 id="checklist-heading">Ative sua IA</h2>
++        <span className="badge">
++          {doneCount} de {items.length} passos concluídos
++        </span>
++      </header>
++      <ul className="checklist-list">
++        {items.map((item) => (
++          <li
++            aria-label={`${item.label}: ${item.done ? "concluído" : "pendente"}`}
++            className={clsx("checklist-item", item.done && "is-done")}
++            key={item.key}
++          >
++            <span className="checklist-marker" aria-hidden="true">
++              {item.done && <Icon name="check" />}
++            </span>
++            <span aria-hidden="true">{item.label}</span>
++          </li>
++        ))}
++      </ul>
++    </section>
++  );
++}
++
+ function formatCurrency(value: number): string {
+   return new Intl.NumberFormat("pt-BR", {
+     style: "currency",
+diff --git a/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx b/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
+index 85a03f5..294dfb2 100644
+--- a/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
++++ b/apps/frontend/src/features/onboarding/OnboardingRuntime.tsx
+@@ -10,11 +10,18 @@ import {
+   useState,
+ } from "react";
+ 
+-import type { AiTone, CalendarSource, OnboardingState } from "@/data";
++import type {
++  AiTone,
++  BusinessModality,
++  CalendarSource,
++  OnboardingState,
++} from "@/data";
+ import { getProductServices } from "@/shared/runtime/ProductRuntime";
+ 
+ export type OnboardingDraft = {
++  businessAddress: string;
+   businessCategory: string;
++  businessModalities: BusinessModality[];
+   businessName: string;
+   calendarSource: CalendarSource | null;
+   days: number[];
+@@ -39,7 +46,9 @@ type OnboardingRuntimeValue = {
+ };
+ 
+ const initialDraft: OnboardingDraft = {
++  businessAddress: "",
+   businessCategory: "",
++  businessModalities: [],
+   businessName: "",
+   calendarSource: null,
+   days: [1, 2, 3, 4, 5],
+@@ -137,7 +146,7 @@ export function nextRequiredStep(state: OnboardingState): string {
+   }
+   if (!state.ai.tone) return "tom-da-ia";
+   if (state.whatsapp?.status !== "CONNECTED") return "whatsapp";
+-  return "validacao";
++  return "whatsapp-conectar";
+ }
+ 
+ export function onboardingPriceType(
+@@ -156,7 +165,10 @@ function draftFromState(
+     state.availability?.rules.filter((rule) => rule.active) ?? [];
+   return {
+     ...current,
++    businessAddress: state.business?.address ?? current.businessAddress,
+     businessCategory: state.business?.category ?? current.businessCategory,
++    businessModalities:
++      state.business?.modalities ?? current.businessModalities,
+     businessName: state.business?.name ?? current.businessName,
+     calendarSource: state.calendar.source,
+     days: activeRules.length
+diff --git a/apps/frontend/src/features/onboarding/OnboardingScreen.tsx b/apps/frontend/src/features/onboarding/OnboardingScreen.tsx
+index 970f31a..a1f30e9 100644
+--- a/apps/frontend/src/features/onboarding/OnboardingScreen.tsx
++++ b/apps/frontend/src/features/onboarding/OnboardingScreen.tsx
+@@ -1,1371 +1,191 @@
+ "use client";
+ 
+-import clsx from "clsx";
+ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
++import { type FormEvent, useState } from "react";
+ 
+-import { Icon } from "@/shared/icons/Icon";
+-import { Brand } from "@/shared/ui/Brand";
+-import { CurrencyInput } from "@/shared/ui/CurrencyInput";
+-
+-import { ProductOnboardingScreen } from "./ProductOnboardingScreen";
+ import {
+-  onboardingOrder,
+-  type OnboardingScenario,
+-  onboardingScenarios,
+-} from "./scenarios";
+-
+-function Summary({
+-  rows = [
+-    ["Serviço", "Serviço de demonstração"],
+-    ["Duração", "60 minutos"],
+-    ["Preço", "R$ 120,00"],
+-    ["Fonte oficial", "Agenda Atendly"],
+-  ],
+-}: {
+-  rows?: readonly (readonly [string, string])[];
+-}) {
+-  return (
+-    <div className="service-summary">
+-      {rows.map(([label, value]) => (
+-        <div className="summary-row" key={label}>
+-          <span>{label}</span>
+-          <strong>{value}</strong>
+-        </div>
+-      ))}
+-    </div>
+-  );
+-}
++  getProductServices,
++  useProductRuntime,
++} from "@/shared/runtime/ProductRuntime";
+ 
+-function ImportRow({
+-  badge,
+-  badgeClass,
+-  copy,
+-  icon,
+-  title,
+-}: {
+-  badge: string;
+-  badgeClass?: string;
+-  copy: string;
+-  icon: "alert" | "check";
+-  title: string;
+-}) {
+-  return (
+-    <div className="import-row">
+-      <Icon name={icon} />
+-      <div className="import-row-main">
+-        <strong>{title}</strong>
+-        <span>{copy}</span>
+-      </div>
+-      <span className={clsx("badge", badgeClass)}>{badge}</span>
+-    </div>
+-  );
+-}
++import {
++  blockForScenario,
++  onboardingBlockLabels,
++  onboardingFlow,
++  progressPercent,
++} from "./blocks";
++import {
++  onboardingError,
++  stepBodyByBlock,
++  stepPersistByBlock,
++} from "./blocks/registry";
++import { skipWhatsappStep } from "./blocks/whatsapp";
++import { useOnboardingRuntime } from "./OnboardingRuntime";
++import { OnboardingShell } from "./OnboardingShell";
++import { type OnboardingScenario, onboardingScenarios } from "./scenarios";
+ 
+-function Body({
+-  kind,
++/** Despachante: escolhe o bloco pelo cenário e delega corpo/persistência a
++ * `features/onboarding/blocks/*`. Nenhum bloco conhece os outros. */
++export function OnboardingScreen({
+   scenario,
+-  selection,
+-  setSelection,
+ }: {
+-  kind: string;
+   scenario: OnboardingScenario;
+-  selection: number;
+-  setSelection: (value: number) => void;
+ }) {
+-  const [days, setDays] = useState([1, 2, 3, 4, 5]);
+-  const [copied, setCopied] = useState(false);
+-  if (kind === "business")
+-    return (
+-      <>
+-        <label className="field">
+-          <span className="label">Nome do negócio</span>
+-          <input
+-            className="input"
+-            placeholder="Ex.: Studio Aurora"
+-            autoComplete="organization"
+-            required
+-          />
+-        </label>
+-        <label className="field">
+-          <span className="label">Tipo de serviço</span>
+-          <span className="input-wrap">
+-            <select className="select" defaultValue="" required>
+-              <option value="">Selecione</option>
+-              <option>Beleza e estética</option>
+-              <option>Barbearia</option>
+-              <option>Bem-estar</option>
+-              <option>Treinamento</option>
+-              <option>Consultas</option>
+-              <option>Outro serviço com agendamento</option>
+-            </select>
+-            <Icon className="select-icon" name="chevron-down" />
+-          </span>
+-        </label>
+-      </>
+-    );
+-  if (["source", "method", "tone"].includes(kind)) {
+-    const options =
+-      kind === "source"
+-        ? [
+-            [
+-              "calendar",
+-              "Agenda Atendly",
+-              "A Atendly controla serviços, horários e agendamentos.",
+-            ],
+-            [
+-              "refresh",
+-              "Minha Agenda",
+-              "Minha Agenda continua controlando seus agendamentos.",
+-            ],
+-          ]
+-        : kind === "method"
+-          ? [
+-              [
+-                "plus",
+-                "Começar do zero",
+-                "Cadastre seu primeiro serviço e seus horários habituais.",
+-              ],
+-              [
+-                "refresh",
+-                "Importar uma vez",
+-                "Copie dados da Minha Agenda. Depois, Agenda Atendly vira a fonte oficial.",
+-              ],
+-            ]
+-          : [
+-              [
+-                "shield",
+-                "Profissional e objetiva",
+-                "Mensagens diretas, claras e cordiais.",
+-              ],
+-              [
+-                "chat",
+-                "Leve e próxima",
+-                "Conversa acolhedora e informal na medida certa.",
+-              ],
+-            ];
+-    return (
+-      <>
+-        <div
+-          className="choice-grid"
+-          role="radiogroup"
+-          aria-label="Escolha uma opção"
+-        >
+-          {options.map(([icon, title, copy], index) => (
+-            <button
+-              className={clsx(
+-                "choice-card source-card",
+-                selection === index && "is-selected",
+-              )}
+-              type="button"
+-              role="radio"
+-              aria-checked={selection === index}
+-              tabIndex={
+-                selection < 0
+-                  ? index === 0
+-                    ? 0
+-                    : -1
+-                  : selection === index
+-                    ? 0
+-                    : -1
+-              }
+-              onClick={() => setSelection(index)}
+-              onKeyDown={(event) => {
+-                const direction =
+-                  event.key === "ArrowRight" || event.key === "ArrowDown"
+-                    ? 1
+-                    : event.key === "ArrowLeft" || event.key === "ArrowUp"
+-                      ? -1
+-                      : event.key === "Home"
+-                        ? -index
+-                        : event.key === "End"
+-                          ? options.length - 1 - index
+-                          : 0;
+-                if (!direction) return;
+-                event.preventDefault();
+-                const nextIndex =
+-                  (index + direction + options.length) % options.length;
+-                setSelection(nextIndex);
+-                const buttons =
+-                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+-                    '[role="radio"]',
+-                  );
+-                buttons?.[nextIndex]?.focus();
+-              }}
+-              key={title}
+-            >
+-              <span className="choice-check">
+-                <Icon name="check" />
+-              </span>
+-              <Icon name={icon as "calendar"} />
+-              <h2>{title}</h2>
+-              <p>{copy}</p>
+-            </button>
+-          ))}
+-        </div>
+-        {kind === "method" && (
+-          <div className="onboarding-note is-important">
+-            <Icon name="alert" />
+-            <span>
+-              <strong>Importar não mantém sincronização.</strong> É uma cópia
+-              única para iniciar a Agenda Atendly.
+-            </span>
+-          </div>
+-        )}
+-      </>
+-    );
+-  }
+-  if (kind === "service-name")
+-    return (
+-      <label className="field">
+-        <span className="label">Nome do serviço</span>
+-        <input
+-          className="input"
+-          placeholder="Ex.: Corte feminino"
+-          required
+-          autoFocus
+-        />
+-      </label>
+-    );
+-  if (kind === "service-duration")
+-    return (
+-      <label className="field">
+-        <span className="label">Duração do serviço</span>
+-        <span className="input-wrap">
+-          <select className="select" defaultValue="" required>
+-            <option value="">Selecione</option>
+-            <option>30 minutos</option>
+-            <option>45 minutos</option>
+-            <option>1 hora</option>
+-            <option>1 hora e 30 minutos</option>
+-            <option>2 horas</option>
+-          </select>
+-          <Icon name="chevron-down" className="select-icon" />
+-        </span>
+-      </label>
+-    );
+-  if (kind === "service-price")
+-    return (
+-      <>
+-        <label className="field">
+-          <span className="label">Preço</span>
+-          <CurrencyInput className="input" placeholder="R$ 0,00" required />
+-        </label>
+-        <div className="switch-row">
+-          <div className="switch-copy">
+-            <strong>Valor sob consulta</strong>
+-            <span>O preço não será informado automaticamente.</span>
+-          </div>
+-          <label className="switch">
+-            <input type="checkbox" aria-label="Usar valor sob consulta" />
+-            <span className="switch-track" />
+-          </label>
+-        </div>
+-      </>
+-    );
+-  if (kind === "days")
+-    return (
+-      <>
+-        <div className="day-grid" role="group" aria-label="Dias de atendimento">
+-          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(
+-            (day, index) => (
+-              <button
+-                className="day-button"
+-                type="button"
+-                aria-pressed={days.includes(index)}
+-                onClick={() =>
+-                  setDays((current) =>
+-                    current.includes(index)
+-                      ? current.filter((item) => item !== index)
+-                      : [...current, index],
+-                  )
+-                }
+-                key={day}
+-              >
+-                {day}
+-              </button>
+-            ),
+-          )}
+-        </div>
+-      </>
+-    );
+-  if (kind === "hours")
+-    return (
+-      <div className="time-grid">
+-        <label className="field">
+-          <span className="label">Começa às</span>
+-          <input className="input" type="time" defaultValue="09:00" required />
+-        </label>
+-        <label className="field">
+-          <span className="label">Termina às</span>
+-          <input className="input" type="time" defaultValue="18:00" required />
+-        </label>
+-      </div>
+-    );
+-  if (["confirm", "ready", "confirm-import"].includes(kind))
+-    return scenario === "agenda-atendly-pronta" ? (
+-      <Summary
+-        rows={[
+-          ["Fonte oficial", "Agenda Atendly"],
+-          ["Serviço inicial", "Cadastrado"],
+-          ["Horário habitual", "Configurado"],
+-        ]}
+-      />
+-    ) : scenario === "importar-confirmar" ? (
+-      <>
+-        <Summary
+-          rows={[
+-            ["Origem", "Minha Agenda"],
+-            ["Destino", "Agenda Atendly"],
+-            ["Tipo", "Importação única"],
+-            ["Sincronização futura", "Não incluída"],
+-          ]}
+-        />
+-        <div className="onboarding-note is-important">
+-          <Icon name="alert" />
+-          <span>
+-            Os dados originais não serão apagados. A Agenda Atendly só será
+-            considerada pronta após resultado bem-sucedido.
+-          </span>
+-        </div>
+-      </>
+-    ) : scenario === "agenda-atendly-confirmar" ? (
+-      <>
+-        <Summary
+-          rows={[
+-            ["Fonte oficial", "Agenda Atendly"],
+-            ["Controle de horários", "Pela Atendly"],
+-            ["Novos agendamentos", "Salvos na Atendly"],
+-          ]}
+-        />
+-        <div className="onboarding-note">
+-          <Icon name="info" />
+-          <span>
+-            Trocar a fonte depois exige um fluxo assistido. Não será uma mudança
+-            instantânea.
+-          </span>
+-        </div>
+-      </>
+-    ) : (
+-      <Summary />
+-    );
+-  if (scenario === "importar-conectar")
+-    return (
+-      <>
+-        <div className="import-definition">
+-          <div className="definition-block">
+-            <strong>Minha Agenda</strong>
+-            <p>Origem dos dados existentes.</p>
+-          </div>
+-          <span className="definition-arrow" aria-hidden="true">
+-            →
+-          </span>
+-          <div className="definition-block is-current">
+-            <strong>Agenda Atendly</strong>
+-            <p>Nova fonte oficial depois da importação concluída.</p>
+-          </div>
+-        </div>
+-        <div className="onboarding-note is-important">
+-          <Icon name="alert" />
+-          <span>
+-            <strong>Não é integração contínua.</strong> Alterações futuras não
+-            serão sincronizadas entre as agendas.
+-          </span>
+-        </div>
+-        <div className="onboarding-note">
+-          <Icon name="info" />
+-          <span>
+-            O método exato de conexão depende da capacidade disponível na
+-            integração e não é definido neste protótipo.
+-          </span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "minha-agenda-conectar")
+-    return (
+-      <>
+-        <div className="analysis-panel">
+-          <Icon
+-            name="shield"
+-            style={{
+-              width: 28,
+-              height: 28,
+-              margin: "0 auto 18px",
+-              color: "var(--accent)",
+-            }}
+-          />
+-          <h2>Conexão protegida</h2>
+-          <p>
+-            Este protótipo não presume login, código, senha ou outro método
+-            ainda não definido.
+-          </p>
+-        </div>
+-        <div className="onboarding-note">
+-          <Icon name="info" />
+-          <span>Nenhum dado será alterado durante a conexão.</span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "minha-agenda-autenticando")
+-    return (
+-      <div className="analysis-panel" role="status" aria-live="polite">
+-        <span className="spinner" aria-hidden="true" />
+-        <h2>Autenticando conexão</h2>
+-        <p>Nenhum agendamento está sendo alterado.</p>
+-      </div>
+-    );
+-  if (scenario === "importar-progresso")
+-    return (
+-      <>
+-        <div className="progress-stack">
+-          <div className="progress-status">
+-            <strong>Copiando dados com segurança…</strong>
+-            <span>Origem preservada</span>
+-          </div>
+-          <div
+-            className="progress-track"
+-            role="progressbar"
+-            aria-label="Progresso da importação"
+-            aria-valuemin={0}
+-            aria-valuemax={100}
+-            aria-valuenow={23}
+-          >
+-            <div className="progress-bar" style={{ width: "23%" }} />
+-          </div>
+-        </div>
+-        <div className="onboarding-note">
+-          <Icon name="shield" />
+-          <span>
+-            Nenhum dado importado será usado até a operação terminar com
+-            sucesso.
+-          </span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "importar-previa")
+-    return (
+-      <div className="import-list">
+-        <ImportRow
+-          icon="check"
+-          title="Serviços"
+-          copy="Dados encontrados e preparados para revisão"
+-          badge="Pronto"
+-          badgeClass="badge-success"
+-        />
+-        <ImportRow
+-          icon="check"
+-          title="Clientes"
+-          copy="Dados encontrados e preparados para revisão"
+-          badge="Pronto"
+-          badgeClass="badge-success"
+-        />
+-        <ImportRow
+-          icon="check"
+-          title="Agendamentos futuros"
+-          copy="Dados encontrados e preparados para revisão"
+-          badge="Pronto"
+-          badgeClass="badge-success"
+-        />
+-        <ImportRow
+-          icon="alert"
+-          title="Disponibilidade"
+-          copy="Requer revisão antes da cópia"
+-          badge="Revisar"
+-          badgeClass="badge-attention"
+-        />
+-      </div>
+-    );
+-  if (scenario === "importar-sucesso")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Fonte oficial", "Agenda Atendly"],
+-          ["Minha Agenda", "Dados originais preservados"],
+-          ["Sincronização futura", "Não ativa"],
+-        ]}
+-      />
+-    );
+-  if (scenario === "importar-erro")
+-    return (
+-      <div className="onboarding-note is-important">
+-        <Icon name="shield" />
+-        <span>Os dados na Minha Agenda permanecem como estavam.</span>
+-      </div>
+-    );
+-  if (scenario === "importar-parcial")
+-    return (
+-      <div className="import-list result-list">
+-        <ImportRow
+-          icon="check"
+-          title="Dados compatíveis"
+-          copy="Preparados com sucesso"
+-          badge="Pronto"
+-          badgeClass="badge-success"
+-        />
+-        <ImportRow
+-          icon="alert"
+-          title="Registros incompletos"
+-          copy="Precisam ser corrigidos antes da ativação"
+-          badge="Revisar"
+-          badgeClass="badge-attention"
+-        />
+-      </div>
+-    );
+-  if (scenario === "minha-agenda-conectada")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Estado", "Conectado"],
+-          ["Fonte oficial", "Minha Agenda"],
+-          ["Última consulta", "Concluída nesta sessão"],
+-        ]}
+-      />
+-    );
+-  if (scenario === "minha-agenda-verificar")
+-    return (
+-      <>
+-        <div className="data-check-grid">
+-          {[
+-            [
+-              "Serviços",
+-              "Nomes, duração e valores retornados.",
+-              "servicos",
+-              "Consultado",
+-            ],
+-            [
+-              "Clientes",
+-              "Identificação disponível na origem.",
+-              "clientes",
+-              "Consultado",
+-            ],
+-            [
+-              "Agendamentos",
+-              "Compromissos retornados pela integração.",
+-              "agendamentos",
+-              "Consultado",
+-            ],
+-            [
+-              "Disponibilidade",
+-              "Resultado conforme capacidade da integração.",
+-              "disponibilidade",
+-              "Dependente",
+-            ],
+-          ].map(([title, copy, slug, badge], index) => (
+-            <Link
+-              className="data-check-card"
+-              href={`/onboarding/minha-agenda-${slug}`}
+-              key={title}
+-            >
+-              <div className="data-check-card-top">
+-                <strong>{title}</strong>
+-                <span className={clsx("badge", index < 3 && "badge-success")}>
+-                  {badge}
+-                </span>
+-              </div>
+-              <p>{copy}</p>
+-            </Link>
+-          ))}
+-        </div>
+-        <div className="connection-meta">
+-          <span>Última consulta</span>
+-          <strong>Concluída nesta sessão</strong>
+-        </div>
+-      </>
+-    );
+-  if (["external-intro", "external-connect"].includes(kind)) {
+-    const steps =
+-      kind === "external-intro"
+-        ? [
+-            [
+-              "Minha Agenda permanece oficial",
+-              "Horários e confirmações dependem dela.",
+-            ],
+-            [
+-              "Atendly respeita os dados encontrados",
+-              "Nenhum serviço, preço ou horário será inventado.",
+-            ],
+-            [
+-              "Ações dependem da integração",
+-              "Controles não suportados não serão apresentados como disponíveis.",
+-            ],
+-          ]
+-        : [
+-            [
+-              "Autorize a conexão",
+-              "O método exato depende da integração disponível.",
+-            ],
+-            [
+-              "Confira os dados",
+-              "Serviços, clientes, agenda e disponibilidade.",
+-            ],
+-            ["Valide a fonte oficial", "Nenhum horário será inventado."],
+-          ];
+-    return (
+-      <ol className="integration-steps">
+-        {steps.map(([title, copy], index) => (
+-          <li className="integration-step" key={title}>
+-            <span>{index + 1}</span>
+-            <div>
+-              <strong>{title}</strong>
+-              <small>{copy}</small>
+-            </div>
+-          </li>
+-        ))}
+-      </ol>
+-    );
+-  }
+-  if (scenario === "importar-analisar")
+-    return (
+-      <div className="analysis-panel" role="status" aria-live="polite">
+-        <span className="spinner" aria-hidden="true" />
+-        <h3>Preparando uma prévia</h3>
+-        <p>Nenhum dado foi alterado. Aguarde a análise terminar.</p>
+-      </div>
+-    );
+-  if (["analysis", "progress"].includes(kind))
+-    return (
+-      <div className="analysis-panel" aria-busy="true">
+-        <span className="spinner" />
+-        <h2>
+-          {kind === "progress"
+-            ? "Copiando itens validados"
+-            : "Consultando dados disponíveis"}
+-        </h2>
+-        <p>Nenhum resultado parcial será tratado como confirmação.</p>
+-        <div className="progress-track" style={{ marginTop: 20 }}>
+-          <div
+-            className="progress-bar"
+-            style={{ width: kind === "progress" ? "68%" : "42%" }}
+-          />
+-        </div>
+-      </div>
+-    );
+-  if (
+-    [
+-      "minha-agenda-servicos",
+-      "minha-agenda-clientes",
+-      "minha-agenda-agendamentos",
+-    ].includes(scenario)
+-  ) {
+-    const rows =
+-      scenario === "minha-agenda-servicos"
+-        ? [
+-            [
+-              "Nome do serviço",
+-              "Usado para identificar o atendimento",
+-              "Retornado pela origem",
+-            ],
+-            ["Duração", "Usada para consultar horários", "Quando suportada"],
+-            ["Preço", "Nunca será inventado pela Atendly", "Quando informado"],
+-          ]
+-        : scenario === "minha-agenda-clientes"
+-          ? [
+-              ["Nome", "Identificação do cliente", "Quando retornado"],
+-              ["Contato", "Associação com o atendimento", "Quando retornado"],
+-              [
+-                "Histórico relacionado",
+-                "Contexto disponível na origem",
+-                "Dependente da integração",
+-              ],
+-            ]
+-          : [
+-              [
+-                "Data e horário",
+-                "Agenda oficial consultada",
+-                "Retornado pela origem",
+-              ],
+-              [
+-                "Cliente e serviço",
+-                "Contexto do compromisso",
+-                "Quando retornados",
+-              ],
+-              [
+-                "Operações permitidas",
+-                "Alterar, remarcar ou cancelar",
+-                "Dependente da integração",
+-              ],
+-            ];
+-    return (
+-      <>
+-        <div className="data-detail">
+-          {rows.map(([title, copy, value]) => (
+-            <div className="data-detail-row" key={title}>
+-              <div>
+-                <strong>{title}</strong>
+-                <span>{copy}</span>
+-              </div>
+-              <span>{value}</span>
+-            </div>
+-          ))}
+-        </div>
+-        {scenario === "minha-agenda-servicos" && (
+-          <div className="onboarding-note">
+-            <Icon name="info" />
+-            <span>
+-              Edição pela Atendly depende das operações realmente suportadas.
+-            </span>
+-          </div>
+-        )}
+-      </>
+-    );
+-  }
+-  if (scenario === "minha-agenda-disponibilidade")
+-    return (
+-      <>
+-        <Summary
+-          rows={[
+-            ["Fonte consultada", "Minha Agenda"],
+-            ["Controles locais", "Não disponíveis"],
+-            ["Resultado", "Dependente da integração"],
+-          ]}
+-        />
+-        <div className="onboarding-note is-important">
+-          <Icon name="alert" />
+-          <span>
+-            Se a disponibilidade não puder ser consultada com segurança, a
+-            integração não será considerada válida para agendamentos
+-            automáticos.
+-          </span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "minha-agenda-valida")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Fonte oficial", "Minha Agenda"],
+-          ["Estado", "Integração válida"],
+-          ["Última consulta", "Concluída nesta sessão"],
+-          ["Controles locais", "Somente quando suportados"],
+-        ]}
+-      />
+-    );
+-  if (scenario === "minha-agenda-incompleta")
+-    return (
+-      <>
+-        <div className="import-list">
+-          <ImportRow
+-            icon="check"
+-            title="Dados consultados"
+-            copy="Itens disponíveis permanecem preservados"
+-            badge="Disponível"
+-            badgeClass="badge-success"
+-          />
+-          <ImportRow
+-            icon="alert"
+-            title="Informações necessárias"
+-            copy="Não retornadas pela integração"
+-            badge="Incompleto"
+-            badgeClass="badge-attention"
+-          />
+-        </div>
+-        <div className="onboarding-note is-important">
+-          <Icon name="alert" />
+-          <span>
+-            A Atendly não criará disponibilidade, serviço, preço ou confirmação
+-            ausente.
+-          </span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "minha-agenda-falha")
+-    return (
+-      <div className="onboarding-note is-important">
+-        <Icon name="shield" />
+-        <span>
+-          Atendimento automático por agenda externa não está disponível até uma
+-          conexão válida.
+-        </span>
+-      </div>
+-    );
+-  if (scenario === "minha-agenda-indisponivel")
+-    return (
+-      <div className="onboarding-note is-important">
+-        <Icon name="alert" />
+-        <span>
+-          Não confirme horários enquanto a fonte oficial não puder responder.
+-        </span>
+-      </div>
+-    );
+-  if (["preview", "verify", "data", "connected"].includes(kind))
+-    return (
+-      <div className="import-list">
+-        <div className="import-row">
+-          <Icon name="briefcase" />
+-          <div className="import-row-main">
+-            <strong>Serviços</strong>
+-            <span>1 item disponível no exemplo</span>
+-          </div>
+-          <span className="badge badge-success">Pronto</span>
+-        </div>
+-        <div className="import-row">
+-          <Icon name="users" />
+-          <div className="import-row-main">
+-            <strong>Clientes</strong>
+-            <span>Dados identificados pela conexão</span>
+-          </div>
+-          <span className="badge">Consultar</span>
+-        </div>
+-        <div className="import-row">
+-          <Icon name="calendar" />
+-          <div className="import-row-main">
+-            <strong>Agendamentos</strong>
+-            <span>Fonte oficial preservada</span>
+-          </div>
+-          <span className="badge badge-success">Pronto</span>
+-        </div>
+-      </div>
+-    );
+-  if (["success", "partial", "error"].includes(kind)) return null;
+-  if (kind === "whatsapp")
+-    return (
+-      <div className="choice-grid">
+-        <section className="card">
+-          <h2>Computador</h2>
+-          <div
+-            className="state-icon"
+-            style={{ width: 160, height: 160, marginTop: 18 }}
+-          >
+-            <Icon name="refresh" />
+-          </div>
+-          <p className="small muted">Escaneie o QR Code pelo WhatsApp.</p>
+-        </section>
+-        <section className="card">
+-          <h2>Celular</h2>
+-          <div
+-            className="linking-code mono"
+-            style={{ fontSize: 28, marginBlock: 24 }}
+-          >
+-            ABCD-EFGH
+-          </div>
+-          <button
+-            className="btn btn-secondary"
+-            type="button"
+-            onClick={() => {
+-              void navigator.clipboard?.writeText("ABCD-EFGH");
+-              setCopied(true);
+-            }}
+-          >
+-            {copied ? "Código copiado" : "Copiar código"}
+-          </button>
+-        </section>
+-      </div>
+-    );
+-  if (kind === "validation")
+-    return (
+-      <div className="import-list">
+-        <div className="import-row">
+-          <Icon name="check" />
+-          <div className="import-row-main">
+-            <strong>Fonte oficial</strong>
+-            <span>Agenda validada</span>
+-          </div>
+-          <span className="badge badge-success">Pronto</span>
+-        </div>
+-        <div className="import-row">
+-          <Icon name="check" />
+-          <div className="import-row-main">
+-            <strong>WhatsApp</strong>
+-            <span>Conectado</span>
+-          </div>
+-          <span className="badge badge-success">Pronto</span>
+-        </div>
+-        <div className="import-row">
+-          <Icon name="check" />
+-          <div className="import-row-main">
+-            <strong>Atendente virtual</strong>
+-            <span>Tom definido</span>
+-          </div>
+-          <span className="badge badge-success">Pronto</span>
+-        </div>
+-      </div>
+-    );
+-  return <Summary />;
+-}
++  const router = useRouter();
++  const { refreshSession, setUnauthenticated } = useProductRuntime();
++  const {
++    draft,
++    error: loadError,
++    loading,
++    refresh,
++    setDraft,
++  } = useOnboardingRuntime();
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [eyebrow, title, description] = onboardingScenarios[scenario];
+ 
+-const nextByKind: Record<string, string> = {
+-  business: "fonte-da-agenda",
+-  source: "agenda-atendly-confirmar",
+-  confirm: "agenda-atendly-metodo",
+-  method: "servico-nome",
+-  "service-name": "servico-duracao",
+-  "service-duration": "servico-preco",
+-  "service-price": "dias-de-atendimento",
+-  days: "horarios",
+-  hours: "agenda-atendly-pronta",
+-  ready: "tom-da-ia",
+-  tone: "whatsapp",
+-  whatsapp: "validacao",
+-  validation: "/inicio",
+-  "external-intro": "minha-agenda-conectar",
+-  "external-connect": "minha-agenda-autenticando",
+-  analysis: "importar-previa",
+-  preview: "importar-confirmar",
+-  "confirm-import": "importar-progresso",
+-  progress: "importar-sucesso",
+-  verify: "minha-agenda-valida",
+-  connected: "minha-agenda-verificar",
+-  data: "minha-agenda-verificar",
+-  success: "/inicio",
+-  partial: "minha-agenda-verificar",
+-  error: "fonte-da-agenda",
+-};
++  if (loading)
++    return <OnboardingMessage message="Carregando sua configuração..." />;
++  if (loadError) return <OnboardingMessage message={loadError} />;
+ 
+-export function OnboardingScreen(props: {
+-  scenario: OnboardingScenario;
+-  preview?: boolean;
+-}) {
+-  return props.preview ? (
+-    <PrototypeOnboardingScreen scenario={props.scenario} />
+-  ) : (
+-    <ProductOnboardingScreen scenario={props.scenario} />
+-  );
+-}
++  const blockId = blockForScenario(scenario);
++  const blockLabel = onboardingBlockLabels[blockId];
++  const external = scenario.startsWith("minha-agenda-");
++  const isWhatsappIntro = scenario === "whatsapp";
++  const isWhatsappConclusion = scenario === "whatsapp-concluido";
++  const index = onboardingFlow.indexOf(scenario);
++  const previous = index > 0 ? onboardingFlow[index - 1] : undefined;
+ 
+-function PrototypeOnboardingScreen({
+-  scenario,
+-}: {
+-  scenario: OnboardingScenario;
+-}) {
+-  const router = useRouter();
+-  const [selection, setSelection] = useState(-1);
+-  const [eyebrow, title, description, kind] = onboardingScenarios[scenario];
+-  const position = onboardingOrder.indexOf(scenario);
+-  const coarseStep = Math.min(
+-    5,
+-    Math.max(
+-      1,
+-      scenario.startsWith("dados")
+-        ? 1
+-        : scenario.includes("fonte") || scenario.includes("metodo")
+-          ? 2
+-          : scenario.includes("tom")
+-            ? 3
+-            : scenario === "whatsapp"
+-              ? 4
+-              : 5,
+-    ),
+-  );
+-  const progressMeta: Record<string, [string, string, number]> = {
+-    "dados-do-negocio": ["Etapa 1 de 8", "Seu negócio", 12.5],
+-    "fonte-da-agenda": ["Etapa 2 de 8", "Agenda", 25],
+-    "agenda-atendly-confirmar": ["Etapa 3 de 8", "Agenda Atendly", 37.5],
+-    "agenda-atendly-metodo": ["Etapa 4 de 8", "Configuração", 50],
+-    "servico-nome": ["Etapa 5 de 8", "Serviço", 62.5],
+-    "servico-duracao": ["Etapa 5 de 8", "Serviço · duração", 62.5],
+-    "servico-preco": ["Etapa 5 de 8", "Serviço · preço", 62.5],
+-    "dias-de-atendimento": ["Etapa 6 de 8", "Dias", 75],
+-    horarios: ["Etapa 7 de 8", "Horário", 87.5],
+-    "agenda-atendly-pronta": ["Etapa 8 de 8", "Agenda pronta", 100],
+-    "minha-agenda-introducao": ["Minha Agenda · 1 de 5", "Introdução", 20],
+-    "minha-agenda-conectar": ["Minha Agenda · 2 de 5", "Conexão", 40],
+-    "minha-agenda-autenticando": ["Minha Agenda · 2 de 5", "Autenticando", 40],
+-    "minha-agenda-conectada": ["Minha Agenda · 3 de 5", "Conectada", 60],
+-    "minha-agenda-verificar": ["Minha Agenda · 4 de 5", "Verificação", 80],
+-    "minha-agenda-valida": ["Minha Agenda · 5 de 5", "Válida", 100],
+-    "importar-conectar": ["Importação · 1 de 6", "Conectar", 16.7],
+-    "importar-analisar": ["Importação · 2 de 6", "Análise", 33.3],
+-    "importar-previa": ["Importação · 3 de 6", "Prévia", 50],
+-    "importar-confirmar": ["Importação · 4 de 6", "Confirmar", 66.7],
+-    "importar-progresso": ["Importação · 5 de 6", "Copiando", 83.3],
+-    "importar-sucesso": ["Importação · 6 de 6", "Concluída", 100],
+-    "importar-parcial": ["Importação · resultado", "Atenção", 100],
+-    "importar-erro": ["Importação · resultado", "Falha", 100],
+-    "minha-agenda-servicos": ["Verificação", "Serviços", 80],
+-    "minha-agenda-clientes": ["Verificação", "Clientes", 80],
+-    "minha-agenda-agendamentos": ["Verificação", "Agendamentos", 80],
+-    "minha-agenda-disponibilidade": ["Verificação", "Disponibilidade", 80],
+-    "minha-agenda-incompleta": ["Minha Agenda · verificação", "Atenção", 80],
+-    "minha-agenda-falha": ["Minha Agenda · conexão", "Falha", 40],
+-    "minha-agenda-indisponivel": [
+-      "Minha Agenda · consulta",
+-      "Indisponível",
+-      60,
+-    ],
+-  };
+-  const progress = progressMeta[scenario] ?? [
+-    `Etapa ${coarseStep} de 5`,
+-    `${coarseStep * 20}%`,
+-    coarseStep * 20,
+-  ];
+-  const previous = position > 0 ? onboardingOrder[position - 1] : undefined;
+-  const backOverrides: Partial<Record<OnboardingScenario, OnboardingScenario>> =
+-    {
+-      "fonte-da-agenda": "dados-do-negocio",
+-      "agenda-atendly-confirmar": "fonte-da-agenda",
+-      "agenda-atendly-metodo": "agenda-atendly-confirmar",
+-      "minha-agenda-introducao": "fonte-da-agenda",
+-    };
+-  const backStep = backOverrides[scenario] ?? previous;
+-  const configuredNext =
+-    nextByKind[kind] ??
+-    (position < onboardingOrder.length - 1
+-      ? onboardingOrder[position + 1]
+-      : "/inicio");
+-  const next =
+-    kind === "source" && selection === 1
+-      ? "minha-agenda-introducao"
+-      : kind === "method" && selection === 1
+-        ? "importar-conectar"
+-        : configuredNext;
+-  const target = next.startsWith("/") ? next : `/onboarding/${next}`;
+-  const cta =
+-    kind === "validation" || kind === "success"
+-      ? "Ir para o início"
+-      : kind === "error"
+-        ? "Escolher outra agenda"
+-        : kind === "progress" || kind === "analysis"
+-          ? "Ver resultado"
+-          : "Continuar";
+-  const requiresChoice = kind === "source" || kind === "method";
+-  const bannerCopy: Partial<Record<OnboardingScenario, string>> = {
+-    "minha-agenda-introducao":
+-      "Minha Agenda continuará controlando seus agendamentos",
+-    "minha-agenda-conectar":
+-      "Minha Agenda continuará controlando seus agendamentos",
+-    "minha-agenda-autenticando": "Minha Agenda continua sendo a fonte oficial",
+-    "minha-agenda-conectada": "Minha Agenda continua sendo a fonte oficial",
+-    "minha-agenda-verificar": "Minha Agenda continua sendo a fonte oficial",
+-    "minha-agenda-servicos":
+-      "Serviços permanecem controlados pela Minha Agenda",
+-    "minha-agenda-clientes": "Minha Agenda continua sendo a fonte oficial",
+-    "minha-agenda-agendamentos":
+-      "Agendamentos continuam controlados pela Minha Agenda",
+-    "minha-agenda-disponibilidade":
+-      "Disponibilidade continua definida pela Minha Agenda",
+-    "minha-agenda-valida":
+-      "Minha Agenda continuará controlando seus agendamentos",
+-    "minha-agenda-incompleta": "Minha Agenda continua sendo a fonte oficial",
+-    "minha-agenda-falha": "Minha Agenda permanece sem alterações",
+-    "minha-agenda-indisponivel": "Minha Agenda continua sendo a fonte oficial",
+-  };
+-  const resultState: Partial<
+-    Record<OnboardingScenario, "success" | "partial" | "error">
+-  > = {
+-    "importar-sucesso": "success",
+-    "importar-parcial": "partial",
+-    "importar-erro": "error",
+-    "agenda-atendly-pronta": "success",
+-    "minha-agenda-conectada": "success",
+-    "minha-agenda-valida": "success",
+-    "minha-agenda-incompleta": "partial",
+-    "minha-agenda-falha": "error",
+-    "minha-agenda-indisponivel": "error",
+-  };
+-  const actionConfig: Partial<
+-    Record<
+-      OnboardingScenario,
+-      {
+-        back: string;
+-        backLabel: string;
+-        primary?: string;
+-        primaryLabel?: string;
+-      }
+-    >
+-  > = {
+-    "agenda-atendly-confirmar": {
+-      back: "fonte-da-agenda",
+-      backLabel: "Voltar",
+-      primary: "agenda-atendly-metodo",
+-      primaryLabel: "Configurar Agenda Atendly",
+-    },
+-    "servico-nome": {
+-      back: "agenda-atendly-metodo",
+-      backLabel: "Voltar",
+-      primary: "servico-duracao",
+-      primaryLabel: "Definir duração",
+-    },
+-    "servico-duracao": {
+-      back: "servico-nome",
+-      backLabel: "Voltar",
+-      primary: "servico-preco",
+-      primaryLabel: "Definir preço",
+-    },
+-    "servico-preco": {
+-      back: "servico-duracao",
+-      backLabel: "Voltar",
+-      primary: "dias-de-atendimento",
+-      primaryLabel: "Definir dias",
+-    },
+-    horarios: {
+-      back: "dias-de-atendimento",
+-      backLabel: "Voltar",
+-      primary: "agenda-atendly-pronta",
+-      primaryLabel: "Salvar configuração",
+-    },
+-    "dias-de-atendimento": {
+-      back: "servico-preco",
+-      backLabel: "Voltar",
+-      primary: "horarios",
+-      primaryLabel: "Definir horário",
+-    },
+-    "agenda-atendly-pronta": {
+-      back: "horarios",
+-      backLabel: "Revisar",
+-      primary: "/inicio",
+-      primaryLabel: "Voltar à visão geral",
+-    },
+-    "importar-conectar": {
+-      back: "agenda-atendly-metodo",
+-      backLabel: "Voltar",
+-      primary: "importar-analisar",
+-      primaryLabel: "Iniciar conexão segura",
+-    },
+-    "importar-analisar": {
+-      back: "importar-conectar",
+-      backLabel: "Cancelar",
+-      primary: "importar-previa",
+-      primaryLabel: "Ver prévia",
+-    },
+-    "importar-previa": {
+-      back: "importar-conectar",
+-      backLabel: "Voltar",
+-      primary: "importar-confirmar",
+-      primaryLabel: "Revisar importação",
+-    },
+-    "importar-confirmar": {
+-      back: "importar-previa",
+-      backLabel: "Voltar",
+-      primary: "importar-progresso",
+-      primaryLabel: "Iniciar importação",
+-    },
+-    "importar-sucesso": {
+-      back: "importar-previa",
+-      backLabel: "Ver prévia",
+-      primary: "/inicio",
+-      primaryLabel: "Voltar à visão geral",
+-    },
+-    "importar-parcial": {
+-      back: "agenda-atendly-metodo",
+-      backLabel: "Escolher outro caminho",
+-      primary: "importar-previa",
+-      primaryLabel: "Revisar pendências",
+-    },
+-    "importar-erro": {
+-      back: "agenda-atendly-metodo",
+-      backLabel: "Começar do zero",
+-      primary: "importar-conectar",
+-      primaryLabel: "Tentar conectar novamente",
+-    },
+-    "importar-progresso": {
+-      back: "",
+-      backLabel: "",
+-      primary: "importar-sucesso",
+-      primaryLabel: "Ver resultado",
+-    },
+-    "minha-agenda-conectar": {
+-      back: "minha-agenda-introducao",
+-      backLabel: "Voltar",
+-      primary: "minha-agenda-autenticando",
+-      primaryLabel: "Iniciar conexão",
+-    },
+-    "minha-agenda-autenticando": {
+-      back: "",
+-      backLabel: "",
+-      primary: "minha-agenda-conectada",
+-      primaryLabel: "Revisar conexão",
+-    },
+-    "minha-agenda-conectada": {
+-      back: "minha-agenda-conectar",
+-      backLabel: "Voltar",
+-      primary: "minha-agenda-verificar",
+-      primaryLabel: "Verificar dados",
+-    },
+-    "minha-agenda-verificar": {
+-      back: "minha-agenda-conectada",
+-      backLabel: "Voltar",
+-      primary: "minha-agenda-valida",
+-      primaryLabel: "Validar integração",
+-    },
+-    "minha-agenda-servicos": {
+-      back: "minha-agenda-verificar",
+-      backLabel: "Voltar à verificação",
+-    },
+-    "minha-agenda-clientes": {
+-      back: "minha-agenda-verificar",
+-      backLabel: "Voltar à verificação",
+-    },
+-    "minha-agenda-agendamentos": {
+-      back: "minha-agenda-verificar",
+-      backLabel: "Voltar à verificação",
+-    },
+-    "minha-agenda-disponibilidade": {
+-      back: "minha-agenda-verificar",
+-      backLabel: "Voltar à verificação",
+-    },
+-    "minha-agenda-valida": {
+-      back: "minha-agenda-verificar",
+-      backLabel: "Revisar dados",
+-      primary: "/inicio",
+-      primaryLabel: "Voltar à visão geral",
+-    },
+-    "minha-agenda-incompleta": {
+-      back: "fonte-da-agenda",
+-      backLabel: "Escolher outra agenda",
+-      primary: "minha-agenda-verificar",
+-      primaryLabel: "Verificar novamente",
+-    },
+-    "minha-agenda-falha": {
+-      back: "fonte-da-agenda",
+-      backLabel: "Escolher outra agenda",
+-      primary: "minha-agenda-conectar",
+-      primaryLabel: "Tentar conectar novamente",
+-    },
+-    "minha-agenda-indisponivel": {
+-      back: "fonte-da-agenda",
+-      backLabel: "Escolher outra agenda",
+-      primary: "minha-agenda-conectada",
+-      primaryLabel: "Tentar consultar novamente",
+-    },
+-  };
+-  const actions = actionConfig[scenario];
+-  const content = useMemo<ReactNode>(
+-    () => (
+-      <Body
+-        kind={kind}
+-        scenario={scenario}
+-        selection={selection}
+-        setSelection={setSelection}
+-      />
+-    ),
+-    [kind, scenario, selection],
+-  );
+-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
++  function go(step: OnboardingScenario) {
++    router.push(`/onboarding/${step}`);
++  }
++
++  async function submit(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+     if (!event.currentTarget.checkValidity()) {
+       event.currentTarget.reportValidity();
+       return;
+     }
+-    router.push(target);
++    setBusy(true);
++    setError(null);
++    try {
++      await stepPersistByBlock[blockId](scenario, {
++        draft,
++        go,
++        refresh,
++        refreshSession,
++        router,
++        setError,
++      });
++    } catch (caught: unknown) {
++      setError(onboardingError(caught));
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  async function skip() {
++    setBusy(true);
++    setError(null);
++    try {
++      await skipWhatsappStep({
++        draft,
++        go,
++        refresh,
++        refreshSession,
++        router,
++        setError,
++      });
++    } catch (caught: unknown) {
++      setError(onboardingError(caught));
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  async function logout() {
++    await getProductServices()
++      .auth.logout()
++      .catch(() => undefined);
++    setUnauthenticated();
++    router.replace("/login");
+   }
++
++  const actions = external ? (
++    <Link className="btn btn-secondary" href="/onboarding/fonte-da-agenda">
++      Escolher Agenda Atendly
++    </Link>
++  ) : isWhatsappConclusion ? (
++    <>
++      <Link className="btn btn-secondary" href="/configuracoes/whatsapp">
++        Conectar agora
++      </Link>
++      <Link className="btn btn-primary" href="/inicio">
++        Ir para o início
++      </Link>
++    </>
++  ) : isWhatsappIntro ? (
++    <>
++      {previous && (
++        <Link className="btn btn-secondary" href={`/onboarding/${previous}`}>
++          Voltar
++        </Link>
++      )}
++      <button
++        className="btn btn-secondary"
++        disabled={busy}
++        type="button"
++        onClick={() => void skip()}
++      >
++        {busy ? "Salvando..." : "Fazer isso depois"}
++      </button>
++      <button className="btn btn-primary" disabled={busy} type="submit">
++        {busy ? "Salvando..." : "Conectar meu WhatsApp"}
++      </button>
++    </>
++  ) : (
++    <>
++      {previous && (
++        <Link className="btn btn-secondary" href={`/onboarding/${previous}`}>
++          Voltar
++        </Link>
++      )}
++      <button className="btn btn-primary" disabled={busy} type="submit">
++        {busy
++          ? "Salvando..."
++          : scenario === "whatsapp-conectar"
++            ? "Concluir configuração"
++            : "Continuar"}
++      </button>
++    </>
++  );
++
++  return (
++    <OnboardingShell
++      actions={actions}
++      blockLabel={blockLabel}
++      body={stepBodyByBlock[blockId](scenario, draft, setDraft)}
++      description={description}
++      error={error}
++      eyebrow={eyebrow}
++      onExit={() => void logout()}
++      onSubmit={(event) => void submit(event)}
++      progressPercent={progressPercent(scenario)}
++      title={title}
++    />
++  );
++}
++
++function OnboardingMessage({ message }: { message: string }) {
+   return (
+     <main className="onboarding-shell">
+-      <header className="onboarding-topbar">
+-        <Brand href="/onboarding/dados-do-negocio" />
+-        <div className="step-progress" aria-label={`Etapa ${coarseStep} de 5`}>
+-          <div className="step-progress-row">
+-            <span>{progress[0]}</span>
+-            <span>{progress[1]}</span>
+-          </div>
+-          <div className="progress-track">
+-            <div
+-              className="progress-bar"
+-              style={{ width: `${progress[2]}%` }}
+-            />
+-          </div>
+-        </div>
+-        {scenario === "importar-progresso" ||
+-        scenario === "minha-agenda-autenticando" ? (
+-          <span />
+-        ) : (
+-          <Link className="onboarding-exit" href="/login">
+-            Sair
+-          </Link>
+-        )}
+-      </header>
+-      <form className="onboarding-main" onSubmit={handleSubmit}>
+-        <div className="onboarding-content">
+-          {bannerCopy[scenario] && (
+-            <div className="external-source-banner">
+-              <Icon name="calendar" />
+-              {bannerCopy[scenario]}
+-            </div>
+-          )}
+-          {resultState[scenario] && (
+-            <div
+-              className={clsx(
+-                "result-icon",
+-                resultState[scenario] === "partial" && "is-partial",
+-                resultState[scenario] === "error" && "is-error",
+-              )}
+-            >
+-              <Icon
+-                name={resultState[scenario] === "success" ? "check" : "alert"}
+-              />
+-            </div>
+-          )}
+-          <header className="onboarding-heading">
+-            <p className="eyebrow">{eyebrow}</p>
+-            <h1>{title}</h1>
+-            <p>{description}</p>
+-          </header>
+-          <div
+-            className={clsx(
+-              [
+-                "business",
+-                "service-name",
+-                "service-duration",
+-                "service-price",
+-                "days",
+-                "hours",
+-              ].includes(kind)
+-                ? "onboarding-form"
+-                : "onboarding-step-body",
+-            )}
+-          >
+-            {content}
+-            <div
+-              className={clsx(
+-                "onboarding-actions",
+-                !(actions?.back ?? backStep) && "is-single",
+-              )}
+-            >
+-              {(actions?.back ?? backStep) && (
+-                <Link
+-                  className="btn btn-secondary"
+-                  href={
+-                    (actions?.back ?? backStep)?.startsWith("/")
+-                      ? (actions?.back ?? backStep)!
+-                      : `/onboarding/${actions?.back ?? backStep}`
+-                  }
+-                >
+-                  {actions?.backLabel ?? "Voltar"}
+-                </Link>
+-              )}
+-              {actions ? (
+-                actions.primary &&
+-                (scenario === "importar-progresso" ||
+-                scenario === "minha-agenda-autenticando" ||
+-                scenario === "importar-analisar" ? (
+-                  <button className="btn btn-primary" type="button" disabled>
+-                    {actions.primaryLabel}
+-                  </button>
+-                ) : (
+-                  <Link
+-                    className="btn btn-primary"
+-                    href={
+-                      actions.primary.startsWith("/")
+-                        ? actions.primary
+-                        : `/onboarding/${actions.primary}`
+-                    }
+-                  >
+-                    {actions.primaryLabel}
+-                  </Link>
+-                ))
+-              ) : (
+-                <button
+-                  className={clsx(
+-                    "btn btn-primary",
+-                    requiresChoice && selection < 0 && "is-disabled",
+-                  )}
+-                  type="submit"
+-                  disabled={requiresChoice && selection < 0}
+-                  aria-disabled={requiresChoice && selection < 0}
+-                >
+-                  {scenario === "minha-agenda-introducao"
+-                    ? "Conectar Minha Agenda"
+-                    : kind === "source"
+-                      ? "Usar esta agenda"
+-                      : kind === "method"
+-                        ? "Seguir por este caminho"
+-                        : cta}
+-                </button>
+-              )}
+-            </div>
+-          </div>
++      <section className="onboarding-main">
++        <div className="analysis-panel" aria-live="polite">
++          <span className="spinner" aria-hidden="true" />
++          <p>{message}</p>
+         </div>
+-      </form>
++      </section>
+     </main>
+   );
+ }
+diff --git a/apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx b/apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx
+deleted file mode 100644
+index eeb7925..0000000
+--- a/apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx
++++ /dev/null
+@@ -1,635 +0,0 @@
+-"use client";
+-
+-import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import { type FormEvent, useState } from "react";
+-
+-import { BffHttpError } from "@/data";
+-import { WhatsAppConnectionPanel } from "@/features/whatsapp/WhatsAppConnectionPanel";
+-import { Icon } from "@/shared/icons/Icon";
+-import {
+-  getProductServices,
+-  useProductRuntime,
+-} from "@/shared/runtime/ProductRuntime";
+-import { Brand } from "@/shared/ui/Brand";
+-
+-import { onboardingPriceType, useOnboardingRuntime } from "./OnboardingRuntime";
+-import { type OnboardingScenario, onboardingScenarios } from "./scenarios";
+-
+-const flow: OnboardingScenario[] = [
+-  "dados-do-negocio",
+-  "fonte-da-agenda",
+-  "agenda-atendly-confirmar",
+-  "agenda-atendly-metodo",
+-  "servico-nome",
+-  "servico-duracao",
+-  "servico-preco",
+-  "dias-de-atendimento",
+-  "horarios",
+-  "agenda-atendly-pronta",
+-  "tom-da-ia",
+-  "whatsapp",
+-  "validacao",
+-];
+-
+-const weekdayLabels = [
+-  "Domingo",
+-  "Segunda",
+-  "Terça",
+-  "Quarta",
+-  "Quinta",
+-  "Sexta",
+-  "Sábado",
+-];
+-
+-export function ProductOnboardingScreen({
+-  scenario,
+-}: {
+-  scenario: OnboardingScenario;
+-}) {
+-  const router = useRouter();
+-  const { refreshSession, setUnauthenticated } = useProductRuntime();
+-  const {
+-    draft,
+-    error: loadError,
+-    loading,
+-    refresh,
+-    setDraft,
+-  } = useOnboardingRuntime();
+-  const [busy, setBusy] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
+-  const [eyebrow, title, description] = onboardingScenarios[scenario];
+-  const position = Math.max(0, flow.indexOf(scenario));
+-  const progress = Math.round(((position + 1) / flow.length) * 100);
+-
+-  if (loading)
+-    return <ProductMessage message="Carregando sua configuração..." />;
+-  if (loadError) return <ProductMessage message={loadError} />;
+-
+-  async function submit(event: FormEvent<HTMLFormElement>) {
+-    event.preventDefault();
+-    if (!event.currentTarget.checkValidity()) {
+-      event.currentTarget.reportValidity();
+-      return;
+-    }
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      await persistStep(scenario);
+-    } catch (caught: unknown) {
+-      setError(onboardingError(caught));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  async function persistStep(step: OnboardingScenario) {
+-    const onboarding = getProductServices().onboarding;
+-    switch (step) {
+-      case "dados-do-negocio":
+-        await onboarding.update({
+-          business: {
+-            category: draft.businessCategory,
+-            name: draft.businessName,
+-            timezone: draft.timezone,
+-          },
+-        });
+-        await refresh();
+-        go("fonte-da-agenda");
+-        return;
+-      case "fonte-da-agenda":
+-        if (draft.calendarSource === "EXTERNAL") {
+-          go("minha-agenda-conectar");
+-          return;
+-        }
+-        if (draft.calendarSource !== "ATENDLY") {
+-          setError("Escolha uma fonte oficial para continuar.");
+-          return;
+-        }
+-        await onboarding.update({
+-          calendar: { source: "ATENDLY", timezone: draft.timezone },
+-        });
+-        await refresh();
+-        go("agenda-atendly-confirmar");
+-        return;
+-      case "agenda-atendly-confirmar":
+-        go("agenda-atendly-metodo");
+-        return;
+-      case "agenda-atendly-metodo":
+-        go("servico-nome");
+-        return;
+-      case "servico-nome":
+-        go("servico-duracao");
+-        return;
+-      case "servico-duracao":
+-        go("servico-preco");
+-        return;
+-      case "servico-preco": {
+-        const fixedPrice = Number(draft.servicePrice.replace(",", "."));
+-        // O onboarding só grava os dois tipos originais; um tipo novo
+-        // herdado de um serviço existente (ex.: importado) é normalizado
+-        // pelo par mais próximo — nunca preço zero (ver OnboardingRuntime).
+-        const priceType = onboardingPriceType(draft.servicePriceType);
+-        await onboarding.update({
+-          service: {
+-            active: true,
+-            durationMinutes: draft.serviceDuration,
+-            id: draft.serviceId,
+-            name: draft.serviceName,
+-            price: priceType === "ON_REQUEST" ? null : fixedPrice,
+-            priceType,
+-          },
+-        });
+-        await refresh();
+-        go("dias-de-atendimento");
+-        return;
+-      }
+-      case "dias-de-atendimento":
+-        if (draft.days.length === 0) {
+-          setError("Escolha pelo menos um dia de atendimento.");
+-          return;
+-        }
+-        go("horarios");
+-        return;
+-      case "horarios":
+-        if (draft.startTime >= draft.endTime) {
+-          setError("O horário final deve ser posterior ao horário inicial.");
+-          return;
+-        }
+-        await onboarding.update({
+-          availability: {
+-            timezone: draft.timezone,
+-            rules: draft.days.map((dayOfWeek) => ({
+-              active: true,
+-              dayOfWeek,
+-              endTime: draft.endTime,
+-              startTime: draft.startTime,
+-            })),
+-          },
+-        });
+-        await refresh();
+-        go("agenda-atendly-pronta");
+-        return;
+-      case "agenda-atendly-pronta":
+-        go("tom-da-ia");
+-        return;
+-      case "tom-da-ia":
+-        if (!draft.tone) {
+-          setError("Escolha um dos três estilos disponíveis.");
+-          return;
+-        }
+-        await onboarding.update({ ai: { tone: draft.tone } });
+-        await refresh();
+-        go("whatsapp");
+-        return;
+-      case "whatsapp": {
+-        const connection = await getProductServices().whatsapp.get();
+-        if (connection?.status !== "CONNECTED") {
+-          setError("Conclua a vinculação no WhatsApp antes de continuar.");
+-          return;
+-        }
+-        await refresh();
+-        go("validacao");
+-        return;
+-      }
+-      case "validacao":
+-        await onboarding.complete();
+-        await refreshSession();
+-        router.replace("/inicio");
+-        return;
+-      default:
+-        go("fonte-da-agenda");
+-    }
+-  }
+-
+-  async function logout() {
+-    await getProductServices()
+-      .auth.logout()
+-      .catch(() => undefined);
+-    setUnauthenticated();
+-    router.replace("/login");
+-  }
+-
+-  function go(step: OnboardingScenario) {
+-    router.push(`/onboarding/${step}`);
+-  }
+-
+-  const previous = position > 0 ? flow[position - 1] : undefined;
+-  const external = scenario.startsWith("minha-agenda-");
+-  return (
+-    <main className="onboarding-shell">
+-      <header className="onboarding-topbar">
+-        <Brand href="/onboarding" />
+-        <div className="step-progress" aria-label={`Progresso: ${progress}%`}>
+-          <div className="step-progress-row">
+-            <span>Configuração inicial</span>
+-            <span>{progress}%</span>
+-          </div>
+-          <div className="progress-track">
+-            <div className="progress-bar" style={{ width: `${progress}%` }} />
+-          </div>
+-        </div>
+-        <button
+-          className="onboarding-exit"
+-          type="button"
+-          onClick={() => void logout()}
+-        >
+-          Sair
+-        </button>
+-      </header>
+-      <form
+-        className="onboarding-main"
+-        onSubmit={(event) => void submit(event)}
+-      >
+-        <div className="onboarding-content">
+-          <header className="onboarding-heading">
+-            <p className="eyebrow">{eyebrow}</p>
+-            <h1>{title}</h1>
+-            <p>{description}</p>
+-          </header>
+-          <div className="onboarding-step-body">
+-            {external ? (
+-              <ExternalUnavailable />
+-            ) : (
+-              <StepBody draft={draft} scenario={scenario} setDraft={setDraft} />
+-            )}
+-          </div>
+-          {error && (
+-            <div className="onboarding-note is-important" role="alert">
+-              <Icon name="alert" />
+-              <span>{error}</span>
+-            </div>
+-          )}
+-          <div className="onboarding-actions">
+-            {external ? (
+-              <Link
+-                className="btn btn-secondary"
+-                href="/onboarding/fonte-da-agenda"
+-              >
+-                Escolher Agenda Atendly
+-              </Link>
+-            ) : (
+-              <>
+-                {previous && (
+-                  <Link
+-                    className="btn btn-secondary"
+-                    href={`/onboarding/${previous}`}
+-                  >
+-                    Voltar
+-                  </Link>
+-                )}
+-                <button
+-                  className="btn btn-primary"
+-                  disabled={busy}
+-                  type="submit"
+-                >
+-                  {busy
+-                    ? "Salvando..."
+-                    : scenario === "validacao"
+-                      ? "Concluir configuração"
+-                      : "Continuar"}
+-                </button>
+-              </>
+-            )}
+-          </div>
+-        </div>
+-      </form>
+-    </main>
+-  );
+-}
+-
+-function StepBody({
+-  draft,
+-  scenario,
+-  setDraft,
+-}: {
+-  draft: ReturnType<typeof useOnboardingRuntime>["draft"];
+-  scenario: OnboardingScenario;
+-  setDraft: ReturnType<typeof useOnboardingRuntime>["setDraft"];
+-}) {
+-  if (scenario === "dados-do-negocio")
+-    return (
+-      <div className="onboarding-form">
+-        <label className="field">
+-          <span className="label">Nome do negócio</span>
+-          <input
+-            className="input"
+-            required
+-            minLength={2}
+-            value={draft.businessName}
+-            onChange={(event) =>
+-              setDraft((value) => ({
+-                ...value,
+-                businessName: event.target.value,
+-              }))
+-            }
+-          />
+-        </label>
+-        <label className="field">
+-          <span className="label">Categoria</span>
+-          <input
+-            className="input"
+-            required
+-            value={draft.businessCategory}
+-            onChange={(event) =>
+-              setDraft((value) => ({
+-                ...value,
+-                businessCategory: event.target.value,
+-              }))
+-            }
+-          />
+-        </label>
+-      </div>
+-    );
+-  if (scenario === "fonte-da-agenda")
+-    return (
+-      <div className="choice-grid">
+-        <Choice
+-          selected={draft.calendarSource === "ATENDLY"}
+-          title="Agenda Atendly"
+-          copy="Gerencie serviços, disponibilidade e agendamentos na Atendly."
+-          onClick={() =>
+-            setDraft((value) => ({ ...value, calendarSource: "ATENDLY" }))
+-          }
+-        />
+-        <Choice
+-          selected={draft.calendarSource === "EXTERNAL"}
+-          title="Minha Agenda"
+-          copy="Use a integração externa como fonte oficial."
+-          onClick={() =>
+-            setDraft((value) => ({ ...value, calendarSource: "EXTERNAL" }))
+-          }
+-        />
+-      </div>
+-    );
+-  if (scenario === "agenda-atendly-confirmar")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Fonte oficial", "Agenda Atendly"],
+-          ["Fuso horário", draft.timezone],
+-        ]}
+-      />
+-    );
+-  if (scenario === "agenda-atendly-metodo")
+-    return (
+-      <>
+-        <Choice
+-          selected
+-          title="Começar do zero"
+-          copy="Cadastre seu primeiro serviço e disponibilidade agora."
+-          onClick={() => undefined}
+-        />
+-        <div className="onboarding-note">
+-          <Icon name="info" />
+-          <span>A importação única será habilitada no fluxo de migração.</span>
+-        </div>
+-      </>
+-    );
+-  if (scenario === "servico-nome")
+-    return (
+-      <label className="field">
+-        <span className="label">Nome do serviço</span>
+-        <input
+-          className="input"
+-          required
+-          value={draft.serviceName}
+-          onChange={(event) =>
+-            setDraft((value) => ({ ...value, serviceName: event.target.value }))
+-          }
+-        />
+-      </label>
+-    );
+-  if (scenario === "servico-duracao")
+-    return (
+-      <label className="field">
+-        <span className="label">Duração em minutos</span>
+-        <input
+-          className="input"
+-          min={5}
+-          max={1440}
+-          required
+-          type="number"
+-          value={draft.serviceDuration}
+-          onChange={(event) =>
+-            setDraft((value) => ({
+-              ...value,
+-              serviceDuration: Number(event.target.value),
+-            }))
+-          }
+-        />
+-      </label>
+-    );
+-  if (scenario === "servico-preco")
+-    return (
+-      <div className="onboarding-form">
+-        <label className="check">
+-          <input
+-            checked={draft.servicePriceType === "ON_REQUEST"}
+-            type="checkbox"
+-            onChange={(event) =>
+-              setDraft((value) => ({
+-                ...value,
+-                servicePriceType: event.target.checked ? "ON_REQUEST" : "FIXED",
+-              }))
+-            }
+-          />
+-          <span className="check-box" aria-hidden="true" />
+-          <span>Sob consulta</span>
+-        </label>
+-        {draft.servicePriceType === "FIXED" && (
+-          <label className="field">
+-            <span className="label">Preço em reais</span>
+-            <input
+-              className="input"
+-              min="0"
+-              required
+-              step="0.01"
+-              type="number"
+-              value={draft.servicePrice}
+-              onChange={(event) =>
+-                setDraft((value) => ({
+-                  ...value,
+-                  servicePrice: event.target.value,
+-                }))
+-              }
+-            />
+-          </label>
+-        )}
+-      </div>
+-    );
+-  if (scenario === "dias-de-atendimento")
+-    return (
+-      <div className="choice-grid">
+-        {weekdayLabels.map((label, day) => (
+-          <label
+-            className={`choice-card${draft.days.includes(day) ? " is-selected" : ""}`}
+-            key={label}
+-          >
+-            <input
+-              className="sr-only"
+-              checked={draft.days.includes(day)}
+-              type="checkbox"
+-              onChange={(event) =>
+-                setDraft((value) => ({
+-                  ...value,
+-                  days: event.target.checked
+-                    ? [...value.days, day].sort()
+-                    : value.days.filter((item) => item !== day),
+-                }))
+-              }
+-            />
+-            <h3>{label}</h3>
+-          </label>
+-        ))}
+-      </div>
+-    );
+-  if (scenario === "horarios")
+-    return (
+-      <div className="choice-grid">
+-        <label className="field">
+-          <span className="label">Início</span>
+-          <input
+-            className="input"
+-            required
+-            type="time"
+-            value={draft.startTime}
+-            onChange={(event) =>
+-              setDraft((value) => ({ ...value, startTime: event.target.value }))
+-            }
+-          />
+-        </label>
+-        <label className="field">
+-          <span className="label">Fim</span>
+-          <input
+-            className="input"
+-            required
+-            type="time"
+-            value={draft.endTime}
+-            onChange={(event) =>
+-              setDraft((value) => ({ ...value, endTime: event.target.value }))
+-            }
+-          />
+-        </label>
+-      </div>
+-    );
+-  if (scenario === "agenda-atendly-pronta")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Serviço", draft.serviceName],
+-          ["Duração", `${draft.serviceDuration} minutos`],
+-          ["Fonte oficial", "Agenda Atendly"],
+-        ]}
+-      />
+-    );
+-  if (scenario === "tom-da-ia")
+-    return (
+-      <div className="choice-grid">
+-        <Choice
+-          selected={draft.tone === "PROFESSIONAL"}
+-          title="Profissional"
+-          copy="Direta, clara e cordial."
+-          onClick={() =>
+-            setDraft((value) => ({ ...value, tone: "PROFESSIONAL" }))
+-          }
+-        />
+-        <Choice
+-          selected={draft.tone === "BALANCED"}
+-          title="Equilibrada"
+-          copy="Cordial com um toque natural."
+-          onClick={() => setDraft((value) => ({ ...value, tone: "BALANCED" }))}
+-        />
+-        <Choice
+-          selected={draft.tone === "CASUAL"}
+-          title="Descontraída"
+-          copy="Natural, acolhedora e simples."
+-          onClick={() => setDraft((value) => ({ ...value, tone: "CASUAL" }))}
+-        />
+-      </div>
+-    );
+-  if (scenario === "whatsapp") return <WhatsAppConnectionPanel />;
+-  if (scenario === "validacao")
+-    return (
+-      <Summary
+-        rows={[
+-          ["Negócio", "Configurado"],
+-          ["Agenda", "Agenda Atendly"],
+-          ["WhatsApp", "Conectado"],
+-          ["Atendente virtual", "Configurado"],
+-        ]}
+-      />
+-    );
+-  return null;
+-}
+-
+-function Choice({
+-  copy,
+-  onClick,
+-  selected,
+-  title,
+-}: {
+-  copy: string;
+-  onClick: () => void;
+-  selected: boolean;
+-  title: string;
+-}) {
+-  return (
+-    <button
+-      className={`choice-card${selected ? " is-selected" : ""}`}
+-      type="button"
+-      onClick={onClick}
+-    >
+-      <span className="choice-check">
+-        <Icon name="check" />
+-      </span>
+-      <h2>{title}</h2>
+-      <p>{copy}</p>
+-    </button>
+-  );
+-}
+-
+-function Summary({ rows }: { rows: Array<[string, string]> }) {
+-  return (
+-    <div className="service-summary">
+-      {rows.map(([label, value]) => (
+-        <div className="summary-row" key={label}>
+-          <span>{label}</span>
+-          <strong>{value}</strong>
+-        </div>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-function ExternalUnavailable() {
+-  return (
+-    <div className="onboarding-note is-important">
+-      <Icon name="info" />
+-      <span>
+-        A autenticação da Minha Agenda ainda depende da definição do provedor.
+-        Nenhuma conexão será simulada ou marcada como concluída.
+-      </span>
+-    </div>
+-  );
+-}
+-
+-function ProductMessage({ message }: { message: string }) {
+-  return (
+-    <main className="onboarding-shell">
+-      <section className="onboarding-main">
+-        <div className="analysis-panel" aria-live="polite">
+-          <span className="spinner" />
+-          <p>{message}</p>
+-        </div>
+-      </section>
+-    </main>
+-  );
+-}
+-
+-function onboardingError(error: unknown): string {
+-  if (error instanceof BffHttpError && error.status === 409) {
+-    return "Ainda há itens obrigatórios pendentes. Revise agenda, serviço, disponibilidade e WhatsApp.";
+-  }
+-  return "Não foi possível salvar esta etapa. Tente novamente.";
+-}
+diff --git a/apps/frontend/src/features/onboarding/scenarios.ts b/apps/frontend/src/features/onboarding/scenarios.ts
+index a92e01f..66609df 100644
+--- a/apps/frontend/src/features/onboarding/scenarios.ts
++++ b/apps/frontend/src/features/onboarding/scenarios.ts
+@@ -59,132 +59,12 @@ export const onboardingScenarios = {
+     "Serviço e disponibilidade foram salvos. O restante da ativação continua em uma próxima etapa do produto.",
+     "ready",
+   ],
+-  "importar-conectar": [
+-    "Importação única",
+-    "Conecte a Minha Agenda para copiar seus dados",
+-    "A conexão será usada somente para preparar a importação.",
+-    "external-connect",
+-  ],
+-  "importar-analisar": [
+-    "Verificando origem",
+-    "Analisando os dados encontrados",
+-    "Antes de copiar qualquer coisa, a Atendly verifica o que pode ser importado.",
+-    "analysis",
+-  ],
+-  "importar-previa": [
+-    "Prévia",
+-    "Revise o que está pronto para copiar",
+-    "A prévia mostra categorias encontradas sem alterar nenhuma agenda.",
+-    "preview",
+-  ],
+-  "importar-confirmar": [
+-    "Revisão final",
+-    "Copiar estes dados para a Agenda Atendly?",
+-    "A cópia começa somente depois desta confirmação.",
+-    "confirm-import",
+-  ],
+-  "importar-progresso": [
+-    "Importação em andamento",
+-    "Copiando seus dados",
+-    "Permaneça nesta tela até a confirmação final.",
+-    "progress",
+-  ],
+-  "importar-sucesso": [
+-    "Importação concluída",
+-    "Seus dados foram copiados",
+-    "A Agenda Atendly agora contém os dados validados na prévia.",
+-    "success",
+-  ],
+-  "importar-parcial": [
+-    "Resultado parcial",
+-    "Alguns dados precisam de revisão",
+-    "Parte da cópia não foi concluída. A Agenda Atendly ainda não foi ativada como fonte oficial.",
+-    "partial",
+-  ],
+-  "importar-erro": [
+-    "Importação não concluída",
+-    "Não foi possível copiar os dados",
+-    "Nenhuma mudança foi aplicada. A Agenda Atendly não foi ativada como fonte oficial.",
+-    "error",
+-  ],
+-  "minha-agenda-introducao": [
+-    "Integração contínua",
+-    "Atendly trabalhará junto com a Minha Agenda",
+-    "A Atendly consultará e enviará apenas as operações suportadas pela integração.",
+-    "external-intro",
+-  ],
+   "minha-agenda-conectar": [
+     "Conectar fonte oficial",
+     "Autorize a consulta da sua agenda",
+     "A forma exata de autenticação depende da integração disponível.",
+     "external-connect",
+   ],
+-  "minha-agenda-autenticando": [
+-    "Conectando",
+-    "Confirmando acesso à Minha Agenda",
+-    "Aguarde a resposta antes de seguir.",
+-    "analysis",
+-  ],
+-  "minha-agenda-conectada": [
+-    "Conexão realizada",
+-    "Minha Agenda respondeu com sucesso",
+-    "Agora precisamos verificar se os dados necessários estão disponíveis.",
+-    "connected",
+-  ],
+-  "minha-agenda-verificar": [
+-    "Dados encontrados",
+-    "Confira o que a integração conseguiu consultar",
+-    "Abra cada categoria para entender o que será usado pela Atendly.",
+-    "verify",
+-  ],
+-  "minha-agenda-servicos": [
+-    "Serviços encontrados",
+-    "Dados de serviço disponíveis para consulta",
+-    "Valores reais aparecem somente após resposta da integração.",
+-    "data",
+-  ],
+-  "minha-agenda-clientes": [
+-    "Clientes encontrados",
+-    "Identificação disponível na origem",
+-    "A Atendly usará somente os dados retornados pela integração.",
+-    "data",
+-  ],
+-  "minha-agenda-agendamentos": [
+-    "Agendamentos encontrados",
+-    "Compromissos disponíveis para consulta",
+-    "A Atendly não considera um agendamento confirmado sem sucesso na fonte oficial.",
+-    "data",
+-  ],
+-  "minha-agenda-disponibilidade": [
+-    "Disponibilidade",
+-    "Horários dependem da resposta da integração",
+-    "A Atendly nunca criará disponibilidade que não tenha sido retornada pela fonte oficial.",
+-    "data",
+-  ],
+-  "minha-agenda-valida": [
+-    "Integração válida",
+-    "Minha Agenda está pronta para ser usada pela Atendly",
+-    "Os dados necessários foram consultados. Ações continuam limitadas ao que a integração suportar.",
+-    "success",
+-  ],
+-  "minha-agenda-incompleta": [
+-    "Dados incompletos",
+-    "Faltam informações para agendar com segurança",
+-    "A integração não será considerada válida enquanto os dados necessários não estiverem disponíveis.",
+-    "partial",
+-  ],
+-  "minha-agenda-falha": [
+-    "Conexão não realizada",
+-    "Não foi possível conectar a Minha Agenda",
+-    "Nenhum dado foi consultado ou alterado. Revise a conexão antes de tentar novamente.",
+-    "error",
+-  ],
+-  "minha-agenda-indisponivel": [
+-    "Fonte temporariamente indisponível",
+-    "Não foi possível consultar a Minha Agenda",
+-    "Os dados podem estar desatualizados. A integração não será marcada como válida agora.",
+-    "error",
+-  ],
+   "tom-da-ia": [
+     "Atendente virtual",
+     "Como a Atendly deve conversar?",
+@@ -192,16 +72,22 @@ export const onboardingScenarios = {
+     "tone",
+   ],
+   whatsapp: [
++    "Antes de conectar",
++    "Agora vamos colocar sua IA para atender de verdade",
++    "Antes de conectar seu número, veja o que muda no seu dia a dia.",
++    "whatsapp",
++  ],
++  "whatsapp-conectar": [
+     "Conectar WhatsApp",
+     "Ative o atendimento no seu número",
+     "No celular, use o código de vinculação. No computador, escaneie o QR Code.",
+-    "whatsapp",
++    "whatsapp-connect",
+   ],
+-  validacao: [
+-    "Teste final",
+-    "Vamos conferir se tudo está funcionando",
+-    "A validação verifica agenda, WhatsApp e atendimento antes de liberar o início.",
+-    "validation",
++  "whatsapp-concluido": [
++    "Onboarding concluído",
++    "Sua Atendly está configurada.",
++    "Conecte seu WhatsApp quando quiser colocar a IA para atender seus clientes.",
++    "whatsapp-done",
+   ],
+ } as const;
+ 
+diff --git a/apps/frontend/src/features/onboarding/types.ts b/apps/frontend/src/features/onboarding/types.ts
+deleted file mode 100644
+index b6280c3..0000000
+--- a/apps/frontend/src/features/onboarding/types.ts
++++ /dev/null
+@@ -1,17 +0,0 @@
+-export type CalendarSource = "atendly" | "external";
+-
+-export interface OnboardingDraft {
+-  businessName: string;
+-  category: string;
+-  calendarSource?: CalendarSource;
+-  serviceName?: string;
+-  serviceDuration?: string;
+-  servicePrice?: string;
+-  workingDays: string[];
+-  tone?: "professional" | "friendly";
+-}
+-
+-export interface OnboardingService {
+-  loadDraft(): Promise<OnboardingDraft>;
+-  saveDraft(draft: OnboardingDraft): Promise<void>;
+-}
+diff --git a/apps/frontend/src/features/settings/ProductSettingsScreen.tsx b/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
+index 6dd956f..9be15a9 100644
+--- a/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
++++ b/apps/frontend/src/features/settings/ProductSettingsScreen.tsx
+@@ -4,7 +4,11 @@ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+ 
+-import type { AiTone, SettingsState } from "@/data";
++import type { AiTone, BusinessModality, SettingsState } from "@/data";
++import {
++  BUSINESS_MODALITY_OPTIONS,
++  FREQUENT_BUSINESS_SEGMENTS,
++} from "@/features/onboarding/blocks/business";
+ import { WhatsAppConnectionPanel } from "@/features/whatsapp/WhatsAppConnectionPanel";
+ import { Icon, type IconName } from "@/shared/icons/Icon";
+ import { useShellConfig } from "@/shared/layout/ShellConfig";
+@@ -207,6 +211,15 @@ function BusinessSettings({
+   const { refreshSession } = useProductRuntime();
+   const [name, setName] = useState(settings.business?.name ?? "");
+   const [category, setCategory] = useState(settings.business?.category ?? "");
++  const [customSegment, setCustomSegment] = useState(
++    () =>
++      !!settings.business?.category &&
++      !FREQUENT_BUSINESS_SEGMENTS.includes(settings.business.category),
++  );
++  const [modalities, setModalities] = useState<BusinessModality[]>(
++    settings.business?.modalities ?? [],
++  );
++  const [address, setAddress] = useState(settings.business?.address ?? "");
+   const [timezone, setTimezone] = useState(
+     settings.business?.timezone ?? "America/Sao_Paulo",
+   );
+@@ -214,8 +227,19 @@ function BusinessSettings({
+   const [message, setMessage] = useState<string | null>(null);
+   const [timezoneConfirmationOpen, setTimezoneConfirmationOpen] =
+     useState(false);
++  const requiresAddress = modalities.includes("ON_SITE");
++  const pendingProjection =
++    settings.business?.contextProjectionStatus === "PENDING";
+   async function save(event: FormEvent) {
+     event.preventDefault();
++    if (modalities.length === 0) {
++      setMessage("Escolha ao menos uma modalidade de atendimento.");
++      return;
++    }
++    if (requiresAddress && !address.trim()) {
++      setMessage("Informe o endereço do seu espaço.");
++      return;
++    }
+     if (timezone !== settings.business?.timezone) {
+       setTimezoneConfirmationOpen(true);
+       return;
+@@ -228,8 +252,10 @@ function BusinessSettings({
+     try {
+       onSaved(
+         await getProductServices().settings.updateBusiness({
+-          name,
++          address: requiresAddress ? address.trim() : null,
+           category,
++          modalities,
++          name,
+           timezone,
+         }),
+       );
+@@ -259,15 +285,43 @@ function BusinessSettings({
+               onChange={(event) => setName(event.target.value)}
+             />
+           </label>
+-          <label className="field">
+-            <span className="label">Categoria</span>
+-            <input
+-              className="input"
+-              required
+-              value={category}
+-              onChange={(event) => setCategory(event.target.value)}
+-            />
+-          </label>
++          <div className="field is-wide">
++            <span className="label">Qual é o seu segmento?</span>
++            <div className="chip-row">
++              {FREQUENT_BUSINESS_SEGMENTS.map((segment) => (
++                <button
++                  className={`chip${!customSegment && category === segment ? " is-active" : ""}`}
++                  key={segment}
++                  type="button"
++                  onClick={() => {
++                    setCustomSegment(false);
++                    setCategory(segment);
++                  }}
++                >
++                  {segment}
++                </button>
++              ))}
++              <button
++                className={`chip${customSegment ? " is-active" : ""}`}
++                type="button"
++                onClick={() => {
++                  setCustomSegment(true);
++                  setCategory("");
++                }}
++              >
++                Outro
++              </button>
++            </div>
++            {customSegment && (
++              <input
++                className="input"
++                required
++                placeholder="Qual é o seu segmento?"
++                value={category}
++                onChange={(event) => setCategory(event.target.value)}
++              />
++            )}
++          </div>
+           <label className="field">
+             <span className="label">Idioma</span>
+             <span className="input-wrap">
+@@ -310,7 +364,57 @@ function BusinessSettings({
+               A mudança exige revisão porque altera horários futuros.
+             </span>
+           </label>
++          <div className="field is-wide">
++            <span className="label">Modalidade de atendimento</span>
++            <div className="choice-grid">
++              {BUSINESS_MODALITY_OPTIONS.map((option) => {
++                const selected = modalities.includes(option.value);
++                return (
++                  <label
++                    className={`choice-card${selected ? " is-selected" : ""}`}
++                    key={option.value}
++                  >
++                    <input
++                      checked={selected}
++                      className="sr-only"
++                      type="checkbox"
++                      onChange={(event) =>
++                        setModalities((current) =>
++                          event.target.checked
++                            ? [...current, option.value]
++                            : current.filter((item) => item !== option.value),
++                        )
++                      }
++                    />
++                    <h3>{option.title}</h3>
++                    <p>{option.copy}</p>
++                  </label>
++                );
++              })}
++            </div>
++          </div>
++          {requiresAddress && (
++            <label className="field is-wide">
++              <span className="label">Endereço do seu espaço</span>
++              <input
++                className="input"
++                maxLength={300}
++                required
++                value={address}
++                onChange={(event) => setAddress(event.target.value)}
++              />
++            </label>
++          )}
+         </div>
++        {pendingProjection && (
++          <div className="onboarding-note is-important">
++            <Icon name="info" />
++            <span>
++              Os dados do negócio foram salvos. A IA ainda está atualizando o
++              contexto com essa mudança.
++            </span>
++          </div>
++        )}
+         <SaveActions busy={busy} message={message} />
+       </form>
+       <Dialog
+diff --git a/apps/frontend/src/shared/layout/AppShell.tsx b/apps/frontend/src/shared/layout/AppShell.tsx
+index b9e74da..41ab93c 100644
+--- a/apps/frontend/src/shared/layout/AppShell.tsx
++++ b/apps/frontend/src/shared/layout/AppShell.tsx
+@@ -10,7 +10,11 @@ import {
+   getProductServices,
+   useProductRuntime,
+ } from "@/shared/runtime/ProductRuntime";
+-import { useSystemStatus } from "@/shared/runtime/systemStatus";
++import {
++  type StatusView,
++  SystemStatusProvider,
++  useSystemStatus,
++} from "@/shared/runtime/systemStatus";
+ import { Brand } from "@/shared/ui/Brand";
+ import { Dialog } from "@/shared/ui/Dialog";
+ 
+@@ -29,7 +33,21 @@ export type AppShellProps = ShellConfig & {
+   children: ReactNode;
+ };
+ 
+-export function AppShell({
++/**
++ * `SystemStatusProvider` monta o único poller de `GET /v1/status` da árvore
++ * (Goal018/WU-10): o chrome do shell e a tela filha (ex.: `DashboardScreen`)
++ * leem o mesmo resultado via `useSystemStatus`, em vez de cada um abrir seu
++ * próprio `setInterval`/listener de `focus`.
++ */
++export function AppShell(props: AppShellProps) {
++  return (
++    <SystemStatusProvider>
++      <AppShellChrome {...props} />
++    </SystemStatusProvider>
++  );
++}
++
++function AppShellChrome({
+   action,
+   active,
+   attention = false,
+@@ -133,6 +151,7 @@ export function AppShell({
+             view={status.aiView}
+             activeCopy="IA ativa"
+             offCopy="IA desligada"
++            pendingCopy="IA em ativação"
+           />
+           <nav className="nav" aria-label="Navegação principal">
+             {SIDEBAR_DESTINATIONS.map((item) => (
+@@ -318,12 +337,14 @@ function StatusLine({
+   activeCopy,
+   label,
+   offCopy,
++  pendingCopy,
+   view,
+ }: {
+   activeCopy: string;
+   label: string;
+   offCopy: string;
+-  view: "active" | "loading" | "off" | "unknown";
++  pendingCopy?: string;
++  view: StatusView;
+ }) {
+   const copy =
+     view === "loading"
+@@ -332,13 +353,16 @@ function StatusLine({
+         ? `${label} não confirmado`
+         : view === "active"
+           ? activeCopy
+-          : offCopy;
++          : view === "pending"
++            ? (pendingCopy ?? `${label} em ativação`)
++            : offCopy;
+   return (
+     <div className="wa-status status-line" role="status">
+       <span
+         className={clsx(
+           "status-dot",
+           view === "off" && "danger",
++          view === "pending" && "warning",
+           (view === "loading" || view === "unknown") && "neutral",
+         )}
+         aria-hidden="true"
+diff --git a/apps/frontend/src/shared/runtime/systemStatus.ts b/apps/frontend/src/shared/runtime/systemStatus.tsx
+similarity index 61%
+rename from apps/frontend/src/shared/runtime/systemStatus.ts
+rename to apps/frontend/src/shared/runtime/systemStatus.tsx
+index 93f209f..b0b43f8 100644
+--- a/apps/frontend/src/shared/runtime/systemStatus.ts
++++ b/apps/frontend/src/shared/runtime/systemStatus.tsx
+@@ -1,13 +1,19 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import {
++  createContext,
++  type ReactNode,
++  useContext,
++  useEffect,
++  useState,
++} from "react";
+ 
+ import type { AiStateValue, SystemStatus, WhatsAppStatusValue } from "@/data";
+ 
+ import { getProductServices } from "./ProductRuntime";
+ 
+ export type StatusFetchPhase = "error" | "loaded" | "loading";
+-export type StatusView = "active" | "loading" | "off" | "unknown";
++export type StatusView = "active" | "loading" | "off" | "pending" | "unknown";
+ 
+ /**
+  * Quatro estados visuais, nunca um default conectado: enquanto a primeira
+@@ -26,7 +32,12 @@ export function whatsappStatusView(
+   return "off";
+ }
+ 
+-/** Mesmo princípio para a IA: `PENDING` (desejado ligado, ainda não efetivo) some sob "off". */
++/**
++ * Mesmo princípio para a IA, com uma quinta apresentação própria: `PENDING`
++ * (desejado ligado, IA ainda não confirma) deixa de cair sob "off" — resíduo
++ * do review014 — e passa a ter leitura distinta de desligada e de
++ * indisponível (Goal018/WU-10).
++ */
+ export function aiStatusView(
+   phase: StatusFetchPhase,
+   state?: AiStateValue,
+@@ -34,6 +45,7 @@ export function aiStatusView(
+   if (phase === "loading") return "loading";
+   if (phase === "error") return "unknown";
+   if (state === "ACTIVE") return "active";
++  if (state === "PENDING") return "pending";
+   if (state === "UNKNOWN") return "unknown";
+   return "off";
+ }
+@@ -48,8 +60,8 @@ export type UseSystemStatusResult = {
+   whatsappView: StatusView;
+ };
+ 
+-/** Carrega `GET /v1/status` uma vez por shell montado, com revalidação por intervalo e foco. */
+-export function useSystemStatus(): UseSystemStatusResult {
++/** Carrega `GET /v1/status` uma vez por montagem, com revalidação por intervalo e foco. */
++function useSystemStatusPolling(): UseSystemStatusResult {
+   const [phase, setPhase] = useState<StatusFetchPhase>("loading");
+   const [data, setData] = useState<SystemStatus | null>(null);
+ 
+@@ -90,3 +102,29 @@ export function useSystemStatus(): UseSystemStatusResult {
+     whatsappView: whatsappStatusView(phase, data?.whatsapp.status),
+   };
+ }
++
++const SystemStatusContext = createContext<UseSystemStatusResult | null>(null);
++
++/**
++ * Único ponto de `useSystemStatusPolling` da árvore: `AppShell` monta este
++ * provider uma vez (Goal018/WU-10) e tanto o próprio shell quanto a tela
++ * filha (ex.: `DashboardScreen`) leem o mesmo resultado via `useSystemStatus`,
++ * em vez de cada um abrir seu próprio `setInterval`/listener de `focus`.
++ */
++export function SystemStatusProvider({ children }: { children: ReactNode }) {
++  const value = useSystemStatusPolling();
++  return (
++    <SystemStatusContext.Provider value={value}>
++      {children}
++    </SystemStatusContext.Provider>
++  );
++}
++
++/** Lê o status compartilhado pelo `SystemStatusProvider` mais próximo. */
++export function useSystemStatus(): UseSystemStatusResult {
++  const value = useContext(SystemStatusContext);
++  if (!value) {
++    throw new Error("useSystemStatus must be used inside SystemStatusProvider.");
++  }
++  return value;
++}
+diff --git a/apps/frontend/src/shared/styles/atendly.css b/apps/frontend/src/shared/styles/atendly.css
+index 5ddb827..10a44f0 100644
+--- a/apps/frontend/src/shared/styles/atendly.css
++++ b/apps/frontend/src/shared/styles/atendly.css
+@@ -2214,6 +2214,32 @@ p {
+   border-color: color-mix(in oklch, var(--warning), white 62%);
+   background: var(--warning-soft);
+ }
++.onboarding-points {
++  display: grid;
++  gap: 4px;
++  margin: 0;
++  padding: 0;
++  list-style: none;
++}
++.onboarding-points li {
++  display: flex;
++  align-items: flex-start;
++  gap: 14px;
++  padding: 14px 4px;
++  border-bottom: 1px solid var(--border);
++  font-size: 15px;
++  line-height: 1.4;
++}
++.onboarding-points li:last-child {
++  border-bottom: none;
++}
++.onboarding-points .icon {
++  flex: none;
++  width: 24px;
++  height: 24px;
++  margin-top: 1px;
++  color: var(--accent);
++}
+ .source-card {
+   min-height: 168px;
+   color: var(--fg);
+@@ -2725,6 +2751,49 @@ p {
+   font-weight: 600;
+   text-decoration: none;
+ }
++.checklist-card {
++  margin-bottom: 16px;
++}
++.checklist-list {
++  display: grid;
++  gap: 8px;
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++.checklist-item {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 12px 14px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++  color: var(--fg);
++}
++.checklist-item.is-done {
++  color: var(--fg-soft);
++  text-decoration: line-through;
++}
++.checklist-marker {
++  width: 22px;
++  height: 22px;
++  border-radius: 50%;
++  border: 1.5px solid var(--border);
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  flex: none;
++}
++.checklist-item.is-done .checklist-marker {
++  background: var(--accent);
++  border-color: var(--accent);
++  color: var(--surface);
++}
++.checklist-item.is-done .checklist-marker .icon {
++  width: 12px;
++  height: 12px;
++}
+ .agenda-stack {
+   display: grid;
+   gap: 10px;
+diff --git a/apps/frontend/tests/goal014-shell.test.ts b/apps/frontend/tests/goal014-shell.test.ts
+index 563b0e2..d0ba0c3 100644
+--- a/apps/frontend/tests/goal014-shell.test.ts
++++ b/apps/frontend/tests/goal014-shell.test.ts
+@@ -102,11 +102,11 @@ describe("mapeamento de status (WhatsApp e IA)", () => {
+     expect(whatsappStatusView("loaded", "DISCONNECTED")).toBe("off");
+   });
+ 
+-  test("IA: ACTIVE é 'active', UNKNOWN é 'unknown', OFF e PENDING são 'off'", () => {
++  test("IA: ACTIVE é 'active', UNKNOWN é 'unknown', OFF é 'off', PENDING tem apresentação própria (Goal018/WU-10)", () => {
+     expect(aiStatusView("loaded", "ACTIVE")).toBe("active");
+     expect(aiStatusView("loaded", "UNKNOWN")).toBe("unknown");
+     expect(aiStatusView("loaded", "OFF")).toBe("off");
+-    expect(aiStatusView("loaded", "PENDING")).toBe("off");
++    expect(aiStatusView("loaded", "PENDING")).toBe("pending");
+   });
+ 
+   test("nenhuma combinação produz 'active' sem uma leitura 'loaded' e um estado confirmado", () => {
+diff --git a/docs/migration/CURRENT_STATE.md b/docs/migration/CURRENT_STATE.md
+index f001894..9d642dd 100644
+--- a/docs/migration/CURRENT_STATE.md
++++ b/docs/migration/CURRENT_STATE.md
+@@ -58,7 +58,7 @@ Inventário registrado: [PUBLIC_API_V1](../../apps/bff/PUBLIC_API_V1.md). Montag
+ | Família pública | Dono da operação / observação |
+ | --- | --- |
+ | `/v1/auth/*` | BFF, sessão e conta |
+-| `/v1/onboarding` + `/complete` | BFF compõe perfil, catálogo, disponibilidade, IA e WhatsApp |
++| `/v1/onboarding` + `/complete` | BFF compõe perfil, catálogo, disponibilidade e IA; WhatsApp saiu da composição no Goal018 — `complete` não verifica mais instância nem status do Evolution |
+ | `/v1/dashboard` | Composição com estado degradado por dependência, sem zerar silenciosamente erro como sucesso |
+ | `/v1/appointments`, `/availability`, `/time-blocks` | Proxy validado para Scheduling; create/reschedule/cancel transportam idempotency key |
+ | `/v1/customers`, `/v1/services` | CRUD parcial via Scheduling; telefone obrigatório no create cliente BFF |
+@@ -67,7 +67,7 @@ Inventário registrado: [PUBLIC_API_V1](../../apps/bff/PUBLIC_API_V1.md). Montag
+ | `/v1/whatsapp/*` | BFF controla provisionamento/QR/pairing/status/disconnect em Evolution e provisiona vínculo na IA |
+ | `/v1/calendar/integration/*`, `/calendar/migrations/*` | Contratos legados ainda montados e consumidos |
+ 
+-`onboarding/routes.ts:166–195` exige fonte escolhida, dois tons antigos e WhatsApp conectado; fonte externa dispensa disponibilidade interna, exigindo integração conectada. `settings/routes.ts:88–100` persiste AI settings antes de sincronizar IA: falha remota deixa duas cópias divergentes. Atualização de negócio também precede sincronização. Não há transação distribuída ou reconciliação durável nesse caminho.
++`onboarding/routes.ts:174–235` exige fonte escolhida, dois tons antigos, modalidade selecionada e endereço quando `ON_SITE` (Goal018); fonte externa dispensa disponibilidade interna, exigindo integração conectada. WhatsApp deixou de ser exigência de conclusão no Goal018 — a rota não consulta mais `WhatsAppInstance` nem o status do Evolution. `settings/routes.ts:88–100` persiste AI settings antes de sincronizar IA: falha remota deixa duas cópias divergentes. Atualização de negócio também precede sincronização. Não há transação distribuída ou reconciliação durável nesse caminho.
+ 
+ WhatsApp é criado remotamente antes da inserção local (`whatsapp/routes.ts:144–160`), e depois provisionado na IA. Concorrência/falha parcial pode deixar instância órfã; não foi observado incidente real. GET status atualiza a projeção local, podendo reduzir estados intermediários a CONNECTED/DISCONNECTED.
+ 
+@@ -79,7 +79,7 @@ Schema: `apps/bff/prisma/schema.prisma`.
+ | --- | --- |
+ | User | CUID, email global único, passwordHash, created/updated |
+ | Tenant / TenantMember | Tenant ID canônico; membership com papel OWNER; FKs locais |
+-| BusinessProfile | tenantId único; nome, categoria, timezone, idioma, moeda, onboardingCompletedAt |
++| BusinessProfile | tenantId único; nome, categoria, timezone, idioma, moeda, onboardingCompletedAt; `modalities` (array), `address` (nulável) e `businessContextVersion`/`businessContextProjectedVersion` (contador gravado x versão confirmada pela IA) desde o Goal018 |
+ | AiSettings | tenantId único; enabled e enum de dois tons; cópia funcional na IA |
+ | WhatsAppInstance | userId único; id/name/token externo, número/status/QR/timestamps; token armazenado como String sem cifra neste schema/rota |
+ | LegalAcceptance | User + versões termos/privacidade únicas; acceptedAt |
+diff --git a/docs/migration/GAP_ANALYSIS.md b/docs/migration/GAP_ANALYSIS.md
+index 1f05281..d248565 100644
+--- a/docs/migration/GAP_ANALYSIS.md
++++ b/docs/migration/GAP_ANALYSIS.md
+@@ -52,8 +52,8 @@ Estas são as fontes dos requisitos confrontados abaixo. Os fatos de implementa
+ | G-22 P1 — privacidade conversa — FECHADO no diff005; interface no diff017 | Comercial/Não classificadas/Pessoal; override; Ignorar IA absoluto | `Contact` (ignore com autor/origem/data, pausa explícita, override manual) e `ConversationSession` (categoria vigente com origem, sugestão do agente com proveniência, atendimento humano) persistidos; override manual prevalece sobre a sugestão e atravessa a troca de sessão; ignore é regra do contato avaliada antes de qualquer leitura de conteúdo; sessão pessoal desliga a IA só naquela sessão; classificação do agente nunca escreve override | Memória estruturada e transcrição ainda não existem (Goals 012 e 013), então a remoção de memória anterior do contexto se resume a `contextSince` no histórico do turno | [Review005](reviews/005-review.md). A interface chegou no diff017: as três abas saem de `category` na query do BFF, o override manual de categoria é declarado no painel de contexto, e marcar e desmarcar ignorado existem na tela pela mesma operação reversível (`setIgnored`), com a copy dizendo que o conteúdo deixa de virar contexto e que nada é apagado |
+ | G-23 P2 — mídia — **FECHADO no diff013; exibição no diff017** | Áudio entendido; imagem humano; documento visível sem interpretação | Toda mensagem do contato é persistida como `Message` com `kind` e mídia ganha `MessageAttachment` com metadados e proveniência da transcrição, sem byte de mídia retido no PostgreSQL da IA (purga do `base64` ao concluir o evento, com backfill do estoque, preservando as chaves do proto que servem ao download sob demanda); limite de corpo explícito na rota do webhook (32 MiB) e teto de mídia embutida no Go (16 MiB) eliminam a perda por `413`; transcrição por porta com provider OpenAI por HTTP e dublê em teste, num nó entre `recordInbound` e `sessionGate` — transcreve também com IA desligada e em atendimento humano, nunca para contato ignorado nem sessão pessoal —, com confirmação clara em áudio sob os mesmos guards do Goal011 e falha que grava `FAILED` sem inventar texto; imagem em handoff determinístico sem chamar o modelo, documento e vídeo visíveis sem interpretação, sticker/GIF/`unknown` sem resposta e sem renovar sessão; rota de mídia sob demanda na IA e no BFF, com `kind`/`attachment` no DTO dos três apps | Nenhuma transcrição real foi executada: todo provider é dublê e os evals provam roteamento e guards, não qualidade de reconhecimento de voz. A plataforma não guarda cópia dos bytes — a exibição depende da origem (WhatsApp ou MinIO) e a purga do `base64` não é reversível; mídia `tooLarge` fica visível só como metadado. `webhook_deliveries` no Go continua guardando o payload integral, incluindo o `base64` (mesmo limite de G-04) | [Review013](reviews/013-review.md). Visão computacional, leitura de PDF e qualquer interpretação de imagem ou documento seguem fora do MVP; armazenamento durável de mídia (MinIO/S3) é decisão de infraestrutura fora do Goal; player de áudio e visualizador de imagem, documento e vídeo entregues no diff017, sempre por pedido explícito da profissional e sempre pelo proxy — nenhuma URL da origem entra na árvore, e áudio sem bytes na origem diz isso em vez de oferecer o player; envio de mídia pela profissional continua fora, declarado no Goal017 por falta de contrato nos três serviços e no transporte; retenção no Goal022 |
+ | G-24 P2 — conhecimento/sugestões — **FECHADO no diff012** | FAQ e conhecimento editáveis, sugestões no atendimento humano | Conhecimento criado, editado, listado e desativado por rota (IA `/internal/knowledge/...`, BFF `/v1/knowledge/...`), com versão nova e inativação da anterior na mesma transação, embedding calculado antes da transação (`KNOWLEDGE_INDEX_UNAVAILABLE` sem tocar o banco), `checksum` igual sem reindexar, FAQ por serviço (`KnowledgeDocument.serviceId`) com precedência no prompt e campo livre único por negócio; `CustomerMemory` com origem, permissão por linha, substituição sem apagar, idade e inferência só a partir de atendimento confirmado no ledger de tools; resumo só do material autorizado e sempre com `AiRun kind = SUMMARY`; sugestões de resposta fora do grafo, com binding somente leitura, `AiRun kind = SUGGESTION`, cinco recusas próprias e nenhum efeito, rascunho ou envio; seed rebaixado a ferramenta de desenvolvimento | Persistência de `KnowledgeChunk` com embedding continua sem prova contra banco: o PostgreSQL dos gates não tem a extensão `vector` e o ensaio pula essa parte com skip nomeado. Memória `AI_INFERRED` entra no prompt já na primeira confirmação, então `PREFERRED_DAY`/`PREFERRED_PERIOD` se comportam como "último dia marcado"; `RECURRING_SERVICE` só nasce de série confirmada porque não há porta de histórico de atendimentos na IA. O modo sugestão recupera conhecimento sem serviço em foco | [Review012](reviews/012-review.md). Base de conhecimento por arquivo/PDF segue fora do MVP; mídia é G-23 (Goal013); telas de cliente e de conversa fechadas nos Goals 015 e 017, com a de conhecimento ainda no Goal018; retenção no Goal022 |
+-| G-25 P1 — onboarding/ativação | Pode concluir sem WA; teste real ativa; mínimos operacionais | WhatsApp obrigatório e enabled sem prova do teste | Bloqueia entrada ou mostra IA ativa sem aptidão | Onboarding completion separado de activation eligibility/test, demo simulada claramente distinta do teste real |
+-| G-26 P2 — negócio | Dados/modalidades/horários/instruções consistentes | BFF perfil mínimo e timezone replicado | IA não tem informações suficientes, settings incompleto | BFF dono do negócio; projeções versionadas para IA/Scheduling, falha visível e reconciliação |
++| G-25 P1 — onboarding/ativação | Pode concluir sem WA; teste real ativa; mínimos operacionais | `POST /v1/onboarding/complete` não exige mais WhatsApp (Goal018): a checagem de `WhatsAppInstance`/status do Evolution foi removida da rota, que agora recusa só por mínimos de negócio (nome, categoria, modalidade, endereço quando `ON_SITE`), agenda, tom e catálogo; `enabled: true` continua sem exigir prova de nenhum teste real bem-sucedido | Bloqueio de entrada por WhatsApp deixou de existir; IA ainda pode aparecer ativa sem prova de aptidão | Onboarding completion separado de activation eligibility/test, demo simulada claramente distinta do teste real |
++| G-26 P2 — negócio | Dados/modalidades/horários/instruções consistentes | `BusinessProfile` ganhou `modalities` (seleção múltipla), `address` (nulável, exigido só com `ON_SITE`) e um contador de versão do contexto (`businessContextVersion`), com a última versão efetivamente confirmada pela IA (`businessContextProjectedVersion`) exposta em `/v1/settings` e `/v1/onboarding` (Goal018); horários (disponibilidade) e instruções (conhecimento) continuam nos módulos que já existiam (Goal009, Goal012), fora do `BusinessProfile`; timezone continua replicado entre `BusinessProfile`, `CalendarSettings` e o contexto da IA, sem reconciliação automática entre as cópias | IA agora recebe modalidade e endereço; settings ainda sem horários/instruções consolidados no mesmo lugar | BFF dono do negócio; projeções versionadas para IA/Scheduling, falha visível e reconciliação |
+ | G-27 P1 — notificações/jobs | Até2 lembretes, default1/24h, presença separada, notificar cliente por padrão em mudanças relevantes | Sem mecanismo durável de domínio; health só sonda | Eventos/lembretes perdidos ou duplicados | Jobs no dono, outbox, dedupe por appointment/version; revalidar cancelamento/remarcação antes de envio |
+ | G-28 P2 — central/alertas | Níveis informativo/atenção/crítico, handoff, falha lembrete, email crítico | Dashboard health/logs não são central de produto | Profissional não percebe falha/cliente esperando | Central persistida no BFF, eventos por dono, email crítico configurável; não novo app nativo/push |
+ | G-29 P1 — retenção/conta | 30/90/180/365, comercial90/pessoal30; reduzir confirma; exclusão recuperável7dias | Sem ciclo cross-store ou conta pendente | Retenção indefinida/cópias esquecidas; automações após exclusão | Jobs de purge de conteúdo/copias; suspender conta/WA, restore exige novo teste. Metadados mínimos e histórico operacional separados |
+diff --git a/docs/migration/REUSE_ANALYSIS.md b/docs/migration/REUSE_ANALYSIS.md
+index 50698f3..35e044a 100644
+--- a/docs/migration/REUSE_ANALYSIS.md
++++ b/docs/migration/REUSE_ANALYSIS.md
+@@ -9,7 +9,7 @@ Retomada em 2026-09-05: consultas e resultados anteriores foram recuperados sele
+ Constatações confirmadas até este checkpoint:
+ 
+ - Existe frontend real conectado ao BFF: registry de serviços, cliente HTTP com validação Zod, contexto de sessão e componentes de loading/erro. Não é necessário tratar todas as telas como mocks nem descartar essa base.
+-- A estrutura atual preserva regras antigas de fonte externa operacional e onboarding que exige WhatsApp; essas regras não podem orientar o novo frontend. Os dois tons deixaram de ser fato do runtime no Goal011 — o estilo tem três valores do frontend ao prompt, com os antigos sobrevivendo só como alias de entrada até o Goal024.
++- A estrutura atual preserva regra antiga de fonte externa operacional; onboarding não exige mais WhatsApp no backend (Goal018: `POST /v1/onboarding/complete` deixou de checar `WhatsAppInstance`/status do Evolution), mas o fluxo legado do frontend (`OnboardingRuntime.tsx:139`) ainda bloqueia client-side enquanto `whatsapp.status !== "CONNECTED"` — nenhuma das duas regras, a antiga do backend nem a residual do frontend, pode orientar o novo frontend. Os dois tons deixaram de ser fato do runtime no Goal011 — o estilo tem três valores do frontend ao prompt, com os antigos sobrevivendo só como alias de entrada até o Goal024.
+ - A referência visual aprovada usa direção Recepção, Literata/Hanken Grotesk e petróleo; o CSS atual usa Inter/IBM Plex Mono e identidade anterior. Reaproveitar a divisão de responsabilidades não significa preservar o visual legado.
+ - Os caminhos de preview e dados de demonstração precisam ser distinguidos dos caminhos reais em qualquer inventário de funcionalidade.
+ - Recuperação de senha tem implementação real; a adequação deve respeitar o limite de escopo vigente do vault, que a mantém visual no MVP, sem remover automaticamente backend já existente.
+diff --git a/tools/ia-loop/lib/temporary-postgres.mjs b/tools/ia-loop/lib/temporary-postgres.mjs
+index 6d6f14f..bd8b6c4 100644
+--- a/tools/ia-loop/lib/temporary-postgres.mjs
++++ b/tools/ia-loop/lib/temporary-postgres.mjs
+@@ -169,9 +169,19 @@ export function createPostgresDriver({ pgBin = resolvePgBinDirectory() } = {}) {
+   };
+ }
+ 
+-/** A database name derived from an env var name: BFF_TEST_DATABASE_URL -> bff. */
++/**
++ * A database name derived from an env var name: BFF_TEST_DATABASE_URL ->
++ * ia_bff_test.
++ *
++ * The `_test` suffix is not cosmetic: `scripts/validate-integration.mjs`
++ * refuses any BFF_TEST_DATABASE_URL whose database name does not contain
++ * "test" as a delimited word, precisely so it can never fall back to a
++ * shared or product database. Dropping the suffix (as a bare `ia_bff` did)
++ * makes the gate refuse every name this function produces.
++ */
+ export function databaseNameForEnv(name) {
+-  return `ia_${String(name).toLowerCase().replace(/_test_database_url$/, '').replace(/[^a-z0-9]+/g, '_')}`;
++  const label = String(name).toLowerCase().replace(/_test_database_url$/, '').replace(/[^a-z0-9]+/g, '_');
++  return `ia_${label}_test`;
+ }
+ 
+ /** Reads the postgres data directory's postmaster.pid for the live PID, if any. */
+diff --git a/tools/ia-loop/tests/test-databases.test.mjs b/tools/ia-loop/tests/test-databases.test.mjs
+index c1a4ccf..f0bafd6 100644
+--- a/tools/ia-loop/tests/test-databases.test.mjs
++++ b/tools/ia-loop/tests/test-databases.test.mjs
+@@ -93,9 +93,9 @@ async function withTempRoot(body) {
+ // --- naming --------------------------------------------------------------
+ 
+ test('a database name is derived from the variable that asked for it', () => {
+-  assert.equal(databaseNameForEnv('BFF_TEST_DATABASE_URL'), 'ia_bff');
+-  assert.equal(databaseNameForEnv('AI_TEST_DATABASE_URL'), 'ia_ai');
+-  assert.equal(databaseNameForEnv('SCHEDULING_TEST_DATABASE_URL'), 'ia_scheduling');
++  assert.equal(databaseNameForEnv('BFF_TEST_DATABASE_URL'), 'ia_bff_test');
++  assert.equal(databaseNameForEnv('AI_TEST_DATABASE_URL'), 'ia_ai_test');
++  assert.equal(databaseNameForEnv('SCHEDULING_TEST_DATABASE_URL'), 'ia_scheduling_test');
+ });
+ 
+ test('each service gets its OWN database, so one migration cannot decide another schema', () => {
+@@ -129,7 +129,7 @@ test('the cluster is stopped after the action, on the happy path', async () => {
+       { registry, stateDir, attemptId: 'a1' }, ['BFF_TEST_DATABASE_URL'], () => 'ok', { driver, tempRoot },
+     );
+     assert.ok(stopped(log), 'the cluster must not outlive the action');
+-    assert.ok(log.indexOf('createdb:ia_bff') < log.findIndex((l) => l === 'status:STOPPING'));
++    assert.ok(log.indexOf('createdb:ia_bff_test') < log.findIndex((l) => l === 'status:STOPPING'));
+   });
+ });
+ 
+@@ -149,7 +149,7 @@ test('the cluster is stopped even when the action THROWS', async () => {
+ 
+ test('the cluster is stopped even when creating a database fails halfway', async () => {
+   await withTempRoot(async ({ stateDir, tempRoot }) => {
+-    const { registry, driver, log, created } = harness({ failOn: 'ia_ai' });
++    const { registry, driver, log, created } = harness({ failOn: 'ia_ai_test' });
+     await assert.rejects(
+       () => withTestDatabases(
+         { registry, stateDir, attemptId: 'a1' },
+@@ -158,7 +158,7 @@ test('the cluster is stopped even when creating a database fails halfway', async
+       ),
+       /createdb refused/,
+     );
+-    assert.deepEqual(created, ['ia_bff'], 'the first one was made');
++    assert.deepEqual(created, ['ia_bff_test'], 'the first one was made');
+     assert.ok(stopped(log), 'and the cluster was still torn down');
+   });
+ });
+@@ -179,8 +179,8 @@ test('the action receives one URL per variable, on the cluster that was started'
+     // The port is chosen from a free one in the configured range, so it is
+     // asserted by shape rather than pinned to a number a parallel run could
+     // legitimately take.
+-    assert.match(env.BFF_TEST_DATABASE_URL, new RegExp(`^postgresql://${USER}@127\\.0\\.0\\.1:555\\d\\d/ia_bff$`));
+-    assert.match(env.AI_TEST_DATABASE_URL, /\/ia_ai$/);
++    assert.match(env.BFF_TEST_DATABASE_URL, new RegExp(`^postgresql://${USER}@127\\.0\\.0\\.1:555\\d\\d/ia_bff_test$`));
++    assert.match(env.AI_TEST_DATABASE_URL, /\/ia_ai_test$/);
+     const port = (url) => url.match(/:(\d+)\//)[1];
+     assert.equal(port(env.BFF_TEST_DATABASE_URL), port(env.AI_TEST_DATABASE_URL),
+       'both databases live on the ONE cluster that was started, not two');
+@@ -199,6 +199,6 @@ test('a repeated variable is one database, not two', async () => {
+       ['BFF_TEST_DATABASE_URL', 'BFF_TEST_DATABASE_URL', '  ', null],
+       () => {}, { driver, tempRoot },
+     );
+-    assert.deepEqual(created, ['ia_bff']);
++    assert.deepEqual(created, ['ia_bff_test']);
+   });
+ });

@@ -1,0 +1,27 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T23:24:58.624Z",
+  "attemptId": "006-r1-tech_lead-3f7879f7-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "006-r1-tech_lead-3f7879f7",
+      "goal": "006",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "007",
+      "nextGoalTitle": "Catálogo e acordo comercial",
+      "nextGoalPath": "docs/migration/goals/007-catalogo-e-acordo-comercial.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Expansão de enum, schema e constraints SQL com migration consumida por Scheduling, IA, BFF, frontend e mapper de importação, sem novo risco de segurança ou isolamento.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/006-clientes-como-pessoas.md",
+        "docs/migration/goals/007-catalogo-e-acordo-comercial.md"
+      ],
+      "summary": "Planejamento após o Goal006 na worktree plan-after-goal-006 (HEAD 8d77ed9). MIGRATION_STATUS: baseline aceita vigente atualizada para 8d77ed992f12e1405ae7bfaaeb2d852af5711b5d (origem 7f87967b…), com a cadeia anterior preservada; linha 006 → ACCEPTED (review rodada 1, snapshot 40 arquivos hash 0fdd8834…, gates reproduzidos); linha 007 → READY com a baseline exata e perfil OPUS_MEDIUM; notas administrativas de Implementação006, Review006 R1 e Planejamento após 006. MASTER_PLAN: linha 006 marcada ACCEPTED e histórico v12 registrando reavaliação incremental sem mudança de ordem, IDs ou escopo (o 006 confirmou que todos os consumers de catálogo estão no repositório e fechados em FIXED/ON_REQUEST, mantendo o 007 como pré-requisito de 008/009/010/011). Goal006 com cabeçalho ACCEPTED. Goal007 escrito e único READY: quatro semânticas de preço sem zero fabricado com constraints SQL novas, duração opcional com estado de revisão separado de ativo e predicado único de serviço operacional (IA, requireActive, capacidade de ativação), atributos do serviço do MVP apenas persistidos (descrição, identidade visual, buffers, recorrência de referência), snapshot do acordo com total por regra única, mapper Minha Agenda sem FIXED/zero/duração copiada, contratos por operação em Scheduling/BFF/frontend/IA, resíduos do 006 (addTag idempotente, actor pela sessão, compromissos por customerId), migração expand/cut ensaiada, dez critérios de aceite e review DEEP dirigido. Nenhuma decisão nova (contratos de catálogo serão registrados no fechamento do 007 com evidência). Parser do IA Loop confirma 007 READY, baseline, perfil e anterior 006 ACCEPTED; git diff --check limpo; nada fora de docs/migration alterado."
+    },
+    "attemptId": "006-r1-tech_lead-3f7879f7-a1"
+  }
+}

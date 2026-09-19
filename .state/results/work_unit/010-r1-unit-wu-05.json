@@ -1,0 +1,56 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T04:50:02.963Z",
+  "attemptId": "010-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-wu-05",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Execução da importação passou a ser reivindicada por lease com o relógio do banco e recorte por tenant, e a recuperação global de boot sem lease foi removida.",
+      "report": "## O que mudou e por quê\n\n### 1. `import-lease.ts` (novo) — o lease pelo relógio do banco\n\nSubstitui o `schedule()` em memória como mecanismo de coordenação. Um `Set` de ids só coordena o processo que está rodando: não impede segundo start, segunda instância nem reinício. A coordenação passou a ser a própria linha de `ImportSession` (colunas `leaseOwner`/`leaseAcquiredAt`/`leaseExpiresAt`/`leaseHeartbeatAt`, já criadas por WU-01).\n\n- `acquireImportLease`: **um único UPDATE condicional** dentro de `$transaction`, com `now()` lido por `databaseNow()` (`calendar/write-policy.ts`) na mesma transação — o padrão aceito do hold/loop do Goal008. Predicado: `status IN (...) AND (leaseOwner IS NULL OR leaseExpiresAt <= now OR leaseOwner = :owner)`. Quem faz `count = 1` executa; quem faz `count = 0` recebe `acquired: false` com `heldBy`/`heldUntil`/`status` (releitura só para diagnóstico — o direito já foi decidido pelo `WHERE`). Nunca lança: recusar é o caminho normal de quem perde a disputa. `onClaim` grava campos no **mesmo** UPDATE (status `EXECUTING`, `startedAt`), e na forma de função recebe o `now()` do banco, para que nenhum instante gravado junto com o lease venha do processo.\n- `renewImportLease`: exige mesmo dono **e** `leaseExpiresAt > now()`. Lease vencido não é renovado nem pelo dono anterior — entre o vencimento e a renovação outra instância pode tê-lo tomado legitimamente. `null` é a perda.\n- `releaseImportLease` / `ImportLeaseHolder.release(onRelease)`: libera só se ainda for meu, e grava o fechamento da passada no mesmo UPDATE.\n- `ImportLeaseHolder.heartbeat()`: renova entre itens/categorias. O relógio do processo é usado **apenas** para decidir quando vale a pena ir ao banco (um terço do TTL); a vigência é sempre do banco. Perdido, o holder fica permanentemente perdido.\n- `resumeImportSessions(prisma, { tenantId, owner })`: retomada por tenant e sob lease, sobre `ImportSession` em `EXECUTING`/`PARTIAL`, ignorando quem tem lease vivo.\n- `IMPORT_LEASE_TTL_SECONDS` (padrão 120) em `config/env.ts`, com a mesma justificativa do `CALENDAR_HOLD_TTL_SECONDS`.\n\n### 2. `import-execution-service.ts` — integração do lease no motor de WU-04\n\n- A reivindicação acontece **antes** de `reader.getImportSnapshot`: quem não tem o lote não gasta a origem.\n- `EXECUTABLE_STATUSES` passou a ser o próprio `LEASABLE_IMPORT_STATUSES`, para não existirem duas verdades sobre quando a importação pode rodar.\n- O laço renova o lease em cada fronteira de categoria e entre itens; perdido, para **entre** dois itens (cada item já é transação própria) e o checkpoint da categoria ainda é gravado, porque ele só reconta o que os commits de item gravaram.\n- `finish()` fecha e devolve o lease no mesmo UPDATE condicionado a `leaseOwner`. Sem lease, `count = 0` e nada é escrito. `ImportExecutionResult` ganhou `leaseOwner` e `leaseLost` (aditivo). Erro não-de-item libera o lease e repropaga, para a próxima passada reivindicar na hora em vez de esperar o TTL.\n\n### 3. Fim do resume global\n\n`CalendarMigrationService.resumeIncomplete()` foi removido, junto com a chamada `await migrations.resumeIncomplete()` no boot de `registerManagementRoutes`. Ele varria `MigrationJob` de todos os negócios, sem lease e sem tenant, devolvendo cada job a `PENDING` e reagendando em memória. Job legado pendurado em estado não terminal deixa de ser mexido às cegas: `classifyLegacyJob` (WU-07) já o isola como `NEEDS_REVIEW`. O `schedule()` que restou está documentado como o que sempre foi — agendamento intra-processo do job que este processo acabou de criar, não coordenação.\n\n## Comandos executados e resultado\n\n- `npx tsc --noEmit -p tsconfig.json` (apps/scheduling-service) — limpo, sem saída.\n- `npm test` (apps/scheduling-service, `vitest run --dir tests/unit`) — **14 arquivos, 193 testes, todos passando**.\n- `npm run lint` (`eslint src --max-warnings=0`) — limpo nos arquivos desta unidade. Restam 2 erros **preexistentes** em `src/modules/appointments/appointment-series-service.ts`, arquivo não modificado (confirmado por `git status --short` vazio para ele).\n- `git diff --check` — limpo.\n- `npm run validate:core` — **FALHOU em `build:contracts`** com `'tsc' não é reconhecido`. Causa: `packages/contracts/node_modules` não existe nesta worktree (só `apps/bff` e `apps/scheduling-service` têm dependências instaladas). É limitação de ambiente, anterior e independente desta unidade — nada do que mudei sai do scheduling-service. Não instalei dependências para não alterar o provisionamento da worktree.\n\n## RED/GREEN (mutação, para provar que os testes prendem o mecanismo)\n\n- `databaseNow(transaction)` → `new Date()` (relógio do processo): **3 testes falham** (expiração, retomada por tenant, checkpoint sob perda de lease).\n- Remoção do `OR` da reivindicação: **4 testes falham** (dois starts, duas instâncias, expiração, retomada).\n- Liberação sem guarda de dono (`if (this.lost)` e `leaseOwner` no `WHERE`): **1 teste falha** (checkpoint/reprocessamento).\n\nEm todos os casos o arquivo foi restaurado e a suíte voltou a 7/7 e 193/193.\n\n## Alteração em teste de outra WU (declarada)\n\nEm `tests/unit/import-execution-service.test.ts`, o teste do aborto serializável passou a injetar `failNextTransactions(1, { code: \"P2034\" })` **dentro** do leitor da origem, em vez de antes da chamada. Motivo: a primeira transação da passada agora é a reivindicação do lease, e a injeção antiga a atingia em vez de atingir a escrita do agendamento. A intenção do teste (retry de `runCalendarWrite` sobre a escrita de agenda) está preservada, e o teste voltou a passar sem afrouxar nenhuma asserção.\n\n## Fora do escopo desta unidade (sinalizado, não feito)\n\n- **Prova com duas conexões reais** contra PostgreSQL: o dublê declara explicitamente que concorrência real e relógio do banco são verificados na suíte de integração. As suítes de integração de lease pedidas no item 12 do Goal não estão nesta unidade (`expectedFiles` de WU-05 são `src/modules/migrations/` e `tests/unit/`).\n- `docs/migration/DATA_MIGRATION.md`, linha `DATA-10`, ainda cita `resumeIncomplete` e `calendar-migration-service.ts:142`, que deixaram de existir. Não editei porque as linhas dessa tabela só são marcadas como fechadas com review ACCEPTED (padrão das linhas DATA-02, DATA-09, DATA-11), e o Goal010 ainda não tem review. Fica para o passo de fechamento do Goal.\n- `resumeImportSessions` está exportado do módulo mas ainda não é chamado por rota: o wiring de contratos/rotas é de WU-08.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/migrations/import-lease.ts",
+        "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+        "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+        "apps/scheduling-service/src/modules/migrations/index.ts",
+        "apps/scheduling-service/src/modules/internal-api/routes.ts",
+        "apps/scheduling-service/src/config/env.ts",
+        "apps/scheduling-service/tests/unit/import-lease.test.ts",
+        "apps/scheduling-service/tests/unit/import-execution-service.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Dois starts simultâneos para o mesmo tenant produzem uma única execução, sem segunda sessão nem trabalho duplicado",
+          "met": true,
+          "detail": "import-lease.test.ts, \"produz uma única execução\": dois execute() sem await entre eles; um resolve, o outro rejeita com IMPORT_SESSION_LEASE_HELD/409. Serviços=2, cliente=1, agendamento=1, origem lida 1 vez no total e importSession.rows com 1 linha. Mutação removendo o OR da reivindicação faz o teste falhar."
+        },
+        {
+          "criterion": "Duas instâncias concorrentes não duplicam trabalho nem reiniciam um job vivo cujo lease está válido",
+          "met": true,
+          "detail": "import-lease.test.ts, \"não duplicam trabalho nem reiniciam um job vivo\": A segura lease vivo com EXECUTING e startedAt fixo; execute() de B rejeita com details.heldBy === 'instance-a', reader.reads === 0 (nem lê a origem), nenhuma escrita, e leaseOwner/status/startedAt seguem os de A."
+        },
+        {
+          "criterion": "O lease expira e é reivindicável pelo relógio do banco, provado por fixture de expiração e sem sleep no teste",
+          "met": true,
+          "detail": "import-lease.test.ts, \"é reivindicável depois de vencer\": advanceDatabaseClock((ttl+1)s) move só o relógio que o SELECT now() enxerga; o teste afirma que Date.now() não andou e não usa sleep. Antes acquired=false/heldBy=instance-a; depois acquired=true com leaseOwner=instance-b, e o dono antigo não renova. Mutação para new Date() faz falhar."
+        },
+        {
+          "criterion": "resumeIncomplete não recupera mais globalmente sem lease: a retomada é por tenant e sob lease",
+          "met": true,
+          "detail": "resumeIncomplete e a chamada de boot foram removidas (grep confirma zero referências vivas). Teste com guarda de regressão (CalendarMigrationService sem resumeIncomplete) e \"retoma só as sessões do tenant pedido\": entre quatro sessões, resumeImportSessions devolve só a de tenant-a com lease vencido; a viva mantém instance-live, a READY não é arrastada, a de tenant-b fica intocada."
+        },
+        {
+          "criterion": "A renovação e a perda de lease não corrompem o checkpoint nem reprocessam itens já importados",
+          "met": true,
+          "detail": "Teste \"não corrompem o checkpoint nem reprocessam\": passada 1 (A, renova a cada item, maxItems 1) grava leaseHeartbeatAt e cursor 900; passada 2 perde o lease para B durante a leitura da origem → leaseLost, processed 0, cursor e contagens intactos, sessão segue de B; passada 3 (B) retoma e termina READY com imported 4, 2 serviços e 2 ExternalEntityMap. Mutação na guarda de dono faz falhar."
+        }
+      ]
+    },
+    "attemptId": "010-r1-unit-wu-05-a1"
+  }
+}

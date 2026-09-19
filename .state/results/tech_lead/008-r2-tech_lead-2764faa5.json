@@ -1,0 +1,27 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T19:43:32.694Z",
+  "attemptId": "008-r2-tech_lead-2764faa5-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "008-r2-tech_lead-2764faa5",
+      "goal": "008",
+      "summary": "Registrado o fechamento do Goal008 (ACCEPTED na rodada 2, 43 arquivos, base 26593db) apenas nos documentos que a implementação fez mentir ou ficar incompletos. Criado reviews/008-review.md com as duas rodadas (nove blockers da rodada 1 e como cada um foi fechado), a evidência reproduzida pelo reviewer em cluster descartável, as seis observações não bloqueantes e os limites. CURRENT_STATE ganhou o delta do Goal008 superando os fatos de cancelamento/bloqueio fora de transação, status textual e resultado idempotente pós-commit: política única em write-policy.ts, resultado gravado no mesmo commit com referência de efeito, AppointmentHold com expiresAt TIMESTAMPTZ pelo relógio do banco, quatro estados do produto com statusRaw preservado, AppointmentEvent append-only com sequence, loop de conclusão automática com lease, rotas internas/BFF, IA com hold e frontend aditivo, três migrations e os gates. GAP_ANALYSIS fechou G-11, G-12 e G-18 com a evidência de cada um. DECISIONS: D-006 passou a ACCEPTED, D-008 segue PROPOSED com a primeira aplicação comprovada declarada, e D-024 registra os contratos adotados com alternativas rejeitadas e consequências. DATA_MIGRATION: linhas de Appointment e CalendarMutationIdempotency atualizadas, entradas novas para AppointmentHold e AppointmentEvent, parágrafo das três migrations com a razão de cada passo, mapeamento de status resolvido em 5.3, limite de reversão em 5.6 e três gates (acordo e histórico, concorrência PostgreSQL, idempotência) marcados como provados. TARGET_ARCHITECTURE anotou o que o Goal008 implementou nos três parágrafos de agenda. REUSE_ANALYSIS atualizou Scheduling core e Jobs de domínio. MASTER_PLAN marcou o 008 como ACCEPTED na linha do roadmap, atualizou a linha de risco de perda/duplicação de efeito e acrescentou a entrada v15. O cabeçalho do Goal008 passou de READY para ACCEPTED sem SHA de baseline. Não foi criado Goal seguinte, nada foi marcado READY, MIGRATION_STATUS não foi tocado e nenhum arquivo fora de docs/migration/ foi alterado.",
+      "documentsUpdated": [
+        "docs/migration/reviews/008-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/008-transacoes-holds-historico-agenda.md"
+      ],
+      "notes": "O contexto do fechamento apontava docs/migration/reviews/003-review.md como \"o review desta execução\". Esse arquivo é o review do Goal003, já existente e íntegro — não foi tocado. O review desta execução foi criado em docs/migration/reviews/008-review.md, seguindo a numeração por Goal usada de 001 a 007. Vale corrigir o template do IA Loop, que parece ter um caminho fixo. Também atualizei o cabeçalho de docs/migration/goals/008-transacoes-holds-historico-agenda.md de READY para ACCEPTED (sem registrar SHA de baseline, conforme instruído), porque o documento afirmava um estado falso; é o mesmo padrão do fechamento do Goal007. MIGRATION_STATUS.md não foi tocado."
+    },
+    "attemptId": "008-r2-tech_lead-2764faa5-a1"
+  }
+}

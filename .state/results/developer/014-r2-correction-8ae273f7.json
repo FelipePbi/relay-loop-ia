@@ -1,0 +1,72 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T08:18:41.838Z",
+  "attemptId": "014-r2-correction-8ae273f7-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r2-correction-8ae273f7",
+      "goal": "014",
+      "round": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 1 em Sonnet, 0 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 014, rodada 2\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one STANDARD unit scoped to them — behaviourally the legacy correction round.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 3 blocker(s) registrados pelo Tech Lead na revisão da rodada 1, preservando o que já foi aceito.\nexecutor: sonnet (high), tier STANDARD · 1 tentativa(s)\nArquivos alterados (4): apps/frontend/src/features/dashboard/DashboardScreen.tsx, apps/frontend/src/shared/layout/AppShell.tsx, apps/frontend/src/shared/layout/navigation.ts, apps/frontend/tests/goal014-shell.test.ts\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: /inicio quebra em loop infinito de render (useShellConfig duplicado em ProductDashboardScreen e RealDashboard) — DashboardScreen.tsx: removido o useShellConfig de RealDashboard; ProductDashboardScreen chama useShellConfig uma única vez por render, config computado condicionalmente (dashboardNeedsAttention/dashboardSource). Reproduzi o bug isolando o arquivo pré-fix num teste jsdom temporário: React lançou 'Maximum update depth exceeded'; com o fix o mesmo teste renderiza normal. next build e os 101 testes passam.\n- OK: Blocker 2 resolvido: StatusLine perdeu o gancho de CSS .wa-status — AppShell.tsx:337 — className agora é 'wa-status status-line' (era só 'status-line'), restaurando o seletor consumido por atendly.css:1396/1655/1658/1994, atendly-directory.css:638/657/660 e atendly-settings.css:677/693 para colapsar o rótulo no rail de 88px.\n- OK: Blocker 3 resolvido: MORE_DESTINATIONS não tinha os destinos exigidos pelo escopo obrigatório item 2 — navigation.ts: MORE_DESTINATIONS lista Serviços, Negócio, Agenda, IA, WhatsApp, Importação e Conta, reaproveitando hrefs/ícones do hub de Configurações (ProductSettingsScreen.tsx). PlatformSection ganhou os section-values distintos exigidos pela key única de React nesse map. Teste goal014-shell.test.ts atualizado; 20/20 e 101/101 testes passam.\n\nCorrigi os 3 blockers da rodada 1, sem tocar em mais nada.\n\n**Blocker 1 (loop infinito em /inicio).** `DashboardScreen.tsx`: `ProductDashboardScreen` (pai) e `RealDashboard` (filho, montado no mesmo render) chamavam `useShellConfig` cada um com um formato de config diferente (`loading` vs. `source`). Como `useShellConfig` roda seu efeito a cada render sem lista de dependências (de propósito, ver comentário em ShellConfig.tsx) e o efeito do filho commita antes do pai, os dois configs se alternavam a cada commit — cada `setConfig` via `sameConfig` os via como diferentes um do outro, então nenhum bail-out ocorria e o ciclo nunca estabilizava. Removi o `useShellConfig` de `RealDashboard` e concentrei a decisão em `ProductDashboardScreen`, que agora monta o config certo por branch (loading/erro sem dashboard vs. dashboard carregado, usando dois helpers puros novos `dashboardSource` e `dashboardNeedsAttention` que replicam exatamente o cálculo que antes vivia em `RealDashboard`). Um único `useShellConfig` por render elimina a divergência.\nValidação: isolei a versão pré-fix do arquivo (a que o Goal aponta) num teste jsdom temporário (`ShellConfigProvider` + `ProductDashboardScreen` com `getProductServices`/`useSystemStatus` mockados) e confirmei que ela lança `Error: Maximum update depth exceeded` em `ShellConfig.tsx:71` a partir de `RealDashboard` — reproduzindo o blocker relatado. Restaurei o arquivo corrigido e o mesmo teste passa. O teste foi só para verificação nesta sessão; removi o arquivo antes de terminar (não faz parte do escopo entregue).\n\n**Blocker 2 (`.wa-status` perdido).** `AppShell.tsx:337`: `StatusLine` agora usa `className=\"wa-status status-line\"` (era só `\"status-line\"`), igual ao AppShell antigo. Isso restaura os seletores `.sidebar .wa-status`/`.wa-status span`/`.wa-status .status-dot` em `atendly.css`, `atendly-directory.css` e `atendly-settings.css`, que colapsam o rótulo textual no rail de 88px (tablet/notebook estreito).\n\n**Blocker 3 (`MORE_DESTINATIONS` incompleto).** `navigation.ts`: a lista \"Mais\" tinha só Serviços e Configurações. Agora tem Serviços, Negócio, Agenda, IA, WhatsApp, Importação e Conta — a lista textual do escopo obrigatório item 2 do Goal, usando exatamente os hrefs/ícones já estabelecidos no hub de Configurações (`ProductSettingsScreen.tsx`: `/configuracoes/{negocio,agenda,ia,whatsapp,conta}` com ícones `info`/`calendar`/`spark`/`chat`/`user`) e `/migracao/para-atendly` para Importação (entrada do fluxo, conforme a Especificação das Telas). Não incluí 'Conversas / Retenção' da Especificação porque não existe rota/tela para isso hoje — criar uma seria ampliar escopo além do que os blockers pedem; o texto do próprio item 2 do Goal já enumera os 7 destinos que implementei, um a um. `PlatformSection` ganhou os valores `negocio`, `config-agenda`, `ia`, `whatsapp`, `importacao`, `conta` (necessários porque `AppShell.tsx` usa `item.section` como `key` do React nesse map, e reaproveitar `\"agenda\"` quebraria a invariante de `isMobileTab`/`isMoreActive` que o teste de navegação já verifica). Não há switch exaustivo sobre `PlatformSection` em outro lugar do código (conferido por grep), então a extensão do union não teve efeito colateral. Atualizei `tests/goal014-shell.test.ts`, que antes fixava a lista antiga de 2 itens, para a lista nova de 7.\n\nComandos executados (todos em `apps/frontend`), com resultado real:\n- `npx vitest run tests/goal014-shell.test.ts` → 20 testes passando.\n- `npx vitest run` → 14 arquivos, 101 testes passando.\n- `npx tsc --noEmit -p tsconfig.json` → sem erros.\n- `npx eslint src/features/dashboard/DashboardScreen.tsx src/shared/layout/AppShell.tsx src/shared/layout/navigation.ts tests/goal014-shell.test.ts` → sem erros.\n- `npm run build` (next build, Turbopack) → compilou, typecheck do build passou, todas as 82 rotas geradas, incluindo `/inicio` estático.\n- Teste jsdom temporário criado/rodado/removido nesta sessão para provar o blocker 1 antes e depois do fix (detalhado acima)\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 1 · opus: 0\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "STANDARD",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "sonnet",
+            "effort": "high",
+            "tier": "STANDARD",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+              "apps/frontend/src/shared/layout/AppShell.tsx",
+              "apps/frontend/src/shared/layout/navigation.ts",
+              "apps/frontend/tests/goal014-shell.test.ts"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "STANDARD": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 1,
+            "opus": 0,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 4172,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "014-r2-correction-8ae273f7-a1"
+  }
+}

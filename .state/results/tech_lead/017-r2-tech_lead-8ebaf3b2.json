@@ -1,0 +1,23 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:45:26.725Z",
+  "attemptId": "017-r2-tech_lead-8ebaf3b2-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r2-tech_lead-8ebaf3b2",
+      "goal": "017",
+      "round": 2,
+      "decision": "CHANGES_REQUIRED",
+      "blockers": [
+        "Blocker 4 da rodada 1 entregue pela metade de novo: `docs/migration/GAP_ANALYSIS.md:39` (G-09) continua afirmando na coluna de resíduo \"Composição visual do estado pendente/erro no chat ainda não existe\" — e este diff a torna falsa. `apps/frontend/src/features/conversations/MessageTimeline.tsx:66-107` compõe os quatro `deliveryState` no balão (`deliveryCopy` + `DeliveryBadge`), com `deliveryDetail` anexado, `UNKNOWN` como \"Não confirmado\" sem oferecer reenvio e ausência do campo sem badge nenhum, provado por `apps/frontend/tests/goal017-delivery-state.test.tsx`. O item 15 do Goal nomeia G-09 entre as entradas de `GAP_ANALYSIS` a atualizar (\"G-22, G-23, G-09 e G-31\") e o blocker 4 da rodada 1 apontou `GAP_ANALYSIS.md:39` nominalmente; a rodada 2 atualizou G-22 (linha 52), G-23 (53) e G-31 (61) e deixou G-09 intacta — o relatório do Developer declara o blocker 4 OK listando só essas três. Ação: atualizar **apenas** a coluna de resíduo de G-09 na linha 39, registrando que a composição visual chegou no diff017 (os quatro estados no balão, `UNKNOWN` sem reenviar, mensagem sem o campo sem virar erro, mensagem recebida sem estado) e preservando o resíduo que continua verdadeiro (a reconciliação depender de o WhatsApp honrar o `correlationId`, sem prova com transporte real). Não tocar a linha 5 (\"Atualização após reviewNNN\"), MASTER_PLAN nem MIGRATION_STATUS, que são do fechamento do Goal, e não reescrever as demais colunas da linha."
+      ],
+      "nextAction": "RETURN_TO_DEVELOPER",
+      "nextDeveloperProfile": "SONNET_MEDIUM",
+      "nextDeveloperProfileReason": "Resta uma edição documental localizada de uma linha, sem código e sem contrato envolvido.",
+      "summary": "Três dos quatro blockers da rodada 1 foram resolvidos e provados por inspeção e execução. (1) Ignorados: `ConversationContextPanel.tsx:131-169` traz a seção \\\"Ignorar na IA\\\" com marcar/desmarcar e `ConversationThread.tsx:186-207` chama `setIgnored(id, !ignored)` após confirmação em Dialog que explica o efeito antes de aplicar — `goal017-contact-profile.test.tsx` prova pela tela real os dois sentidos e o cancelar sem efeito. (2) Player de áudio: `AudioAttachment` consulta `getMedia` pelo hook `useAttachmentMedia`, renderiza `<audio controls>` sobre blob local, respeita `mediaAvailable: false` e `tooLarge` e reaproveita as três recusas de `refusalCopy` — provado em `goal017-chat-media.test.tsx`. (3) 201/202: `InternalHttpClient.requestWithStatus` preserva o status, `AiOrchestratorClient.sendMessage` devolve `{message,status}`, `apps/bff/src/modules/conversations/routes.ts:118-130` repassa 202, `PUBLIC_API_V1.md` documenta os dois sucessos e a copy de 201 deixou de afirmar entrega; o ramo 202 da IA em `internal/routes.ts:548` é real, então o caminho deixou de ser morto. Verificações que rodei na worktree: `tsc --noEmit` limpo em frontend e BFF, `eslint src tests --max-warnings=0` limpo, vitest frontend 336/336 em 37 arquivos, vitest ai-orchestrator 542 passed / 59 skipped, `apps/bff/tests/internal-http-client.test.ts` 5/5 (teto de mídia 90s distinto dos 10s JSON e status 201/202 preservado), `git diff --check` exit 0. `apps/bff/tests/goal017-send-status.integration.test.ts` não foi executado por falta de PostgreSQL descartável provisionado — é o gate `validate:integration`, o Developer declarou isso honestamente e o caminho de rota foi conferido por leitura mais o teste unitário do cliente. Resta um único item: a linha G-09 de `GAP_ANALYSIS.md` continua dizendo que a composição visual do estado de entrega no chat não existe, afirmação que este diff torna falsa e que tanto o item 15 do Goal quanto o blocker 4 da rodada 1 mandaram corrigir."
+    },
+    "attemptId": "017-r2-tech_lead-8ebaf3b2-a1"
+  }
+}

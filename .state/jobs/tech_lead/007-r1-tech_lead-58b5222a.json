@@ -1,0 +1,156 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T01:07:55.950Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "007-r1-tech_lead-58b5222a-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "007-r1-tech_lead-58b5222a-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_FALLBACK",
+      "startedAt": "2026-09-09T01:07:55.950Z",
+      "endedAt": "2026-09-09T01:08:56.843Z",
+      "role": "tech_lead",
+      "classification": "USAGE_LIMIT",
+      "code": "NON_ZERO_EXIT",
+      "routedTo": {
+        "modelKey": "opus",
+        "model": "claude-opus-5",
+        "family": "opus",
+        "effort": "high",
+        "reason": "CAPACITY_FALLBACK_USAGE_LIMIT",
+        "fallbackAllowed": false
+      },
+      "fromModel": "fable"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "007-r1-tech_lead-58b5222a",
+    "role": "tech_lead",
+    "goal": "007",
+    "round": 1,
+    "reviewLevel": "DEEP",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "review",
+      "modelKey": "fable",
+      "model": "claude-fable-5-1",
+      "family": "fable",
+      "effort": "high",
+      "complexity": "CRITICAL",
+      "riskScore": 10,
+      "signals": [
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "DATA_CONSISTENCY",
+        "INFRA",
+        "API_CONTRACT",
+        "CROSS_CUTTING",
+        "LARGE_REFACTOR",
+        "LARGE_SCOPE",
+        "LARGE_DIFF"
+      ],
+      "reason": "HIGH_RISK_SPECIALIST_REVIEW",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    },
+    "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+    "executionBase": "9494eb643bd85199a876d6a91ba1461ada101099",
+    "worktreeInitialHead": "9494eb643bd85199a876d6a91ba1461ada101099",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-007",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\007-catalogo-e-acordo-comercial.md",
+    "changedFiles": [
+      "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+      "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+      "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+      "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+      "apps/bff/PUBLIC_API_V1.md",
+      "apps/bff/src/clients/scheduling/index.ts",
+      "apps/bff/src/modules/customers/routes.ts",
+      "apps/bff/src/modules/services/routes.ts",
+      "apps/bff/src/modules/settings/routes.ts",
+      "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+      "apps/frontend/src/data/services/BffServiceCatalogService.ts",
+      "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+      "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+      "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+      "apps/scheduling-service/prisma/migrations/20260908170000_goal007_catalog_expand/migration.sql",
+      "apps/scheduling-service/prisma/migrations/20260908171000_goal007_catalog_constraints/migration.sql",
+      "apps/scheduling-service/prisma/schema.prisma",
+      "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+      "apps/scheduling-service/src/modules/customers/atendly-customer-service.ts",
+      "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+      "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+      "apps/scheduling-service/src/modules/internal-api/routes.ts",
+      "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+      "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+      "apps/scheduling-service/tests/integration/service-catalog.test.ts",
+      "apps/scheduling-service/tests/unit/agreement-total.test.ts",
+      "apps/scheduling-service/tests/unit/service-catalog.test.ts",
+      "apps/scheduling-service/tests/unit/support/database-double.ts",
+      "scripts/goal007-migration-rehearsal.mjs",
+      "scripts/tests/validate-integration.test.mjs",
+      "scripts/validate-integration.mjs"
+    ],
+    "diffStat": ".../src/modules/scheduling-service/client.ts       |  16 +-\n .../src/modules/scheduling-service/types.ts        |  18 +-\n .../src/modules/tools/assistant-tools.ts           | 131 ++++++++--\n .../tests/tools/assistant-tools.test.ts            |   3 +\n apps/bff/PUBLIC_API_V1.md                          |  12 +\n apps/bff/src/clients/scheduling/index.ts           |  33 ++-\n apps/bff/src/modules/customers/routes.ts           |  74 +++---\n apps/bff/src/modules/services/routes.ts            |  18 +-\n apps/bff/src/modules/settings/routes.ts            |  10 +\n apps/frontend/src/data/mappers/publicApiSchemas.ts |  30 ++-\n .../src/data/services/BffServiceCatalogService.ts  |  18 +-\n .../features/directory/ProductDirectoryScreen.tsx  |  17 +-\n .../src/features/onboarding/OnboardingRuntime.tsx  |  17 +-\n .../onboarding/ProductOnboardingScreen.tsx         |  10 +-\n apps/scheduling-service/prisma/schema.prisma       |  44 +++-\n .../src/modules/calendar/calendar-provider.ts      |  47 +++-\n .../src/modules/calendar/calendar-service.ts       |   7 +-\n .../modules/customers/atendly-customer-service.ts  |  11 +-\n .../src/modules/integrations/atendly/provider.ts   |  50 ++--\n .../modules/integrations/minha-agenda/provider.ts  |  92 ++++---\n .../src/modules/internal-api/routes.ts             |  45 +++-\n .../migrations/calendar-migration-service.ts       |  12 +-\n .../modules/services/atendly-service-service.ts    | 266 +++++++++++++++++++--\n .../tests/unit/support/database-double.ts          |   9 +-\n scripts/tests/validate-integration.test.mjs        |   1 +\n scripts/validate-integration.mjs                   |  11 +\n 26 files changed, 804 insertions(+), 198 deletions(-)",
+    "implementationReport": "## Diff inicial\n\nConfirmado vazio contra a baseline aceita (8d77ed9), salvo tooling do IA Loop pré-existente (`tools/ia-loop/**`, `MASTER_PLAN.md`/`MIGRATION_STATUS.md`/`goals/006`/`goals/007`) já presente no `executionBase` (9494eb6), fora do escopo deste diff.\n\n## Diff final — arquivos e consumers\n\n**Scheduling** (`apps/scheduling-service`):\n- `prisma/schema.prisma`: `PriceType` ganha `STARTING_AT`/`NOT_INFORMED`; novos enums `ServiceReviewOrigin` (IMPORT|MANUAL) e `ServiceColorToken` (ROSE|AMBER|EMERALD|SKY|VIOLET|SLATE); `Service.durationMinutes` opcional; `Service` ganha `needsReview`, `reviewOrigin`, `description`, `colorToken`, `bufferBeforeMinutes`/`bufferAfterMinutes` (default 0), `recurrenceIntervalDays`; `AppointmentItem.durationMinutesSnapshot` opcional.\n- Duas migrations novas (ver seção própria).\n- `src/modules/services/atendly-service-service.ts`: reescrito — quatro semânticas de preço com validação por tipo, `needsReview`/`reviewOrigin` em lockstep com duração ausente, `isOperationalService()` (predicado único: ativo + duração presente + fora de revisão), `listOperational()`/`listForScheduling()` filtram por ele, `requireActive()` recusa serviço em revisão com `SERVICE_NEEDS_REVIEW` (409), validação de buffers/recorrência/cor/descrição, `update()` preserva `reviewOrigin` em edições que não tocam duração.\n- `src/modules/calendar/calendar-provider.ts`: `CalendarServiceDefinition`/`CalendarAppointmentServiceItem` com `priceType` de 4 valores e duração opcional; `computeAgreementTotal()` — regra única do total (soma se todos FIXED; STARTING_AT se há \"a partir de\" sem ON_REQUEST/NOT_INFORMED; NONE nos demais casos); `CalendarAppointment.totalPriceType` novo.\n- `src/modules/calendar/calendar-service.ts`: schema de replay da idempotência atualizado (mesma regra).\n- `src/modules/integrations/atendly/provider.ts`: usa `computeAgreementTotal`; `appointmentDuration()` (remarcação) passa a derivar do intervalo `endAt-startAt` em vez de somar snapshots (agora nulos em alguns itens), removendo a dependência de soma não confiável.\n- `src/modules/integrations/minha-agenda/provider.ts`: `toCalendarService`/`appointmentServices`/`toCalendarAppointment` param de de fabricar `FIXED`/zero/duração copiada — preço/duração desconhecidos (mesmo que o tipo declarado diga `number`, a resposta não é validada por schema) viram `NOT_INFORMED`/ausência explícita; item sem duração própria nunca herda a duração total do atendimento (DATA-09).\n- `src/modules/migrations/calendar-migration-service.ts`: `importToAtendly` passa `reviewOrigin: \"IMPORT\"` quando a duração do snapshot é nula; `diagnoseSnapshot` não bloqueia mais duração ausente (vira revisão) e cobre preço obrigatório de `STARTING_AT` também.\n- `src/modules/internal-api/routes.ts`: `serviceBodySchema`/`servicePatchSchema` com os 4 tipos, duração opcional e atributos novos; `serviceDto` expõe os campos novos; `calendarOverview` ganha `capabilities.aiActivationReady` (\"pelo menos um serviço operacional\").\n- `src/modules/customers/atendly-customer-service.ts`: `addTag` idempotente — repetir uma tag existente não reescreve `aiAuthorized` (resíduo Goal006, obs. 4 do review006).\n\n**IA** (`apps/ai-orchestrator`):\n- `scheduling-service/types.ts`/`client.ts`: `priceType` de 4 valores; item de agendamento com duração opcional; `totalPriceType` no agendamento.\n- `tools/assistant-tools.ts`: `list_services` sempre expõe `priceType` (não mais condicionado a `includePrices`, que só controla o valor numérico quando existe); `calculateAgreementTotal`/`priceCommentText` reimplementam a regra única (mensagens \"Total: R$X.\", \"A partir de R$X.\", \"Valor sob consulta.\" ou \"Valor não informado.\"); `findCustomerAppointments` consulta por `customerId` quando o contato já está vinculado a uma pessoa (novo helper `linkedCustomerId`), só cai em candidatos por telefone sem vínculo (resíduo Goal006, obs. 3).\n\n**BFF** (`apps/bff`):\n- `clients/scheduling/index.ts`: schemas de serviço/agendamento com os 4 tipos, atributos novos, `totalPriceType`, `capabilities.aiActivationReady`.\n- `modules/services/routes.ts`: schema de `/v1/services` com os campos novos.\n- `modules/settings/routes.ts`: `PATCH /v1/settings/ai` recusa `enabled: true` com `409 CONFLICT` quando não há serviço operacional.\n- `modules/customers/routes.ts`: `actor`/`proposedByActor`/`confirmedByActor` deixam de vir do corpo — todas as rotas de nota/tag/responsável derivam da sessão (`internalContext(request).userId`) (resíduo Goal006, obs. 2).\n- `PUBLIC_API_V1.md`: nova seção \"Catálogo: quatro semânticas de preço e acordo comercial (Goal007)\".\n\n**Frontend** (`apps/frontend`):\n- `data/mappers/publicApiSchemas.ts`: `serviceSchema`/`appointmentSchema` aceitam os 4 tipos, duração nula, atributos novos, `totalPriceType`.\n- `data/services/BffServiceCatalogService.ts`: `ServiceInput` widened.\n- `features/directory/ProductDirectoryScreen.tsx`: exibe \"A partir de\"/\"Sob consulta\"/\"Não informado\"/\"Precisa de revisão\" sem quebrar; formulário legado continua só com os dois tipos originais (tela completa é Goal015) — editar um serviço com tipo novo sem trocar o rádio falha com erro de validação visível, nunca grava zero nem sobrescreve o tipo silenciosamente.\n- `features/onboarding/OnboardingRuntime.tsx`/`ProductOnboardingScreen.tsx`: `servicePriceType` aceita os 4 valores; `onboardingPriceType()` normaliza para o par binário do onboarding (STARTING_AT→FIXED mantendo o preço numérico já carregado, NOT_INFORMED→ON_REQUEST) só para exibição/reenvio deste fluxo — nunca envia preço zero.\n\n**Scripts**: `scripts/goal007-migration-rehearsal.mjs` (novo) e `scripts/validate-integration.mjs`/`scripts/tests/validate-integration.test.mjs` (gate registrado).\n\n## Decisões de escopo\n\n- **Nomes dos valores novos do enum**: `STARTING_AT` (\"a partir de\") e `NOT_INFORMED` (\"não informado\"), ao lado dos existentes `FIXED`/`ON_REQUEST`, escolhidos por simetria de nomenclatura com os dois originais.\n- **Identidade visual**: `colorToken` — enum fechado de 6 tokens (`ROSE|AMBER|EMERALD|SKY|VIOLET|SLATE`), não hex livre nem número emprestado do Minha Agenda — é o \"token estável\" pedido pelo vault, substitui o `colorId: null` fixo só para a Agenda Atendly; `colorId` numérico continua existindo na interface só para o Minha Agenda (não redesenhado).\n- **Recorrência**: `recurrenceIntervalDays` (inteiro positivo, dias), sem persistir dias da semana/regra complexa — é \"referência\", sem efeito operacional neste Goal (Goal011 aplica).\n- **Buffers**: `bufferBeforeMinutes`/`bufferAfterMinutes`, inteiros não negativos, default 0, sem efeito na ocupação (Goal009 aplica).\n- **Estado de revisão**: `needsReview` boolean em lockstep com `durationMinutes IS NULL` via constraint SQL (`Service_review_check`), não um campo independente — corrigir a duração sempre limpa a revisão automaticamente; `reviewOrigin` (IMPORT|MANUAL) só existe enquanto a revisão está pendente.\n- **Regra do total do acordo**: reimplementada de forma equivalente em Scheduling (`computeAgreementTotal`) e IA (`calculateAgreementTotal`) em vez de um pacote compartilhado — D-011 (`packages/contracts` só por consumidor comprovado).\n- **`aiActivationReady`**: nova capability computada no Scheduling e enforced no `PATCH /v1/settings/ai` do BFF (rejeita ativar a IA sem nenhum serviço operacional); não criei UI nova para isso (Goal015 possui as telas).\n- **`AppointmentItem.durationMinutesSnapshot`**: tornou-se opcional; a duração de remarcação em `atendly/provider.ts` passou a vir de `endAt-startAt` (intervalo persistido), não mais da soma dos snapshots — a soma deixou de ser uma fonte confiável assim que um item pode não ter duração própria.\n\n## Migrations e compatibilidade\n\nDuas migrations, nesta ordem, e **precisam continuar nesta ordem** (não são artificiais):\n1. `20260908170000_goal007_catalog_expand` — `ALTER TYPE ... ADD VALUE IF NOT EXISTS` dos dois tipos novos, colunas novas, `durationMinutes`/`durationMinutesSnapshot` viram nullable, constraints novas de buffer/recorrência/revisão. Postgres não permite usar um valor de enum recém-adicionado na mesma transação que o criou; por isso os dois passos não podem ser comprimidos em um só.\n2. `20260908171000_goal007_catalog_constraints` — substitui `Service_price_check`/`AppointmentItem_priceSnapshot_check` (2 ramos → 4 ramos) e redefine `Service_durationMinutes_check`/`AppointmentItem_durationMinutesSnapshot_check` explicitamente (comportamento idêntico, já que CHECK trata NULL como aprovado). Diferente do corte de unicidade do Goal006, aqui não existe uma janela segura de convivência entre a constraint antiga e os tipos novos — a troca é atômica porque a constraint antiga rejeitaria linha alguma com os tipos novos, que só passam a existir neste Goal.\n\nNenhum registro existente muda de tipo/preço/duração; `FIXED`/`ON_REQUEST` preservam o significado original; nenhum serviço nasce fora-de-revisão→em-revisão pela migração (toda linha existente já tinha duração). Reversão: documentada no cabeçalho da segunda migration — binário anterior funciona enquanto não existir tipo novo, duração nula ou revisão pendente.\n\nEnsaio: `scripts/goal007-migration-rehearsal.mjs` (novo, seguindo o padrão `goal006-migration-rehearsal.mjs`) — reconstrói o schema pré-Goal007, semeia fixture com os dois tipos antigos (incluindo preço zero explícito), um agendamento com snapshot e um serviço marcado como importado via `ExternalEntityMap`, aplica as duas migrations em passos separados e prova: preservação linha a linha após a expansão; que a constraint antiga de preço ainda recusa os tipos novos logo após a expansão (a expansão não abre a porta sozinha); que a constraint de revisão já vale a partir da expansão; que depois do passo de constraints os 4 tipos validam corretamente e o preço zero explícito permanece zero. Registrado em `scripts/validate-integration.mjs` como `rehearse:goal007-catalog-migration`.\n\n## RED/GREEN dos casos negativos\n\n1. **Preço ausente virando zero**: RED implícito era o comportamento anterior (`totalPrice: Number(appointment.price ?? 0)` no Minha Agenda; `price: Number(service.price)` fabricando `FIXED`). GREEN: teste `apps/scheduling-service/tests/unit/service-catalog.test.ts` (\"RED: never fabricates zero...\") — `ON_REQUEST`/`NOT_INFORMED` nunca serializam preço como `0`; `computeAgreementTotal` (`agreement-total.test.ts`) preserva zero explícito só quando informado. Mapeamento do Minha Agenda cobre a mesma regra via `knownNumber`/`knownPositiveDuration`.\n2. **Serviço em revisão oferecido pela IA**: GREEN via `requireActive` (`SERVICE_NEEDS_REVIEW`) e `listOperational()`/`listForScheduling()` excluindo revisão — testado em `service-catalog.test.ts` (\"RED: requireActive rejects...\") e na suíte de integração (`tests/integration/service-catalog.test.ts`, não executada neste ambiente por falta de banco).\n3. **Edição do catálogo reescrevendo snapshot**: GREEN coberto na suíte de integração (\"a later catalog edit does not rewrite the snapshot\") — não executado aqui pelo motivo acima; a garantia estrutural (`AppointmentItem` grava snapshot na criação, nunca relido do catálogo depois) não mudou neste diff, só os tipos que ela carrega.\n4. **Importação forçando FIXED**: GREEN via `toCalendarService`/`appointmentServices` reescritos no Minha Agenda — preço desconhecido vira `NOT_INFORMED`, nunca `FIXED`; duração ausente do item nunca herda a duração total do atendimento (DATA-09).\n5. **Resíduo `addTag` reescrevendo `aiAuthorized`**: GREEN — `update: {}` no upsert em vez de reescrever os campos de autorização.\n6. **Resíduo `list_customer_appointments` por telefone mesmo com contato vinculado**: GREEN — `linkedCustomerId()` consulta o vínculo antes de decidir a estratégia.\n\n## Comandos executados e resultado\n\n- `npx prisma generate` (scheduling-service, bff, ai-orchestrator) — OK.\n- `npx tsc -p tsconfig.json --noEmit` em scheduling-service, bff, ai-orchestrator; `npx tsc --noEmit` em frontend — sem erros nas quatro apps.\n- `npx eslint src --max-warnings=0` nas quatro apps — sem erros.\n- `npx vitest run --dir tests/unit` (scheduling-service) — 39/39 passaram (inclui 2 arquivos novos: `service-catalog.test.ts`, `agreement-total.test.ts`).\n- `npx vitest run` (ai-orchestrator) — 177 passaram / 39 puladas (as puladas já eram puladas antes, exigem infra não disponível).\n- `npx vitest run` (frontend) — 10/10 passaram.\n- `npx vitest run` (bff) — 40 puladas (suíte exige Postgres; comportamento inalterado).\n- `npm run validate:core` (raiz) — **PASSOU** (14 passed, 3 skipped como já eram: `test:bff`/`test:contracts`/`test:health-worker`, sem suíte própria fora de integração); inclui builds das 5 apps, `audit:static` (16 checks estáticos, 15 ok + 1 skipped esperado) e `test:gate-scripts`.\n- `npm run validate:integration` (raiz) — **REFUSED** de forma limpa e esperada: `BFF_TEST_DATABASE_URL is not set`. Não há credencial de Postgres de teste disponível neste ambiente (só descobri um Postgres local sem credencial conhecida); não tentei burlar isso.\n- `git diff --check` — sem erros de whitespace.\n\n## Limitações\n\n- **Sem execução de `validate:integration`, da suíte `tests/integration` do Scheduling nem do ensaio `goal007-migration-rehearsal.mjs`** neste ambiente, por falta de `BFF_TEST_DATABASE_URL`/credencial de Postgres de teste. Os testes de integração foram escritos e revisados manualmente (compila, lint limpo) mas não foram executados contra PostgreSQL real. Isso cobre isolamento por tenant, constraint SQL de preço/revisão a nível de banco, e a estabilidade do snapshot pós-edição — pontos centrais do critério de aceite #1, #2 (parte SQL), #4 (parte de integração) e #9.\n- **Documentação de rastreamento da migração** (`docs/migration/GAP_ANALYSIS.md`, `CURRENT_STATE.md`) não foi editada: o padrão observado no repositório é essas seções (\"Delta implementado — GoalXXX (ACCEPTED na rodada N)\", \"FECHADO no diffXXX\") serem escritas após aceite do Tech Lead, e eu não posso declarar aceite. Registro aqui a evidência de G-16/G-17 para o Tech Lead usar no fechamento: G-16 (quatro preços, preço opcional, snapshots estáveis) coberto na parte de catálogo — resta proposta versionada/hold/valor final (Goal008); G-17 (cor/descrição/buffers/recorrência, revisão separada de operacional) coberto — restam modalidades/regras privadas (Goal018) e telas com progressive disclosure (Goal015).\n- **Formulário legado de serviços** (`ProductDirectoryScreen`) não ganhou suporte de edição completo aos 4 tipos — só exibição sem quebra; editar um serviço `STARTING_AT`/`NOT_INFORMED` sem trocar o rádio falha com erro de validação do backend (não corrompe dado, mas não é uma experiência completa — Goal015 é dono da tela).\n- **Onboarding**: ao carregar um serviço pré-existente com tipo novo, o passo \"servico-preco\" normaliza para o par binário (perde a distinção STARTING_AT/FIXED e NOT_INFORMED/ON_REQUEST se resubmetido) — decisão deliberada para nunca gravar zero nem travar o fluxo linear obrigatório do onboarding; documentado em comentário no código.\n- **G-16/histórico** (Goal008: hold, valor final, presença, eventos) e **modalidades/regras privadas** (G-26, Goal018) não foram tocados, conforme escopo.\n- Sem WhatsApp real, deploy, credenciais reais em fixtures, commit, push, merge ou PR — nenhum executado.",
+    "validations": [
+      {
+        "name": "scheduling-service typecheck (tsc --noEmit)",
+        "passed": true
+      },
+      {
+        "name": "bff typecheck (tsc --noEmit)",
+        "passed": true
+      },
+      {
+        "name": "ai-orchestrator typecheck (tsc --noEmit)",
+        "passed": true
+      },
+      {
+        "name": "frontend typecheck (tsc --noEmit)",
+        "passed": true
+      },
+      {
+        "name": "eslint src --max-warnings=0 (scheduling-service, bff, ai-orchestrator, frontend)",
+        "passed": true
+      },
+      {
+        "name": "scheduling-service unit tests (vitest tests/unit, 39 tests incl. 2 new files)",
+        "passed": true
+      },
+      {
+        "name": "ai-orchestrator test suite (vitest, 177 passed / 39 pre-existing skips)",
+        "passed": true
+      },
+      {
+        "name": "frontend test suite (vitest, 10 tests)",
+        "passed": true
+      },
+      {
+        "name": "npm run validate:core (root gate: builds + unit suites + audit:static + gate-scripts)",
+        "passed": true
+      },
+      {
+        "name": "git diff --check (no whitespace errors)",
+        "passed": true
+      },
+      {
+        "name": "npm run validate:integration",
+        "passed": false,
+        "detail": "REFUSED cleanly: BFF_TEST_DATABASE_URL not set in this environment; no disposable Postgres test credential available. scheduling-service tests/integration and scripts/goal007-migration-rehearsal.mjs were written but not executed against real PostgreSQL."
+      }
+    ],
+    "previousBlockers": [],
+    "packetPath": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\artefacts\\007-r1\\review-packet.json"
+  },
+  "statusAt": "2026-09-09T03:27:22.788Z",
+  "attemptStartedAt": "2026-09-09T01:08:56.843Z",
+  "requeuedAt": "2026-09-09T01:08:56.843Z"
+}

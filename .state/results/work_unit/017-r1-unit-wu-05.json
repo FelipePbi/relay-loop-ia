@@ -1,0 +1,64 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:04:20.891Z",
+  "attemptId": "017-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r1-unit-wu-05",
+      "goal": "017",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Adicionado controle humano completo ao chat: envio que assume com aviso prévio, Retomar IA explicando a reavaliação de contexto, override de categoria com origem visível e sugestões da IA restritas a atendimento humano vigente, com as cinco recusas em copy própria.",
+      "report": "Mudanças em `apps/frontend/src/features/conversations/`:\n\n- `ConversationThread.tsx`: composer aceita digitação em qualquer estado aberto (não só `you-handling`); mostra aviso \"Enviar assume esta conversa: a IA é pausada e você passa a atender.\" quando o envio for assumir; após `sendMessage`/`resend` bem-sucedidos, atualiza `conversation.handling` localmente para `HUMAN` (função `markHumanHandling`) para a barra de estado refletir `Aguardando você → Você atendendo` sem esperar o próximo polling; diálogo de Retomar IA reescrito para explicar que a IA reavalia o contexto atual; nova função `setCategory` chamando `conversations.setCategory`; renderiza `ConversationSuggestions` só quando `state === \"you-handling\" && !closed`.\n- `ConversationContextPanel.tsx`: nova seção \"Categoria\" com badge distinguindo `Definida manualmente`/`Classificação automática`, hint textual da `suggestedCategory` (nunca aplicada sozinha — só clique explícito muda o override), três chips (Comercial/Não classificada/Pessoal) e botão \"Usar classificação automática\" (`category: null`), desabilitado quando já é automática.\n- `ConversationSuggestions.tsx` (novo): botão \"Sugerir resposta\" que chama `generateSuggestions`; estado `ready` mostra até 3 chips clicáveis que preenchem o rascunho (editável, nunca envia sozinho) e permite buscar novamente; as cinco recusas (`CONTACT_IGNORED`, `SESSION_PERSONAL`, `HUMAN_HANDLING_REQUIRED`, `AI_DISABLED`, `NO_TEXTUAL_MESSAGE`, lidas por `upstreamErrorCode`) têm copy própria; lista vazia (`ok:true`, `suggestions: []`) mostra \"Nenhuma sugestão desta vez.\" em vez de ficar em branco.\n- `atendly-conversations.css`: classes novas `composer-suggestions*` e `context-category*`, reaproveitando tokens/`.chip`/`.badge`/`.btn` existentes.\n- Testes novos: `tests/goal017-human-handling.test.tsx` (10 casos: abrir não muda estado, aviso e transição de estado no envio, takeover/release/resolve alcançáveis com copy de reavaliação, override de categoria nos 3 valores + null com origem visível) e `tests/goal017-suggestions.test.tsx` (11 casos: visibilidade condicionada a atendimento humano, uso de sugestão sem enviar, lista vazia não silenciosa, as cinco recusas com copy distinta).\n\nNenhuma mensagem automática de anúncio de troca IA/humano foi introduzida: o composer só envia texto explicitamente digitado ou vindo de uma sugestão explicitamente escolhida.\n\nComandos executados e resultado:\n- `npx tsc --noEmit -p tsconfig.json` (apps/frontend) → sem erros.\n- `npx eslint src/features/conversations/ConversationThread.tsx src/features/conversations/ConversationContextPanel.tsx src/features/conversations/ConversationSuggestions.tsx tests/goal017-human-handling.test.tsx tests/goal017-suggestions.test.tsx` → limpo após autofix de import order e remoção de type assertion desnecessária.\n- `npx vitest run tests/goal017-human-handling.test.tsx tests/goal017-suggestions.test.tsx tests/goal017-inbox-tabs.test.tsx tests/goal017-chat-media.test.tsx tests/goal017-delivery-state.test.tsx tests/goal017-schema.test.ts` → 71 passed.\n- `npx vitest run` (suíte completa do frontend) → 33 arquivos, 301 testes, todos passando.\n- `npx vitest run tests/support/a11y.test.tsx` → 4 passed (self-test do gate axe; a suíte axe por tela é de outra work unit do plano).",
+      "changedFiles": [
+        "apps/frontend/src/features/conversations/ConversationThread.tsx",
+        "apps/frontend/src/features/conversations/ConversationContextPanel.tsx",
+        "apps/frontend/src/features/conversations/ConversationSuggestions.tsx",
+        "apps/frontend/src/shared/styles/atendly-conversations.css",
+        "apps/frontend/tests/goal017-human-handling.test.tsx",
+        "apps/frontend/tests/goal017-suggestions.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Abrir a conversa não altera estado nenhum",
+          "met": true,
+          "detail": "Teste 'nenhuma mutação é chamada ao carregar' em goal017-human-handling.test.tsx verifica takeover/release/resolve/setCategory/sendMessage não chamados após load."
+        },
+        {
+          "criterion": "Enviar assume: a tela avisa junto ao campo antes e reflete Aguardando você para Você atendendo depois",
+          "met": true,
+          "detail": "willAssume em ConversationThread.tsx mostra aviso antes do envio; markHumanHandling() atualiza handling='HUMAN' após envio; testado em 'avisa junto ao campo antes...' e 'reflete Aguardando você para Você atendendo depois...'."
+        },
+        {
+          "criterion": "takeover, release e resolve continuam alcançáveis; Retomar IA explica que a IA reavalia o contexto atual",
+          "met": true,
+          "detail": "Testes 'Assumir conversa chama takeover', 'Retomar IA abre diálogo que explica a reavaliação...' e 'Marcar como resolvida chama resolve' passam; texto do diálogo contém 'reavalia o contexto atual'."
+        },
+        {
+          "criterion": "Override de categoria funciona nos três valores e em null; categorySource MANUAL e AUTOMATIC são distinguíveis e suggestedCategory nunca é aplicada sozinha",
+          "met": true,
+          "detail": "ConversationContextPanel.tsx com 3 chips + botão null; badge 'Definida manualmente'/'Classificação automática'; testes 'os três valores e null funcionam...' e 'mostra a origem automática e a sugestão da IA, sem aplicá-la sozinha'."
+        },
+        {
+          "criterion": "Sugestões só são oferecidas com atendimento humano vigente, até três, editáveis, e nenhuma é enviada sozinha",
+          "met": true,
+          "detail": "Renderização condicionada a state==='you-handling'; componente limita a 3 chips que só preenchem o draft; testes em goal017-suggestions.test.tsx cobrindo visibilidade e uso sem envio."
+        },
+        {
+          "criterion": "As cinco recusas têm copy própria e distinta e nenhuma vira lista vazia silenciosa nem erro genérico",
+          "met": true,
+          "detail": "refusalCopy em ConversationSuggestions.tsx mapeia as 5 upstreamCode; lista vazia (ok:true, []) mostra 'Nenhuma sugestão desta vez.'; testes test.each e teste de unicidade de textos (5 distintos)."
+        },
+        {
+          "criterion": "Nenhuma mensagem automática anunciando troca entre IA e humano é enviada ao cliente",
+          "met": true,
+          "detail": "sendMessage só é chamado com texto digitado pela usuária ou preenchido a partir de uma sugestão explicitamente escolhida; nenhum código introduzido envia texto de anúncio automático."
+        }
+      ]
+    },
+    "attemptId": "017-r1-unit-wu-05-a1"
+  }
+}

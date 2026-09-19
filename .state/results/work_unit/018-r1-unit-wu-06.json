@@ -1,0 +1,42 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:56:40.223Z",
+  "attemptId": "018-r1-unit-wu-06-a3",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-06",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-06",
+      "status": "COMPLETED",
+      "summary": "Estendi publicApiSchemas, BffOnboardingService e BffSettingsService com modalidades, endereço e estado de projeção do negócio, aceitando resposta anterior sem esses campos, provado por 13 testes novos.",
+      "report": "Adicionei a `apps/frontend/src/data/mappers/publicApiSchemas.ts`: `businessModalitySchema` (enum ON_SITE/AT_HOME/ONLINE), `businessContextProjectionStatusSchema` (enum PROJECTED/PENDING), e os cinco campos aditivos e todos opcionais (`modalities`, `address`, `contextVersion`, `contextProjectedVersion`, `contextProjectionStatus`) no objeto `business` de `onboardingStateSchema` e `settingsStateSchema`, seguindo exatamente o contrato descrito em PUBLIC_API_V1.md (WU-01/WU-03) e a forma exposta em `apps/bff/src/modules/{onboarding,settings}/routes.ts`. Exportei os tipos `BusinessModality` e `BusinessContextProjectionStatus`.\n\nEm `BffOnboardingService.ts` e `BffSettingsService.ts`, estendi as interfaces de entrada já existentes (`OnboardingPatch.business` e `BusinessSettingsInput`) com `modalities?: BusinessModality[]` e `address?: string | null`, opcionais — sem criar métodos novos, para não deixar nenhum sem consumidor (os métodos `update`/`updateBusiness` já existem e já são chamados pela camada de UI atual).\n\nCriei `apps/frontend/tests/goal018-schema.test.ts` seguindo o padrão de `goal017-schema.test.ts`: prova resposta antiga (sem os 5 campos) para as duas leituras (onboarding e settings), campos novos com tipo correto (incluindo `address: null`), e rejeição de tipo/vocabulário errado (`modalities` com valor fora do enum ou tipo numérico, `contextProjectionStatus` fora do enum, `contextVersion` como string).\n\nComandos executados (dentro de `apps/frontend`, após `npm install` local — não havia `node_modules` na worktree):\n- `npx vitest run tests/goal018-schema.test.ts tests/goal017-schema.test.ts` → 2 arquivos, 13 testes, todos passaram.\n- `npx tsc --noEmit -p tsconfig.json` → sem erros.\n- `npx eslint src/data/mappers/publicApiSchemas.ts src/data/services/BffOnboardingService.ts src/data/services/BffSettingsService.ts tests/goal018-schema.test.ts --max-warnings=0` → sem erros.\n- `npx vitest run` (suíte completa do frontend) → 38 arquivos, 345 testes, todos passaram, sem regressão.\n\n`node_modules` está no `.gitignore` (confirmado com `git check-ignore`) e `package-lock.json` não foi alterado pelo `npm install`.",
+      "changedFiles": [
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffOnboardingService.ts",
+        "apps/frontend/src/data/services/BffSettingsService.ts",
+        "apps/frontend/tests/goal018-schema.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Resposta anterior, sem os campos novos, continua decodificando",
+          "met": true,
+          "detail": "Testes 'decodifica a resposta antiga' em goal018-schema.test.ts (onboarding e settings) parseiam o objeto business sem os 5 campos novos e afirmam undefined; suíte completa (345 testes) segue verde, incluindo os schemas legados existentes."
+        },
+        {
+          "criterion": "Resposta com os campos novos decodifica com o tipo correto, e tipo errado é rejeitado",
+          "met": true,
+          "detail": "Testes 'decodifica os campos novos com o tipo correto' e 'decodifica address nulo' provam o caminho positivo; testes 'recusa modalidade fora do vocabulário', 'recusa contextProjectionStatus fora do vocabulário', 'recusa contextVersion de tipo errado' e 'recusa modalidade de tipo errado' provam rejeição via .toThrow()."
+        },
+        {
+          "criterion": "Nenhum método novo do adapter fica sem consumidor ao fim do Goal",
+          "met": true,
+          "detail": "Não foi criado nenhum método novo nos dois services; apenas os campos opcionais modalities/address foram adicionados às interfaces de entrada (OnboardingPatch.business, BusinessSettingsInput) dos métodos update/updateBusiness já existentes e já consumidos pela UI atual."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-06-a3"
+  }
+}

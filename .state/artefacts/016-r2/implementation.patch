@@ -1,0 +1,4358 @@
+diff --git a/apps/ai-orchestrator/package.json b/apps/ai-orchestrator/package.json
+index 0f68826..1788648 100644
+--- a/apps/ai-orchestrator/package.json
++++ b/apps/ai-orchestrator/package.json
+@@ -45,5 +45,10 @@
+     "typescript": "^5.9.3",
+     "typescript-eslint": "^8.42.0",
+     "vitest": "^4.1.8"
++  },
++  "allowScripts": {
++    "@prisma/engines@7.10.0": true,
++    "esbuild@0.28.2": true,
++    "prisma@7.10.0": true
+   }
+ }
+diff --git a/apps/bff/PUBLIC_API_V1.md b/apps/bff/PUBLIC_API_V1.md
+index e695557..6936868 100644
+--- a/apps/bff/PUBLIC_API_V1.md
++++ b/apps/bff/PUBLIC_API_V1.md
+@@ -17,7 +17,7 @@ Para comportamento vigente, prevalece [`../../docs/product-vault/00-HOME.md`](..
+ | Ciclo de vida do atendimento | `POST /v1/appointments/:id/complete`; `POST /v1/appointments/:id/no-show`; `POST /v1/appointments/:id/final-value`; `POST /v1/appointments/:id/presence`; `GET /v1/appointments/:id/events` |
+ | Reserva temporária (hold) | `POST /v1/holds`; `GET /v1/holds`; `DELETE /v1/holds/:id` |
+ | Série de atendimento (Goal009) | `POST /v1/appointments/series/preview`; `POST /v1/appointments/series/confirm` |
+-| Disponibilidade e bloqueios | `GET /v1/availability`; `POST /v1/time-blocks`; `DELETE /v1/time-blocks/:id`; `DELETE /v1/time-blocks/:id/occurrence`; `PATCH /v1/time-blocks/:id/occurrence` |
++| Disponibilidade e bloqueios | `GET /v1/availability`; `GET /v1/time-blocks`; `POST /v1/time-blocks`; `DELETE /v1/time-blocks/:id`; `DELETE /v1/time-blocks/:id/occurrence`; `PATCH /v1/time-blocks/:id/occurrence` |
+ | Exceções de disponibilidade (Goal009) | `GET /v1/availability-exceptions`; `POST /v1/availability-exceptions/extra`; `POST /v1/availability-exceptions/unavailable`; `DELETE /v1/availability-exceptions/:id` |
+ | Séries de bloqueio/compromisso (Goal009) | `POST /v1/block-series`; `PATCH /v1/block-series/:id/from-date`; `DELETE /v1/block-series/:id` |
+ | Importação única (Goal010) | `POST /v1/calendar/imports`; `POST /v1/calendar/imports/:sessionId/analyze`; `GET /v1/calendar/imports/:sessionId/categories/:category/items`; `POST /v1/calendar/imports/:sessionId/items/:itemId/decision`; `POST /v1/calendar/imports/:sessionId/execute`; `GET /v1/calendar/imports/:sessionId/progress`; `POST /v1/calendar/imports/:sessionId/complete` |
+@@ -218,7 +218,7 @@ O atendimento ocupa `[startAt − bufferBeforeMinutes, endAt + bufferAfterMinute
+ | `POST /v1/availability-exceptions/unavailable` | cria indisponibilidade pontual (`date`, `startTime`/`endTime` opcionais para dia inteiro, `reason`) |
+ | `DELETE /v1/availability-exceptions/:id` | remove |
+ 
+-Indisponibilidade que cobre um atendimento confirmado é recusada com `409 EXCEPTION_APPOINTMENT_CONFLICT`, salvo decisão humana explícita: `decidedBy` + `decidedReason` no corpo, gravados na própria exceção. A exceção nunca altera atendimento existente.
++Indisponibilidade que cobre um atendimento confirmado é recusada com `409 EXCEPTION_APPOINTMENT_CONFLICT`, salvo decisão humana explícita: `decidedReason` no corpo, gravada na própria exceção junto com quem decidiu. `decidedBy` não é mais um campo do corpo (Goal016): o ator é sempre derivado da sessão autenticada; um corpo antigo que ainda envie `decidedBy` é aceito e o valor é ignorado. A exceção nunca altera atendimento existente.
+ 
+ ### Séries de bloqueio e compromisso pessoal
+ 
+@@ -226,6 +226,7 @@ Indisponibilidade que cobre um atendimento confirmado é recusada com `409 EXCEP
+ 
+ | Rota | O que faz |
+ | --- | --- |
++| `GET /v1/time-blocks?startDate&endDate` | lista blocos do período, escopado por tenant; a janela é obrigatória. Mesma forma de `POST /v1/time-blocks` |
+ | `POST /v1/block-series` | cria série (`rule`: `kind`, `title`, `daysOfWeek`, `startTime`, `endTime`, `seriesStartDate`, e **um** entre `seriesEndDate`/`occurrenceCount`); materializa as ocorrências na criação |
+ | `PATCH /v1/block-series/:id/from-date` | edita a série a partir de `fromDate`: encerra a série atual (ocorrências passadas intocadas) e cria outra com o novo `rule` |
+ | `DELETE /v1/block-series/:id` | remove as ocorrências futuras da série (a partir de hoje); passadas preservadas |
+diff --git a/apps/bff/src/clients/scheduling/index.ts b/apps/bff/src/clients/scheduling/index.ts
+index c295c84..6e45638 100644
+--- a/apps/bff/src/clients/scheduling/index.ts
++++ b/apps/bff/src/clients/scheduling/index.ts
+@@ -705,6 +705,18 @@ export class SchedulingClient {
+     );
+   }
+ 
++  async listTimeBlocks(
++    context: InternalRequestContext,
++    query: { startDate: string; endDate: string },
++  ) {
++    return this.get(
++      context,
++      "/internal/time-blocks",
++      z.array(timeBlockSchema),
++      query,
++    );
++  }
++
+   async createTimeBlock(context: InternalRequestContext, input: unknown) {
+     return this.mutate(
+       context,
+diff --git a/apps/bff/src/modules/calendar/routes.ts b/apps/bff/src/modules/calendar/routes.ts
+index b003447..22d9d66 100644
+--- a/apps/bff/src/modules/calendar/routes.ts
++++ b/apps/bff/src/modules/calendar/routes.ts
+@@ -122,12 +122,15 @@ const extraAvailabilitySchema = z.object({
+   startTime: timeSchema,
+   endTime: timeSchema,
+ });
++// `decidedBy` nao vem mais do corpo (Goal016): quem decide e a sessao
++// autenticada, nunca o cliente. Um corpo antigo que ainda envie `decidedBy`
++// e aceito e o valor e ignorado, sem erro — `z.object` descarta chave
++// desconhecida por padrao.
+ const unavailabilitySchema = z.object({
+   date: dateSchema,
+   startTime: timeSchema.optional(),
+   endTime: timeSchema.optional(),
+   reason: z.string().trim().max(500).optional(),
+-  decidedBy: z.string().trim().min(1).max(200).optional(),
+   decidedReason: z.string().trim().min(1).max(500).optional(),
+ });
+ 
+@@ -411,6 +414,18 @@ export async function registerV1CalendarRoutes(
+     },
+   );
+ 
++  app.get(
++    "/v1/time-blocks",
++    { preHandler: requireTenantContext },
++    async (request) => {
++      const query = parseQuery(exceptionsQuerySchema, request.query);
++      return dataResponse(
++        request,
++        await scheduling.listTimeBlocks(internalContext(request), query),
++      );
++    },
++  );
++
+   app.post(
+     "/v1/time-blocks",
+     { preHandler: requireTenantContext },
+@@ -496,10 +511,14 @@ export async function registerV1CalendarRoutes(
+     "/v1/availability-exceptions/unavailable",
+     { preHandler: requireTenantContext },
+     async (request, reply) => {
+-      const exception = await scheduling.createUnavailability(
+-        internalContext(request),
+-        parseBody(unavailabilitySchema, request.body),
+-      );
++      const context = internalContext(request);
++      const body = parseBody(unavailabilitySchema, request.body);
++      const exception = await scheduling.createUnavailability(context, {
++        ...body,
++        // Decisao humana explicita: o ator e sempre quem esta autenticado
++        // nesta sessao, nunca um valor vindo do corpo.
++        decidedBy: body.decidedReason ? context.userId : undefined,
++      });
+       return reply.code(201).send(dataResponse(request, exception));
+     },
+   );
+diff --git a/apps/bff/tests/goal009-calendar-routes.integration.test.ts b/apps/bff/tests/goal009-calendar-routes.integration.test.ts
+index e09ee64..f7c1fae 100644
+--- a/apps/bff/tests/goal009-calendar-routes.integration.test.ts
++++ b/apps/bff/tests/goal009-calendar-routes.integration.test.ts
+@@ -322,12 +322,12 @@ describe.skipIf(!RUN_INTEGRATION)("Goal009: rotas públicas de agenda", () => {
+     expect(upstream[0].tenantId).toBe(owner.tenantId);
+   });
+ 
+-  it("a indisponibilidade sobre atendimento confirmado leva ator e motivo da decisão humana", async () => {
++  it("a indisponibilidade sobre atendimento confirmado leva o motivo da decisão humana, e o ator vem da sessão (Goal016)", async () => {
+     const owner = created[0]!;
+     stubScheduling(
+       {
+         data: exceptionPayload({
+-          decidedBy: "user-1",
++          decidedBy: owner.userId,
+           decidedReason: "emergência médica",
+         }),
+         requestId: "upstream-decision",
+@@ -342,18 +342,17 @@ describe.skipIf(!RUN_INTEGRATION)("Goal009: rotas públicas de agenda", () => {
+       payload: {
+         date: "2026-09-10",
+         reason: "emergência médica",
+-        decidedBy: "user-1",
+         decidedReason: "emergência médica",
+       },
+     });
+ 
+     expect(response.statusCode).toBe(201);
+     expect(response.json().data).toMatchObject({
+-      decidedBy: "user-1",
++      decidedBy: owner.userId,
+       decidedReason: "emergência médica",
+     });
+     expect(JSON.parse(upstream[0].body ?? "{}")).toMatchObject({
+-      decidedBy: "user-1",
++      decidedBy: owner.userId,
+       decidedReason: "emergência médica",
+     });
+   });
+diff --git a/apps/frontend/src/app/(platform)/agenda/agendamento/page.tsx b/apps/frontend/src/app/(platform)/agenda/agendamento/page.tsx
+index 41e6c0f..2c81c83 100644
+--- a/apps/frontend/src/app/(platform)/agenda/agendamento/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/agendamento/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ export default async function AppointmentPage({
+   searchParams,
+ }: {
+diff --git a/apps/frontend/src/app/(platform)/agenda/bloquear/page.tsx b/apps/frontend/src/app/(platform)/agenda/bloquear/page.tsx
+index 1ce827b..b01a08c 100644
+--- a/apps/frontend/src/app/(platform)/agenda/bloquear/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/bloquear/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ export default function BlockTimePage() {
+   return <ProductAgendaScreen scenario="block-time" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/agenda/cancelar/page.tsx b/apps/frontend/src/app/(platform)/agenda/cancelar/page.tsx
+index 3614b33..fcb42de 100644
+--- a/apps/frontend/src/app/(platform)/agenda/cancelar/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/cancelar/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ 
+ export default async function CancelAppointmentPage({
+   searchParams,
+diff --git a/apps/frontend/src/app/(platform)/agenda/novo/page.tsx b/apps/frontend/src/app/(platform)/agenda/novo/page.tsx
+index 52cc931..1503e47 100644
+--- a/apps/frontend/src/app/(platform)/agenda/novo/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/novo/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ export default function NewAppointmentPage() {
+   return <ProductAgendaScreen scenario="new" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/agenda/page.tsx b/apps/frontend/src/app/(platform)/agenda/page.tsx
+index 317caa3..353a143 100644
+--- a/apps/frontend/src/app/(platform)/agenda/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ export default function AgendaPage() {
+   return <ProductAgendaScreen />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/agenda/reagendar/page.tsx b/apps/frontend/src/app/(platform)/agenda/reagendar/page.tsx
+index 76a5dbf..99d61ff 100644
+--- a/apps/frontend/src/app/(platform)/agenda/reagendar/page.tsx
++++ b/apps/frontend/src/app/(platform)/agenda/reagendar/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductAgendaScreen } from "@/features/calendar/ProductAgendaScreen";
++import { ProductAgendaScreen } from "@/features/agenda/ProductAgendaScreen";
+ export default async function ReschedulePage({
+   searchParams,
+ }: {
+diff --git a/apps/frontend/src/app/globals.css b/apps/frontend/src/app/globals.css
+index 81d8e1f..7f9a151 100644
+--- a/apps/frontend/src/app/globals.css
++++ b/apps/frontend/src/app/globals.css
+@@ -2,7 +2,6 @@
+ @import "../shared/styles/atendly.css";
+ @import "../shared/styles/atendly-conversations.css";
+ @import "../shared/styles/atendly-agenda.css";
+-@import "../shared/styles/atendly-directory.css";
+ @import "../shared/styles/atendly-customers.css";
+ @import "../shared/styles/atendly-services.css";
+ @import "../shared/styles/atendly-settings.css";
+diff --git a/apps/frontend/src/data/services/BffCalendarService.ts b/apps/frontend/src/data/services/BffCalendarService.ts
+index 5f78977..d679392 100644
+--- a/apps/frontend/src/data/services/BffCalendarService.ts
++++ b/apps/frontend/src/data/services/BffCalendarService.ts
+@@ -25,8 +25,10 @@ export interface ListAppointmentsQuery {
+ 
+ export interface CreateAppointmentInput {
+   comments?: string;
+-  customerName: string;
+-  customerPhone: string;
++  /** Pessoa já resolvida; alternativa a `customerName`/`customerPhone`. */
++  customerId?: string;
++  customerName?: string;
++  customerPhone?: string;
+   date: string;
+   /** Duração do atendimento manual excepcional sem serviço cadastrado. */
+   durationMinutes?: number;
+@@ -94,8 +96,7 @@ export interface CreateUnavailabilityInput {
+   endTime?: string;
+   startTime?: string;
+   reason?: string;
+-  /** Decisão humana explícita quando a indisponibilidade cobre atendimento confirmado. */
+-  decidedBy?: string;
++  /** Decisão humana explícita quando a indisponibilidade cobre atendimento confirmado; o ator vem sempre da sessão (Goal016). */
+   decidedReason?: string;
+ }
+ 
+@@ -336,6 +337,18 @@ export class BffCalendarService {
+     });
+   }
+ 
++  listTimeBlocks(
++    query: { endDate: string; startDate: string },
++    signal?: AbortSignal,
++  ) {
++    return this.http.request({
++      path: "/v1/time-blocks",
++      query,
++      schema: z.array(timeBlockSchema),
++      signal,
++    });
++  }
++
+   createTimeBlock(input: CreateTimeBlockInput, signal?: AbortSignal) {
+     return this.http.request({
+       body: input,
+diff --git a/apps/frontend/src/features/calendar/ProductAgendaScreen.tsx b/apps/frontend/src/features/calendar/ProductAgendaScreen.tsx
+deleted file mode 100644
+index f97e314..0000000
+--- a/apps/frontend/src/features/calendar/ProductAgendaScreen.tsx
++++ /dev/null
+@@ -1,1583 +0,0 @@
+-"use client";
+-
+-import clsx from "clsx";
+-import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import {
+-  type FormEvent,
+-  type ReactNode,
+-  useEffect,
+-  useMemo,
+-  useState,
+-} from "react";
+-
+-import {
+-  type Appointment,
+-  appointmentStatusLabel,
+-  type AvailabilitySlot,
+-  BffHttpError,
+-  type CalendarState,
+-  type CustomerList,
+-  isActiveAppointmentStatus,
+-  type ServiceList,
+-  type TimeBlock,
+-} from "@/data";
+-import { Icon } from "@/shared/icons/Icon";
+-import { useShellConfig } from "@/shared/layout/ShellConfig";
+-import { getProductServices } from "@/shared/runtime/ProductRuntime";
+-import { Button } from "@/shared/ui/Button";
+-import { Dialog } from "@/shared/ui/Dialog";
+-import { StatePanel } from "@/shared/ui/States";
+-
+-type AgendaScenario =
+-  "block-time" | "cancel" | "detail" | "list" | "new" | "reschedule";
+-
+-export function ProductAgendaScreen({
+-  appointmentId,
+-  scenario = "list",
+-}: {
+-  appointmentId?: string;
+-  scenario?: AgendaScenario;
+-}) {
+-  if (scenario === "list") return <AppointmentList />;
+-  if (scenario === "new") return <NewAppointment />;
+-  if (scenario === "block-time") return <BlockTime />;
+-  if (scenario === "detail")
+-    return <AppointmentDetail appointmentId={appointmentId} />;
+-  if (scenario === "reschedule")
+-    return <RescheduleAppointment appointmentId={appointmentId} />;
+-  return <CancelAppointment appointmentId={appointmentId} />;
+-}
+-
+-function AppointmentList() {
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+-  const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
+-  const [filter, setFilter] = useState("all");
+-  const [loading, setLoading] = useState(true);
+-  const [error, setError] = useState<string | null>(null);
+-  const [reload, setReload] = useState(0);
+-
+-  const end = addDays(cursor, 6);
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    Promise.all([
+-      getProductServices().calendar.getCalendar(controller.signal),
+-      getProductServices().calendar.listAppointments(
+-        { startDate: isoDate(cursor), endDate: isoDate(addDays(cursor, 6)) },
+-        controller.signal,
+-      ),
+-    ])
+-      .then(([calendarResult, appointmentResult]) => {
+-        setCalendar(calendarResult);
+-        setAppointments(appointmentResult);
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(requestError(caught, "Não foi possível carregar a agenda."));
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [cursor, reload]);
+-
+-  const services = useMemo(
+-    () =>
+-      Array.from(
+-        new Map(
+-          appointments.flatMap((item) =>
+-            item.services.map((service) => [service.serviceId, service.name]),
+-          ),
+-        ),
+-      ),
+-    [appointments],
+-  );
+-  const visible = appointments.filter(
+-    (item) =>
+-      filter === "all" ||
+-      (filter === "ai" && item.source === "AI") ||
+-      item.services.some((service) => service.serviceId === filter),
+-  );
+-  const next = [...appointments]
+-    .filter((item) => isActiveAppointmentStatus(item.status))
+-    .sort(compareAppointments)[0];
+-  const external = calendar?.source === "EXTERNAL";
+-  useShellConfig({
+-    action: calendar?.capabilities.createAppointments
+-      ? { href: "/agenda/novo", icon: "plus", label: "Novo agendamento" }
+-      : undefined,
+-    active: "agenda",
+-    loading,
+-    module: "agenda",
+-    source: external ? "external" : "atendly",
+-    title: "Agenda",
+-  });
+-
+-  return (
+-    <>
+-      <div className="agenda-page">
+-        <header className="agenda-page-header">
+-          <div>
+-            <p className="eyebrow">Operação diária</p>
+-            <h1>Agenda</h1>
+-            <p>Agendamentos reais da fonte oficial do negócio.</p>
+-          </div>
+-          {calendar && (
+-            <div className="agenda-page-actions">
+-              {calendar.capabilities.manageAvailability && (
+-                <Button href="/agenda/bloquear" variant="secondary">
+-                  Bloquear horário
+-                </Button>
+-              )}
+-              {calendar.capabilities.createAppointments && (
+-                <Button href="/agenda/novo">Novo agendamento</Button>
+-              )}
+-            </div>
+-          )}
+-        </header>
+-
+-        {calendar && <SourceStrip calendar={calendar} />}
+-        {error && (
+-          <div className="agenda-state-surface">
+-            <StatePanel
+-              actionLabel="Tentar novamente"
+-              description={error}
+-              icon="alert"
+-              onAction={() => setReload((value) => value + 1)}
+-              title="Agenda indisponível"
+-              tone="error"
+-            />
+-          </div>
+-        )}
+-        {!error && loading && <AgendaLoading />}
+-        {!error && !loading && calendar?.source === null && (
+-          <div className="agenda-state-surface">
+-            <StatePanel
+-              actionHref="/configuracoes/agenda"
+-              actionLabel="Configurar agenda"
+-              description="Conclua a escolha da fonte oficial antes de operar agendamentos."
+-              title="Fonte oficial não configurada"
+-            />
+-          </div>
+-        )}
+-        {!error && !loading && calendar?.source && (
+-          <>
+-            {next && (
+-              <Link
+-                className="agenda-next"
+-                href={`/agenda/agendamento?id=${encodeURIComponent(next.id)}`}
+-              >
+-                <span className="agenda-next-icon">
+-                  <Icon name="clock" />
+-                </span>
+-                <span className="agenda-next-copy">
+-                  <span>Próximo agendamento</span>
+-                  <strong>{customerLabel(next)}</strong>
+-                  <small>
+-                    {formatAppointmentDate(next)} · {serviceNames(next)}
+-                  </small>
+-                </span>
+-                <Icon name="chevron-right" />
+-              </Link>
+-            )}
+-            <section className="agenda-command-bar">
+-              <div className="agenda-date-tools">
+-                <button
+-                  className="icon-btn"
+-                  onClick={() => {
+-                    setLoading(true);
+-                    setError(null);
+-                    setCursor(addDays(cursor, -7));
+-                  }}
+-                  type="button"
+-                  aria-label="Semana anterior"
+-                >
+-                  <Icon name="chevron-left" />
+-                </button>
+-                <strong className="agenda-date-title">
+-                  {formatPeriod(cursor, end)}
+-                </strong>
+-                <button
+-                  className="icon-btn"
+-                  onClick={() => {
+-                    setLoading(true);
+-                    setError(null);
+-                    setCursor(addDays(cursor, 7));
+-                  }}
+-                  type="button"
+-                  aria-label="Próxima semana"
+-                >
+-                  <Icon name="chevron-right" />
+-                </button>
+-              </div>
+-              <div className="agenda-filters" aria-label="Filtrar agenda">
+-                <FilterButton
+-                  active={filter === "all"}
+-                  onClick={() => setFilter("all")}
+-                >
+-                  Todos
+-                </FilterButton>
+-                <FilterButton
+-                  active={filter === "ai"}
+-                  onClick={() => setFilter("ai")}
+-                >
+-                  Criados pela IA
+-                </FilterButton>
+-                {services.map(([id, name]) => (
+-                  <FilterButton
+-                    active={filter === id}
+-                    key={id}
+-                    onClick={() => setFilter(id)}
+-                  >
+-                    {name}
+-                  </FilterButton>
+-                ))}
+-              </div>
+-            </section>
+-            <section
+-              className="agenda-calendar agenda-list-panel"
+-              aria-label="Agendamentos da semana"
+-            >
+-              {visible.length === 0 ? (
+-                <div className="agenda-no-results">
+-                  Nenhum agendamento encontrado neste período.
+-                </div>
+-              ) : (
+-                groupByDate(visible).map(([date, items]) => (
+-                  <div className="agenda-list-group" key={date}>
+-                    <h2 className="agenda-list-heading">{formatDate(date)}</h2>
+-                    <div className="agenda-day-list">
+-                      {items.map((item) => (
+-                        <AppointmentRow item={item} key={item.id} />
+-                      ))}
+-                    </div>
+-                  </div>
+-                ))
+-              )}
+-            </section>
+-          </>
+-        )}
+-      </div>
+-    </>
+-  );
+-}
+-
+-function NewAppointment() {
+-  const router = useRouter();
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [services, setServices] = useState<ServiceList | null>(null);
+-  const [customers, setCustomers] = useState<CustomerList | null>(null);
+-  const [serviceId, setServiceId] = useState("");
+-  const [customerId, setCustomerId] = useState("new");
+-  const [customerName, setCustomerName] = useState("");
+-  const [customerPhone, setCustomerPhone] = useState("");
+-  const [date, setDate] = useState(isoDate(new Date()));
+-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+-  const [startTime, setStartTime] = useState("");
+-  const [comments, setComments] = useState("");
+-  const [loading, setLoading] = useState(true);
+-  const [slotsLoading, setSlotsLoading] = useState(false);
+-  const [busy, setBusy] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
+-  const [confirm, setConfirm] = useState(false);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    Promise.all([
+-      getProductServices().calendar.getCalendar(controller.signal),
+-      getProductServices().serviceCatalog.list(controller.signal),
+-      getProductServices().customers.list(controller.signal),
+-    ])
+-      .then(([calendarResult, serviceResult, customerResult]) => {
+-        setCalendar(calendarResult);
+-        setServices(serviceResult);
+-        setCustomers(customerResult);
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível preparar o agendamento."),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, []);
+-
+-  useEffect(() => {
+-    if (!serviceId || !date || !calendar?.capabilities.createAppointments) {
+-      return;
+-    }
+-    const controller = new AbortController();
+-    getProductServices()
+-      .calendar.getAvailability(
+-        { serviceIds: [serviceId], startDate: date, days: 1, maxSlots: 100 },
+-        controller.signal,
+-      )
+-      .then((result) => {
+-        setSlots(result.filter((slot) => slot.date === date));
+-        setStartTime("");
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(
+-              caught,
+-              "Não foi possível consultar os horários disponíveis.",
+-            ),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setSlotsLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [calendar, date, serviceId]);
+-
+-  const selectedCustomer = customers?.items.find(
+-    (item) => item.id === customerId,
+-  );
+-  const finalName =
+-    customerId === "new"
+-      ? customerName.trim()
+-      : (selectedCustomer?.name?.trim() ?? "");
+-  const finalPhone =
+-    customerId === "new"
+-      ? customerPhone.trim()
+-      : (selectedCustomer?.phone?.trim() ?? "");
+-  const selectedService = services?.items.find((item) => item.id === serviceId);
+-  const canSubmit = Boolean(
+-    finalName && finalPhone && serviceId && date && startTime,
+-  );
+-
+-  async function create() {
+-    if (!canSubmit || busy) return;
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      const appointment = await getProductServices().calendar.createAppointment(
+-        {
+-          comments: comments.trim() || undefined,
+-          customerName: finalName,
+-          customerPhone: finalPhone,
+-          date,
+-          serviceIds: [serviceId],
+-          startTime,
+-        },
+-        crypto.randomUUID(),
+-      );
+-      router.replace(
+-        `/agenda/agendamento?id=${encodeURIComponent(appointment.id)}`,
+-      );
+-    } catch (caught) {
+-      setError(requestError(caught, "Não foi possível criar o agendamento."));
+-      setConfirm(false);
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  return (
+-    <FlowShell
+-      calendar={calendar}
+-      description="Escolha cliente, serviço e um horário disponível na fonte oficial."
+-      loading={loading}
+-      title="Novo agendamento"
+-    >
+-      {error && (
+-        <p className="form-error" role="alert">
+-          {error}
+-        </p>
+-      )}
+-      {!loading && calendar && !calendar.capabilities.createAppointments ? (
+-        <ReadOnlyState calendar={calendar} operation="criar agendamentos" />
+-      ) : (
+-        <div className="agenda-flow-layout">
+-          <form
+-            className="agenda-form-card"
+-            onSubmit={(event) => {
+-              event.preventDefault();
+-              if (canSubmit) setConfirm(true);
+-            }}
+-          >
+-            <h2>Dados do agendamento</h2>
+-            <div className="agenda-form-grid">
+-              <label className="field is-wide">
+-                <span>Serviço</span>
+-                <select
+-                  required
+-                  value={serviceId}
+-                  onChange={(event) => {
+-                    setServiceId(event.target.value);
+-                    setSlots([]);
+-                    setStartTime("");
+-                    setSlotsLoading(Boolean(event.target.value));
+-                    setError(null);
+-                  }}
+-                >
+-                  <option value="">Selecione</option>
+-                  {services?.items
+-                    .filter((item) => item.active)
+-                    .map((item) => (
+-                      <option key={item.id} value={item.id}>
+-                        {item.name} · {item.durationMinutes} min
+-                      </option>
+-                    ))}
+-                </select>
+-              </label>
+-              {customers &&
+-                !customers.managedExternally &&
+-                customers.items.length > 0 && (
+-                  <label className="field is-wide">
+-                    <span>Cliente</span>
+-                    <select
+-                      value={customerId}
+-                      onChange={(event) => setCustomerId(event.target.value)}
+-                    >
+-                      <option value="new">Novo cliente</option>
+-                      {customers.items.map((item) => (
+-                        <option key={item.id} value={item.id}>
+-                          {item.name ??
+-                            item.phone ??
+-                            "Cliente sem identificação"}
+-                        </option>
+-                      ))}
+-                    </select>
+-                  </label>
+-                )}
+-              {customerId === "new" && (
+-                <>
+-                  <label className="field">
+-                    <span>Nome do cliente</span>
+-                    <input
+-                      required
+-                      value={customerName}
+-                      onChange={(event) => setCustomerName(event.target.value)}
+-                    />
+-                  </label>
+-                  <label className="field">
+-                    <span>Telefone</span>
+-                    <input
+-                      required
+-                      inputMode="tel"
+-                      value={customerPhone}
+-                      onChange={(event) => setCustomerPhone(event.target.value)}
+-                    />
+-                  </label>
+-                </>
+-              )}
+-              <label className="field">
+-                <span>Data</span>
+-                <input
+-                  min={isoDate(new Date())}
+-                  required
+-                  type="date"
+-                  value={date}
+-                  onChange={(event) => {
+-                    setDate(event.target.value);
+-                    setSlots([]);
+-                    setStartTime("");
+-                    setSlotsLoading(Boolean(serviceId));
+-                    setError(null);
+-                  }}
+-                />
+-              </label>
+-              <label className="field is-wide">
+-                <span>Observações</span>
+-                <textarea
+-                  rows={3}
+-                  value={comments}
+-                  onChange={(event) => setComments(event.target.value)}
+-                />
+-              </label>
+-            </div>
+-            <fieldset disabled={!serviceId || slotsLoading}>
+-              <legend>Horários disponíveis</legend>
+-              {slotsLoading ? (
+-                <p>Consultando disponibilidade…</p>
+-              ) : slots.length === 0 ? (
+-                <p className="muted">
+-                  Nenhum horário disponível para esta seleção.
+-                </p>
+-              ) : (
+-                <div className="agenda-time-options">
+-                  {slots.map((slot) => (
+-                    <label
+-                      className="agenda-time-option"
+-                      key={`${slot.date}-${slot.startTime}`}
+-                    >
+-                      <input
+-                        checked={startTime === slot.startTime}
+-                        name="start-time"
+-                        onChange={() => setStartTime(slot.startTime)}
+-                        type="radio"
+-                      />
+-                      <span>{slot.startTime}</span>
+-                    </label>
+-                  ))}
+-                </div>
+-              )}
+-            </fieldset>
+-            <div className="agenda-form-footer">
+-              <Button href="/agenda" variant="secondary">
+-                Cancelar
+-              </Button>
+-              <Button disabled={!canSubmit} type="submit">
+-                Revisar e criar
+-              </Button>
+-            </div>
+-          </form>
+-          <Summary title="Resumo">
+-            <SummaryRow label="Cliente" value={finalName || "—"} />
+-            <SummaryRow label="Serviço" value={selectedService?.name ?? "—"} />
+-            <SummaryRow
+-              label="Quando"
+-              value={startTime ? `${formatDate(date)} às ${startTime}` : "—"}
+-            />
+-          </Summary>
+-        </div>
+-      )}
+-      <Dialog
+-        eyebrow="Confirmação"
+-        onClose={() => !busy && setConfirm(false)}
+-        open={confirm}
+-        title="Criar este agendamento?"
+-      >
+-        <div className="agenda-summary-list">
+-          <SummaryRow label="Cliente" value={finalName} />
+-          <SummaryRow label="Serviço" value={selectedService?.name ?? "—"} />
+-          <SummaryRow
+-            label="Quando"
+-            value={`${formatDate(date)} às ${startTime}`}
+-          />
+-        </div>
+-        <div className="modal-actions">
+-          <Button
+-            disabled={busy}
+-            onClick={() => setConfirm(false)}
+-            type="button"
+-            variant="secondary"
+-          >
+-            Voltar
+-          </Button>
+-          <Button loading={busy} onClick={() => void create()} type="button">
+-            Confirmar agendamento
+-          </Button>
+-        </div>
+-      </Dialog>
+-    </FlowShell>
+-  );
+-}
+-
+-function AppointmentDetail({ appointmentId }: { appointmentId?: string }) {
+-  const [appointment, setAppointment] = useState<Appointment | null>(null);
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [loading, setLoading] = useState(Boolean(appointmentId));
+-  const [error, setError] = useState<string | null>(() =>
+-    appointmentId ? null : "O agendamento não foi informado.",
+-  );
+-
+-  useEffect(() => {
+-    if (!appointmentId) return;
+-    const controller = new AbortController();
+-    Promise.all([
+-      getProductServices().calendar.getAppointment(
+-        appointmentId,
+-        controller.signal,
+-      ),
+-      getProductServices().calendar.getCalendar(controller.signal),
+-    ])
+-      .then(([appointmentResult, calendarResult]) => {
+-        setAppointment(appointmentResult);
+-        setCalendar(calendarResult);
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível carregar o agendamento."),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [appointmentId]);
+-
+-  const writable = Boolean(
+-    calendar?.capabilities.createAppointments &&
+-    appointment ? isActiveAppointmentStatus(appointment.status) : false,
+-  );
+-  return (
+-    <FlowShell
+-      calendar={calendar}
+-      description="Dados persistidos na fonte oficial do negócio."
+-      loading={loading}
+-      title="Detalhes do agendamento"
+-    >
+-      {error && (
+-        <StatePanel
+-          actionHref="/agenda"
+-          actionLabel="Voltar à agenda"
+-          description={error}
+-          icon="alert"
+-          title="Agendamento indisponível"
+-          tone="error"
+-        />
+-      )}
+-      {appointment && (
+-        <>
+-          <section className="agenda-detail-hero">
+-            <div>
+-              <p className="eyebrow">{statusLabel(appointment.status)}</p>
+-              <h2>{customerLabel(appointment)}</h2>
+-              <p className="agenda-detail-date">
+-                {formatAppointmentDate(appointment)}
+-              </p>
+-              <p className="agenda-detail-service">
+-                {serviceNames(appointment)}
+-              </p>
+-            </div>
+-            {writable && (
+-              <div className="agenda-detail-actions">
+-                <Button
+-                  href={`/agenda/reagendar?id=${encodeURIComponent(appointment.id)}`}
+-                  variant="secondary"
+-                >
+-                  Reagendar
+-                </Button>
+-                <Button
+-                  href={`/agenda/cancelar?id=${encodeURIComponent(appointment.id)}`}
+-                  variant="danger"
+-                >
+-                  Cancelar agendamento
+-                </Button>
+-              </div>
+-            )}
+-          </section>
+-          {calendar?.source === "EXTERNAL" &&
+-            !calendar.capabilities.createAppointments && (
+-              <ReadOnlyNotice>
+-                Este calendário está em modo de consulta. Alterações devem ser
+-                feitas na fonte oficial.
+-              </ReadOnlyNotice>
+-            )}
+-          <div className="agenda-detail-grid">
+-            <section className="agenda-detail-section">
+-              <h2>Cliente</h2>
+-              <div className="agenda-summary-list">
+-                <SummaryRow label="Nome" value={customerLabel(appointment)} />
+-                <SummaryRow
+-                  label="Telefone"
+-                  value={appointment.customer?.phone ?? "Não informado"}
+-                />
+-              </div>
+-            </section>
+-            <section className="agenda-detail-section">
+-              <h2>Agendamento</h2>
+-              <div className="agenda-summary-list">
+-                <SummaryRow label="Data" value={formatDate(appointment.date)} />
+-                <SummaryRow
+-                  label="Horário"
+-                  value={`${appointment.startTime}–${appointment.endTime}`}
+-                />
+-                <SummaryRow
+-                  label="Duração"
+-                  value={`${appointment.durationMinutes} min`}
+-                />
+-                <SummaryRow
+-                  label="Origem"
+-                  value={sourceLabel(appointment.source)}
+-                />
+-                <SummaryRow
+-                  label="Valor"
+-                  value={formatMoney(appointment.totalPrice)}
+-                />
+-              </div>
+-            </section>
+-            {appointment.comments && (
+-              <section className="agenda-detail-section">
+-                <h2>Observações</h2>
+-                <p>{appointment.comments}</p>
+-              </section>
+-            )}
+-          </div>
+-        </>
+-      )}
+-    </FlowShell>
+-  );
+-}
+-
+-function RescheduleAppointment({ appointmentId }: { appointmentId?: string }) {
+-  const router = useRouter();
+-  const [appointment, setAppointment] = useState<Appointment | null>(null);
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [date, setDate] = useState(isoDate(new Date()));
+-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+-  const [startTime, setStartTime] = useState("");
+-  const [loading, setLoading] = useState(Boolean(appointmentId));
+-  const [slotsLoading, setSlotsLoading] = useState(Boolean(appointmentId));
+-  const [busy, setBusy] = useState(false);
+-  const [confirm, setConfirm] = useState(false);
+-  const [error, setError] = useState<string | null>(() =>
+-    appointmentId ? null : "O agendamento não foi informado.",
+-  );
+-
+-  useEffect(() => {
+-    if (!appointmentId) return;
+-    const controller = new AbortController();
+-    Promise.all([
+-      getProductServices().calendar.getAppointment(
+-        appointmentId,
+-        controller.signal,
+-      ),
+-      getProductServices().calendar.getCalendar(controller.signal),
+-    ])
+-      .then(([appointmentResult, calendarResult]) => {
+-        setAppointment(appointmentResult);
+-        setCalendar(calendarResult);
+-        setDate(
+-          appointmentResult.date < isoDate(new Date())
+-            ? isoDate(new Date())
+-            : appointmentResult.date,
+-        );
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível preparar o reagendamento."),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [appointmentId]);
+-
+-  useEffect(() => {
+-    if (!appointment || !calendar?.capabilities.createAppointments || !date)
+-      return;
+-    const controller = new AbortController();
+-    getProductServices()
+-      .calendar.getAvailability(
+-        {
+-          serviceIds: appointment.services.map((service) => service.serviceId),
+-          startDate: date,
+-          days: 1,
+-          maxSlots: 100,
+-        },
+-        controller.signal,
+-      )
+-      .then((result) => {
+-        setSlots(result.filter((slot) => slot.date === date));
+-        setStartTime("");
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(
+-              caught,
+-              "Não foi possível consultar os horários disponíveis.",
+-            ),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setSlotsLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [appointment, calendar, date]);
+-
+-  async function reschedule() {
+-    if (!appointment || !startTime || busy) return;
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      const result = await getProductServices().calendar.rescheduleAppointment(
+-        appointment.id,
+-        { date, startTime },
+-        crypto.randomUUID(),
+-      );
+-      router.replace(`/agenda/agendamento?id=${encodeURIComponent(result.id)}`);
+-    } catch (caught) {
+-      setError(requestError(caught, "Não foi possível reagendar."));
+-      setConfirm(false);
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  return (
+-    <FlowShell
+-      calendar={calendar}
+-      description="O horário anterior só é liberado depois da confirmação real do novo horário."
+-      loading={loading}
+-      title="Reagendar"
+-    >
+-      {error && (
+-        <p className="form-error" role="alert">
+-          {error}
+-        </p>
+-      )}
+-      {!loading && calendar && !calendar.capabilities.createAppointments ? (
+-        <ReadOnlyState calendar={calendar} operation="reagendar" />
+-      ) : (
+-        appointment && (
+-          <div className="agenda-flow-layout">
+-            <form
+-              className="agenda-form-card"
+-              onSubmit={(event) => {
+-                event.preventDefault();
+-                if (startTime) setConfirm(true);
+-              }}
+-            >
+-              <div className="agenda-current-slot">
+-                <span>Horário atual</span>
+-                <strong>{formatAppointmentDate(appointment)}</strong>
+-              </div>
+-              <div className="agenda-form-grid">
+-                <label className="field">
+-                  <span>Nova data</span>
+-                  <input
+-                    min={isoDate(new Date())}
+-                    required
+-                    type="date"
+-                    value={date}
+-                    onChange={(event) => {
+-                      setDate(event.target.value);
+-                      setSlots([]);
+-                      setStartTime("");
+-                      setSlotsLoading(true);
+-                    }}
+-                  />
+-                </label>
+-              </div>
+-              <fieldset disabled={slotsLoading}>
+-                <legend>Novo horário disponível</legend>
+-                {slotsLoading ? (
+-                  <p>Consultando disponibilidade…</p>
+-                ) : slots.length === 0 ? (
+-                  <p className="muted">Nenhum horário disponível nesta data.</p>
+-                ) : (
+-                  <div className="agenda-time-options">
+-                    {slots.map((slot) => (
+-                      <label
+-                        className="agenda-time-option"
+-                        key={slot.startTime}
+-                      >
+-                        <input
+-                          checked={startTime === slot.startTime}
+-                          name="start-time"
+-                          onChange={() => setStartTime(slot.startTime)}
+-                          type="radio"
+-                        />
+-                        <span>{slot.startTime}</span>
+-                      </label>
+-                    ))}
+-                  </div>
+-                )}
+-              </fieldset>
+-              <div className="agenda-form-footer">
+-                <Button
+-                  href={`/agenda/agendamento?id=${encodeURIComponent(appointment.id)}`}
+-                  variant="secondary"
+-                >
+-                  Cancelar
+-                </Button>
+-                <Button disabled={!startTime} type="submit">
+-                  Revisar alteração
+-                </Button>
+-              </div>
+-            </form>
+-            <Summary title="Resumo">
+-              <SummaryRow label="Cliente" value={customerLabel(appointment)} />
+-              <SummaryRow label="Serviço" value={serviceNames(appointment)} />
+-              <SummaryRow
+-                label="Novo horário"
+-                value={startTime ? `${formatDate(date)} às ${startTime}` : "—"}
+-              />
+-            </Summary>
+-          </div>
+-        )
+-      )}
+-      <Dialog
+-        eyebrow="Confirmação"
+-        onClose={() => !busy && setConfirm(false)}
+-        open={confirm}
+-        title="Confirmar novo horário?"
+-      >
+-        <p>
+-          O horário anterior será liberado somente após a persistência deste
+-          novo agendamento.
+-        </p>
+-        <div className="modal-actions">
+-          <Button
+-            disabled={busy}
+-            onClick={() => setConfirm(false)}
+-            type="button"
+-            variant="secondary"
+-          >
+-            Voltar
+-          </Button>
+-          <Button
+-            loading={busy}
+-            onClick={() => void reschedule()}
+-            type="button"
+-          >
+-            Confirmar reagendamento
+-          </Button>
+-        </div>
+-      </Dialog>
+-    </FlowShell>
+-  );
+-}
+-
+-function CancelAppointment({ appointmentId }: { appointmentId?: string }) {
+-  const router = useRouter();
+-  const [appointment, setAppointment] = useState<Appointment | null>(null);
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [comments, setComments] = useState("");
+-  const [loading, setLoading] = useState(Boolean(appointmentId));
+-  const [busy, setBusy] = useState(false);
+-  const [confirm, setConfirm] = useState(false);
+-  const [error, setError] = useState<string | null>(() =>
+-    appointmentId ? null : "O agendamento não foi informado.",
+-  );
+-
+-  useEffect(() => {
+-    if (!appointmentId) return;
+-    const controller = new AbortController();
+-    Promise.all([
+-      getProductServices().calendar.getAppointment(
+-        appointmentId,
+-        controller.signal,
+-      ),
+-      getProductServices().calendar.getCalendar(controller.signal),
+-    ])
+-      .then(([appointmentResult, calendarResult]) => {
+-        setAppointment(appointmentResult);
+-        setCalendar(calendarResult);
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível preparar o cancelamento."),
+-          );
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, [appointmentId]);
+-
+-  async function cancel() {
+-    if (!appointment || busy) return;
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      const result = await getProductServices().calendar.cancelAppointment(
+-        appointment.id,
+-        { comments: comments.trim() || undefined },
+-        crypto.randomUUID(),
+-      );
+-      router.replace(`/agenda/agendamento?id=${encodeURIComponent(result.id)}`);
+-    } catch (caught) {
+-      setError(
+-        requestError(caught, "Não foi possível cancelar o agendamento."),
+-      );
+-      setConfirm(false);
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  return (
+-    <FlowShell
+-      calendar={calendar}
+-      description="O cancelamento preserva o histórico e só é confirmado após persistência real."
+-      loading={loading}
+-      title="Cancelar agendamento"
+-    >
+-      {error && (
+-        <p className="form-error" role="alert">
+-          {error}
+-        </p>
+-      )}
+-      {!loading && calendar && !calendar.capabilities.createAppointments ? (
+-        <ReadOnlyState calendar={calendar} operation="cancelar agendamentos" />
+-      ) : (
+-        appointment && (
+-          <div className="agenda-flow-layout">
+-            <form
+-              className="agenda-form-card"
+-              onSubmit={(event) => {
+-                event.preventDefault();
+-                setConfirm(true);
+-              }}
+-            >
+-              <h2>{customerLabel(appointment)}</h2>
+-              <p>
+-                {formatAppointmentDate(appointment)} ·{" "}
+-                {serviceNames(appointment)}
+-              </p>
+-              <label className="field">
+-                <span>Motivo ou observação (opcional)</span>
+-                <textarea
+-                  rows={4}
+-                  value={comments}
+-                  onChange={(event) => setComments(event.target.value)}
+-                />
+-              </label>
+-              <div className="agenda-form-footer">
+-                <Button
+-                  href={`/agenda/agendamento?id=${encodeURIComponent(appointment.id)}`}
+-                  variant="secondary"
+-                >
+-                  Voltar
+-                </Button>
+-                <Button type="submit" variant="danger">
+-                  Revisar cancelamento
+-                </Button>
+-              </div>
+-            </form>
+-          </div>
+-        )
+-      )}
+-      <Dialog
+-        eyebrow="Atenção"
+-        onClose={() => !busy && setConfirm(false)}
+-        open={confirm}
+-        title="Cancelar este agendamento?"
+-      >
+-        <p>Esta ação altera o status do agendamento e mantém seu histórico.</p>
+-        <div className="modal-actions">
+-          <Button
+-            disabled={busy}
+-            onClick={() => setConfirm(false)}
+-            type="button"
+-            variant="secondary"
+-          >
+-            Manter agendamento
+-          </Button>
+-          <Button
+-            loading={busy}
+-            onClick={() => void cancel()}
+-            type="button"
+-            variant="danger"
+-          >
+-            Confirmar cancelamento
+-          </Button>
+-        </div>
+-      </Dialog>
+-    </FlowShell>
+-  );
+-}
+-
+-function BlockTime() {
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [date, setDate] = useState(isoDate(new Date()));
+-  const [startTime, setStartTime] = useState("09:00");
+-  const [endTime, setEndTime] = useState("10:00");
+-  const [reason, setReason] = useState("");
+-  const [created, setCreated] = useState<TimeBlock | null>(null);
+-  const [loading, setLoading] = useState(true);
+-  const [busy, setBusy] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .calendar.getCalendar(controller.signal)
+-      .then(setCalendar)
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(requestError(caught, "Não foi possível carregar a agenda."));
+-      })
+-      .finally(() => {
+-        if (!controller.signal.aborted) setLoading(false);
+-      });
+-    return () => controller.abort();
+-  }, []);
+-
+-  async function create(event: FormEvent) {
+-    event.preventDefault();
+-    if (!calendar?.timezone || busy) return;
+-    const startAt = zonedDateTimeToIso(date, startTime, calendar.timezone);
+-    const endAt = zonedDateTimeToIso(date, endTime, calendar.timezone);
+-    if (new Date(endAt) <= new Date(startAt)) {
+-      setError("O fim do bloqueio deve ser posterior ao início.");
+-      return;
+-    }
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      setCreated(
+-        await getProductServices().calendar.createTimeBlock({
+-          startAt,
+-          endAt,
+-          reason: reason.trim() || null,
+-        }),
+-      );
+-    } catch (caught) {
+-      setError(requestError(caught, "Não foi possível bloquear o horário."));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  async function remove() {
+-    if (!created || busy) return;
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      await getProductServices().calendar.deleteTimeBlock(created.id);
+-      setCreated(null);
+-    } catch (caught) {
+-      setError(requestError(caught, "Não foi possível remover o bloqueio."));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  return (
+-    <FlowShell
+-      calendar={calendar}
+-      description="Reserve um intervalo na Agenda Atendly para impedir novos agendamentos."
+-      loading={loading}
+-      title="Bloquear horário"
+-    >
+-      {error && (
+-        <p className="form-error" role="alert">
+-          {error}
+-        </p>
+-      )}
+-      {!loading && calendar && !calendar.capabilities.manageAvailability ? (
+-        <ReadOnlyState calendar={calendar} operation="bloquear horários" />
+-      ) : created ? (
+-        <div className="agenda-flow-layout">
+-          <section className="agenda-form-card">
+-            <p className="eyebrow">Bloqueio confirmado</p>
+-            <h2>Horário indisponível</h2>
+-            <div className="agenda-summary-list">
+-              <SummaryRow
+-                label="Início"
+-                value={formatIsoDateTime(created.startAt, calendar?.timezone)}
+-              />
+-              <SummaryRow
+-                label="Fim"
+-                value={formatIsoDateTime(created.endAt, calendar?.timezone)}
+-              />
+-              <SummaryRow
+-                label="Motivo"
+-                value={created.reason ?? "Não informado"}
+-              />
+-            </div>
+-            <div className="agenda-form-footer">
+-              <Button href="/agenda">Voltar à agenda</Button>
+-              <Button
+-                loading={busy}
+-                onClick={() => void remove()}
+-                type="button"
+-                variant="danger"
+-              >
+-                Remover bloqueio
+-              </Button>
+-            </div>
+-          </section>
+-        </div>
+-      ) : (
+-        <div className="agenda-flow-layout">
+-          <form
+-            className="agenda-form-card"
+-            onSubmit={(event) => void create(event)}
+-          >
+-            <h2>Intervalo</h2>
+-            <div className="agenda-form-grid">
+-              <label className="field is-wide">
+-                <span>Data</span>
+-                <input
+-                  min={isoDate(new Date())}
+-                  required
+-                  type="date"
+-                  value={date}
+-                  onChange={(event) => setDate(event.target.value)}
+-                />
+-              </label>
+-              <label className="field">
+-                <span>Início</span>
+-                <input
+-                  required
+-                  type="time"
+-                  value={startTime}
+-                  onChange={(event) => setStartTime(event.target.value)}
+-                />
+-              </label>
+-              <label className="field">
+-                <span>Fim</span>
+-                <input
+-                  required
+-                  type="time"
+-                  value={endTime}
+-                  onChange={(event) => setEndTime(event.target.value)}
+-                />
+-              </label>
+-              <label className="field is-wide">
+-                <span>Motivo (opcional)</span>
+-                <input
+-                  value={reason}
+-                  onChange={(event) => setReason(event.target.value)}
+-                />
+-              </label>
+-            </div>
+-            <div className="agenda-form-footer">
+-              <Button href="/agenda" variant="secondary">
+-                Cancelar
+-              </Button>
+-              <Button loading={busy} type="submit">
+-                Confirmar bloqueio
+-              </Button>
+-            </div>
+-          </form>
+-          <Summary title="Resumo">
+-            <SummaryRow label="Data" value={formatDate(date)} />
+-            <SummaryRow label="Horário" value={`${startTime}–${endTime}`} />
+-            <SummaryRow label="Fuso" value={calendar?.timezone ?? "—"} />
+-          </Summary>
+-        </div>
+-      )}
+-    </FlowShell>
+-  );
+-}
+-
+-function FlowShell({
+-  calendar,
+-  children,
+-  description,
+-  loading,
+-  title,
+-}: {
+-  calendar: CalendarState | null;
+-  children: ReactNode;
+-  description: string;
+-  loading: boolean;
+-  title: string;
+-}) {
+-  useShellConfig({
+-    active: "agenda",
+-    loading,
+-    module: "agenda",
+-    source: calendar?.source === "EXTERNAL" ? "external" : "atendly",
+-    title,
+-  });
+-  return (
+-    <>
+-      <div className="agenda-flow-page">
+-        <header className="agenda-flow-header">
+-          <Link className="back-link" href="/agenda">
+-            <Icon name="chevron-left" /> Voltar à agenda
+-          </Link>
+-          <p className="eyebrow">Agenda</p>
+-          <h1>{title}</h1>
+-          <p>{description}</p>
+-        </header>
+-        {calendar && <SourceStrip calendar={calendar} />}
+-        {loading ? <AgendaLoading /> : children}
+-      </div>
+-    </>
+-  );
+-}
+-
+-function SourceStrip({ calendar }: { calendar: CalendarState }) {
+-  const external = calendar.source === "EXTERNAL";
+-  const integrationFailed =
+-    external && calendar.integration?.status !== "CONNECTED";
+-  return (
+-    <section className="agenda-source-strip">
+-      <div className="agenda-source-copy">
+-        <span className="agenda-source-icon">
+-          <Icon name={external ? "link" : "calendar"} />
+-        </span>
+-        <div>
+-          <strong>
+-            {external ? "Minha Agenda" : "Agenda Atendly"} é a fonte oficial
+-          </strong>
+-          <span>
+-            {external
+-              ? "A Atendly exibe e altera apenas o que a conexão permite."
+-              : "Disponibilidade e alterações são controladas aqui."}
+-          </span>
+-        </div>
+-      </div>
+-      <span
+-        className={clsx(
+-          "badge",
+-          !external && "badge-success",
+-          integrationFailed && "badge-danger",
+-        )}
+-      >
+-        {integrationFailed
+-          ? "Conexão requer atenção"
+-          : external
+-            ? lastSyncLabel(calendar)
+-            : "Operacional"}
+-      </span>
+-    </section>
+-  );
+-}
+-
+-function ReadOnlyState({
+-  calendar,
+-  operation,
+-}: {
+-  calendar: CalendarState;
+-  operation: string;
+-}) {
+-  return (
+-    <div className="agenda-state-surface">
+-      <StatePanel
+-        actionHref="/agenda"
+-        actionLabel="Voltar à agenda"
+-        description={`A configuração atual de ${calendar.source === "EXTERNAL" ? "Minha Agenda" : "Agenda Atendly"} não permite ${operation} por aqui.`}
+-        icon="lock"
+-        title="Operação indisponível"
+-      />
+-    </div>
+-  );
+-}
+-
+-function ReadOnlyNotice({ children }: { children: ReactNode }) {
+-  return (
+-    <div className="agenda-demo-note">
+-      <Icon name="lock" />
+-      <span>{children}</span>
+-    </div>
+-  );
+-}
+-
+-function Summary({ children, title }: { children: ReactNode; title: string }) {
+-  return (
+-    <aside className="agenda-summary-card">
+-      <h2>{title}</h2>
+-      <div className="agenda-summary-list">{children}</div>
+-    </aside>
+-  );
+-}
+-
+-function SummaryRow({ label, value }: { label: string; value: string }) {
+-  return (
+-    <div className="agenda-summary-row">
+-      <span>{label}</span>
+-      <strong>{value}</strong>
+-    </div>
+-  );
+-}
+-
+-function FilterButton({
+-  active,
+-  children,
+-  onClick,
+-}: {
+-  active: boolean;
+-  children: ReactNode;
+-  onClick: () => void;
+-}) {
+-  return (
+-    <button
+-      className={clsx("agenda-filter", active && "is-active")}
+-      onClick={onClick}
+-      type="button"
+-    >
+-      {children}
+-    </button>
+-  );
+-}
+-
+-function AppointmentRow({ item }: { item: Appointment }) {
+-  return (
+-    <Link
+-      className="agenda-item"
+-      href={`/agenda/agendamento?id=${encodeURIComponent(item.id)}`}
+-    >
+-      <time className="agenda-item-time">{item.startTime}</time>
+-      <span className="agenda-item-copy">
+-        <strong>{customerLabel(item)}</strong>
+-        <span>
+-          {serviceNames(item)} · {item.durationMinutes} min
+-        </span>
+-        <span className="agenda-item-signals">
+-          <span className={clsx("badge", item.source === "AI" && "badge-ai")}>
+-            {sourceLabel(item.source)}
+-          </span>
+-          <span
+-            className={clsx(
+-              "badge",
+-              isActiveAppointmentStatus(item.status) && "badge-success",
+-            )}
+-          >
+-            {statusLabel(item.status)}
+-          </span>
+-        </span>
+-      </span>
+-      <Icon name="chevron-right" />
+-    </Link>
+-  );
+-}
+-
+-function AgendaLoading() {
+-  return (
+-    <div className="agenda-loading-shell" aria-label="Carregando agenda">
+-      <div className="skeleton agenda-loading-header" />
+-      <div className="agenda-loading-grid">
+-        <div className="skeleton agenda-loading-column" />
+-        <div className="skeleton agenda-loading-column" />
+-      </div>
+-    </div>
+-  );
+-}
+-
+-function customerLabel(appointment: Appointment): string {
+-  return (
+-    appointment.customer?.name ??
+-    appointment.customer?.phone ??
+-    "Cliente não identificado"
+-  );
+-}
+-
+-function serviceNames(appointment: Appointment): string {
+-  return (
+-    appointment.services.map((service) => service.name).join(", ") ||
+-    "Serviço não informado"
+-  );
+-}
+-
+-function sourceLabel(source: Appointment["source"]): string {
+-  if (source === "AI") return "Criado pela IA";
+-  if (source === "INTEGRATION") return "Origem externa";
+-  return "Criado manualmente";
+-}
+-
+-function statusLabel(status: string): string {
+-  return appointmentStatusLabel(status);
+-}
+-
+-function compareAppointments(left: Appointment, right: Appointment): number {
+-  return `${left.date}T${left.startTime}`.localeCompare(
+-    `${right.date}T${right.startTime}`,
+-  );
+-}
+-
+-function groupByDate(items: Appointment[]): [string, Appointment[]][] {
+-  const grouped = new Map<string, Appointment[]>();
+-  [...items]
+-    .sort(compareAppointments)
+-    .forEach((item) =>
+-      grouped.set(item.date, [...(grouped.get(item.date) ?? []), item]),
+-    );
+-  return Array.from(grouped);
+-}
+-
+-function startOfWeek(value: Date): Date {
+-  const result = new Date(value);
+-  const weekday = result.getDay();
+-  result.setHours(12, 0, 0, 0);
+-  result.setDate(result.getDate() - ((weekday + 6) % 7));
+-  return result;
+-}
+-
+-function addDays(value: Date, days: number): Date {
+-  const result = new Date(value);
+-  result.setDate(result.getDate() + days);
+-  return result;
+-}
+-
+-function isoDate(value: Date): string {
+-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+-}
+-
+-function parseDate(value: string): Date {
+-  const [year = 0, month = 1, day = 1] = value.split("-").map(Number);
+-  return new Date(year, month - 1, day, 12);
+-}
+-
+-function formatDate(value: string): string {
+-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" }).format(
+-    parseDate(value),
+-  );
+-}
+-
+-function formatPeriod(start: Date, end: Date): string {
+-  const formatter = new Intl.DateTimeFormat("pt-BR", {
+-    day: "2-digit",
+-    month: "short",
+-  });
+-  return `${formatter.format(start)} – ${formatter.format(end)}`;
+-}
+-
+-function formatAppointmentDate(appointment: Appointment): string {
+-  return `${formatDate(appointment.date)} · ${appointment.startTime}–${appointment.endTime}`;
+-}
+-
+-function formatMoney(value: number | null): string {
+-  if (value === null) return "Sob consulta";
+-  return new Intl.NumberFormat("pt-BR", {
+-    style: "currency",
+-    currency: "BRL",
+-  }).format(value);
+-}
+-
+-function lastSyncLabel(calendar: CalendarState): string {
+-  const value = calendar.integration?.lastSuccessfulSyncAt;
+-  if (!value) return "Conectada";
+-  return `Atualizada ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value))}`;
+-}
+-
+-function formatIsoDateTime(value: string, timezone?: string | null): string {
+-  return new Intl.DateTimeFormat("pt-BR", {
+-    dateStyle: "short",
+-    timeStyle: "short",
+-    timeZone: timezone ?? undefined,
+-  }).format(new Date(value));
+-}
+-
+-function zonedDateTimeToIso(
+-  date: string,
+-  time: string,
+-  timeZone: string,
+-): string {
+-  const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+-  const [hour = 0, minute = 0] = time.split(":").map(Number);
+-  const target = Date.UTC(year, month - 1, day, hour, minute);
+-  let guess = target;
+-  const formatter = new Intl.DateTimeFormat("en-US", {
+-    timeZone,
+-    hourCycle: "h23",
+-    year: "numeric",
+-    month: "2-digit",
+-    day: "2-digit",
+-    hour: "2-digit",
+-    minute: "2-digit",
+-    second: "2-digit",
+-  });
+-  for (let pass = 0; pass < 3; pass += 1) {
+-    const parts = Object.fromEntries(
+-      formatter
+-        .formatToParts(new Date(guess))
+-        .map((part) => [part.type, Number(part.value)]),
+-    );
+-    const actual = Date.UTC(
+-      parts.year,
+-      parts.month - 1,
+-      parts.day,
+-      parts.hour,
+-      parts.minute,
+-      parts.second,
+-    );
+-    guess += target - actual;
+-  }
+-  return new Date(guess).toISOString();
+-}
+-
+-function requestError(caught: unknown, fallback: string): string {
+-  if (caught instanceof BffHttpError) return caught.message;
+-  if (caught instanceof Error && caught.message) return caught.message;
+-  return fallback;
+-}
+diff --git a/apps/frontend/src/features/calendar/types.ts b/apps/frontend/src/features/calendar/types.ts
+deleted file mode 100644
+index 27b9b53..0000000
+--- a/apps/frontend/src/features/calendar/types.ts
++++ /dev/null
+@@ -1,26 +0,0 @@
+-export type AgendaScenario =
+-  | "atendly"
+-  | "external"
+-  | "empty"
+-  | "loading"
+-  | "integration-error"
+-  | "sync-conflict"
+-  | "new"
+-  | "detail"
+-  | "reschedule"
+-  | "cancel"
+-  | "block-time";
+-export interface Appointment {
+-  id: string;
+-  customer: string;
+-  service: string;
+-  start: string;
+-  duration: number;
+-  origin: "ai" | "manual" | "external";
+-  status: "confirmed" | "cancelled";
+-}
+-export interface CalendarService {
+-  list(): Promise<Appointment[]>;
+-  create(appointment: Appointment): Promise<Appointment>;
+-  cancel(id: string): Promise<void>;
+-}
+diff --git a/apps/frontend/src/features/customers/CustomerForm.tsx b/apps/frontend/src/features/customers/CustomerForm.tsx
+index f46e3c9..fa09692 100644
+--- a/apps/frontend/src/features/customers/CustomerForm.tsx
++++ b/apps/frontend/src/features/customers/CustomerForm.tsx
+@@ -93,7 +93,6 @@ export function CustomerForm() {
+ 
+   function backToEdit() {
+     setCandidates(null);
+-    setPending(null);
+     setMessage(null);
+   }
+ 
+@@ -193,6 +192,7 @@ export function CustomerForm() {
+           <div className="customer-form-grid">
+             <Field
+               autoComplete="name"
++              defaultValue={pending?.name}
+               help="Use o nome que ajuda você a reconhecer este cliente."
+               label="Nome"
+               maxLength={200}
+@@ -200,6 +200,7 @@ export function CustomerForm() {
+             />
+             <Field
+               autoComplete="tel"
++              defaultValue={pending?.phone}
+               help="O telefone identifica o cliente apenas neste negócio. Pode ficar em branco."
+               inputMode="tel"
+               label="Telefone"
+diff --git a/apps/frontend/src/features/customers/types.ts b/apps/frontend/src/features/customers/types.ts
+deleted file mode 100644
+index b45adc4..0000000
+--- a/apps/frontend/src/features/customers/types.ts
++++ /dev/null
+@@ -1,16 +0,0 @@
+-import type { Customer } from "@/data/mappers/publicApiSchemas";
+-
+-export type CustomerScenario =
+-  | "list"
+-  | "external"
+-  | "empty"
+-  | "loading"
+-  | "error"
+-  | "detail"
+-  | "detail-external"
+-  | "new";
+-export type { Customer };
+-export interface CustomerService {
+-  list(): Promise<Customer[]>;
+-  create(customer: Customer): Promise<Customer>;
+-}
+diff --git a/apps/frontend/src/features/services/types.ts b/apps/frontend/src/features/services/types.ts
+deleted file mode 100644
+index 35ab7ef..0000000
+--- a/apps/frontend/src/features/services/types.ts
++++ /dev/null
+@@ -1,21 +0,0 @@
+-export type ServiceScenario =
+-  | "list"
+-  | "external"
+-  | "external-empty"
+-  | "empty"
+-  | "loading"
+-  | "error"
+-  | "new"
+-  | "edit";
+-export interface CatalogService {
+-  id: string;
+-  name: string;
+-  duration: number;
+-  price?: number;
+-  active: boolean;
+-  origin: "atendly" | "external";
+-}
+-export interface ServiceCatalogService {
+-  list(): Promise<CatalogService[]>;
+-  save(service: CatalogService): Promise<CatalogService>;
+-}
+diff --git a/apps/frontend/src/mocks/data/appointments.ts b/apps/frontend/src/mocks/data/appointments.ts
+deleted file mode 100644
+index a59bda7..0000000
+--- a/apps/frontend/src/mocks/data/appointments.ts
++++ /dev/null
+@@ -1,30 +0,0 @@
+-import type { Appointment } from "@/features/calendar/types";
+-export const mockAppointments: Appointment[] = [
+-  {
+-    id: "apt-1",
+-    customer: "Cliente de demonstração",
+-    service: "Serviço de demonstração",
+-    start: "09:00",
+-    duration: 60,
+-    origin: "ai",
+-    status: "confirmed",
+-  },
+-  {
+-    id: "apt-2",
+-    customer: "Contato de demonstração",
+-    service: "Serviço de demonstração",
+-    start: "11:00",
+-    duration: 45,
+-    origin: "manual",
+-    status: "confirmed",
+-  },
+-  {
+-    id: "apt-3",
+-    customer: "Cliente de demonstração",
+-    service: "Serviço de demonstração",
+-    start: "14:30",
+-    duration: 60,
+-    origin: "ai",
+-    status: "confirmed",
+-  },
+-];
+diff --git a/apps/frontend/src/shared/styles/atendly-agenda.css b/apps/frontend/src/shared/styles/atendly-agenda.css
+index 430a562..482f1c7 100644
+--- a/apps/frontend/src/shared/styles/atendly-agenda.css
++++ b/apps/frontend/src/shared/styles/atendly-agenda.css
+@@ -374,6 +374,174 @@
+   border-color: var(--accent);
+   background: var(--accent-soft);
+ }
++.week-day-head {
++  appearance: none;
++  background: transparent;
++  border-block: 0;
++  border-left: 0;
++  color: inherit;
++  font: inherit;
++  cursor: pointer;
++}
++.agenda-item-kind,
++.week-appointment-kind {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  margin-bottom: 2px;
++  color: var(--muted);
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.02em;
++  text-transform: uppercase;
++}
++.agenda-item-kind .icon,
++.week-appointment-kind .icon {
++  width: 12px;
++  height: 12px;
++}
++.week-appointment.is-buffer {
++  border-style: dotted;
++  color: var(--muted);
++  background: transparent;
++}
++.week-appointment.is-block {
++  border-style: dashed;
++  color: var(--muted);
++  background: repeating-linear-gradient(
++    135deg,
++    var(--surface-interactive) 0 6px,
++    var(--surface) 6px 12px
++  );
++}
++.week-appointment.is-personal {
++  border-style: dashed;
++  background: var(--surface);
++}
++.week-appointment.is-exception-unavailable {
++  border-color: var(--danger);
++  background: var(--danger-soft);
++}
++.week-appointment.is-exception-extra {
++  border-color: var(--accent);
++  background: var(--accent-soft);
++}
++.week-appointment.is-no-show strong {
++  text-decoration: line-through;
++}
++
++.agenda-month-panel {
++  overflow: hidden;
++}
++.month-weekday-row {
++  display: grid;
++  grid-template-columns: repeat(7, minmax(0, 1fr));
++  border-bottom: 1px solid var(--border);
++  background: var(--surface-secondary);
++}
++.month-weekday {
++  padding: 10px 4px;
++  color: var(--muted);
++  font-size: 11px;
++  font-weight: 700;
++  text-align: center;
++  letter-spacing: 0.04em;
++}
++.month-days {
++  display: grid;
++  grid-template-columns: repeat(7, minmax(0, 1fr));
++}
++.month-day {
++  min-height: 96px;
++  padding: 6px;
++  border-right: 1px solid var(--border);
++  border-bottom: 1px solid var(--border);
++  display: flex;
++  flex-direction: column;
++  align-items: stretch;
++  gap: 4px;
++  text-align: left;
++  color: var(--fg);
++  background: var(--surface);
++}
++.month-day:nth-child(7n) {
++  border-right: 0;
++}
++.month-day:hover {
++  background: var(--surface-secondary);
++}
++.month-day.is-outside {
++  color: var(--muted);
++  background: var(--surface-secondary);
++}
++.month-day-number {
++  align-self: flex-start;
++  width: 26px;
++  height: 26px;
++  border-radius: 50%;
++  display: grid;
++  place-items: center;
++  font-size: 13px;
++  font-weight: 600;
++}
++.month-day.is-today .month-day-number {
++  color: var(--surface);
++  background: var(--accent);
++}
++.month-day.is-selected {
++  box-shadow: inset 0 0 0 2px var(--accent);
++}
++.month-day-entries {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++}
++.month-entry {
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  overflow: hidden;
++  padding: 1px 4px;
++  border-radius: 4px;
++  color: var(--fg-soft);
++  background: var(--surface-secondary);
++  font-size: 10px;
++  font-weight: 600;
++  white-space: nowrap;
++}
++.month-entry .icon {
++  width: 10px;
++  height: 10px;
++  flex: none;
++}
++.month-entry span {
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++.month-entry.is-block {
++  background: repeating-linear-gradient(
++    135deg,
++    var(--surface-interactive) 0 4px,
++    var(--surface) 4px 8px
++  );
++}
++.month-entry.is-personal {
++  border: 1px dashed var(--border-strong);
++  background: transparent;
++}
++.month-entry.is-exception-unavailable {
++  color: var(--danger);
++  background: var(--danger-soft);
++}
++.month-entry.is-exception-extra {
++  color: var(--accent);
++  background: var(--accent-soft);
++}
++.month-day-more {
++  color: var(--muted);
++  font-size: 10px;
++  font-weight: 700;
++}
+ 
+ .agenda-day-panel,
+ .agenda-list-panel {
+@@ -426,57 +594,48 @@
+   color: var(--muted);
+   font-size: 12px;
+ }
+-.agenda-day-list {
+-  padding: 4px 18px 18px;
+-}
+-.agenda-item {
++
++/* Dia: mesma grade cronologica da Semana, com uma coluna so. A entrada fica na
++   posicao real do tempo (--start/--span); entradas que se sobrepoem dividem a
++   largura (--lane/--lanes) em vez de uma esconder a outra. */
++.agenda-day-scroll {
++  overflow-x: hidden;
++  overflow-y: auto;
++  max-height: 70vh;
++}
++.agenda-day-column {
+   position: relative;
+-  min-height: 88px;
+-  padding: 16px 8px 16px 82px;
+-  display: block;
+-  color: var(--fg);
+-  text-decoration: none;
+-}
+-.agenda-item + .agenda-item {
+-  border-top: 1px solid var(--border);
+-}
+-.agenda-item:hover {
+-  background: var(--surface-secondary);
+-}
+-.agenda-item.is-readonly:hover {
+-  background: transparent;
+-}
+-.agenda-item-time {
+-  position: absolute;
+-  left: 8px;
+-  top: 18px;
+-  width: 58px;
+-  color: var(--fg);
+-  font: 600 13px/1.3 var(--font-mono);
+-}
+-.agenda-item-copy {
+-  min-width: 0;
+-  display: grid;
+-  gap: 3px;
+-}
+-.agenda-item-copy strong {
+-  font-size: 14px;
+-}
+-.agenda-item-copy span {
+-  color: var(--muted);
+-  font-size: 13px;
++  border-left: 0;
++  background: repeating-linear-gradient(
++    to bottom,
++    transparent 0,
++    transparent 71px,
++    var(--border) 71px,
++    var(--border) 72px
++  );
+ }
+-.agenda-item-signals {
+-  margin-top: 8px;
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 6px;
++.agenda-day-entry {
++  --lane: 0;
++  --lanes: 1;
++  left: calc(6px + var(--lane) * (100% - 12px) / var(--lanes));
++  right: auto;
++  width: calc((100% - 12px) / var(--lanes) - 4px);
++  appearance: none;
++  text-align: left;
++  font: inherit;
++}
++.agenda-day-entry.is-readonly:hover {
++  border-color: var(--border-strong);
++  box-shadow: var(--shadow-sm);
++  transform: none;
+ }
+-.agenda-item.is-blocked {
+-  color: var(--muted);
++.agenda-day-entry.is-selected {
++  border-color: var(--accent);
++  box-shadow: var(--shadow-md);
+ }
+-.agenda-item.is-blocked .agenda-item-time {
+-  color: var(--muted);
++.agenda-day-entry .badge {
++  display: inline-flex;
++  margin-top: 4px;
+ }
+ .agenda-list-group + .agenda-list-group {
+   border-top: 1px solid var(--border);
+@@ -754,6 +913,12 @@
+   grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+   gap: 20px;
+ }
++/* Acoes da ocorrencia selecionada no Dia: mesma superficie do detalhe, aberta
++   abaixo da grade em vez de outra rota. */
++.agenda-occurrence-panel {
++  display: grid;
++  gap: 12px;
++}
+ .agenda-detail-section {
+   padding: 22px 24px;
+   border: 1px solid var(--border);
+@@ -806,6 +971,37 @@
+   color: var(--muted);
+   font-size: 12px;
+ }
++.agenda-lifecycle {
++  display: grid;
++  gap: 16px;
++}
++.agenda-lifecycle-row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  flex-wrap: wrap;
++}
++.agenda-lifecycle-row strong,
++.agenda-lifecycle-row span {
++  display: block;
++}
++.agenda-lifecycle-row span {
++  margin-top: 2px;
++  color: var(--muted);
++  font-size: 13px;
++}
++.agenda-lifecycle-actions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++}
++.agenda-lifecycle-form {
++  padding: 16px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++}
+ .agenda-danger-zone {
+   margin-top: 20px;
+   padding-top: 20px;
+@@ -860,6 +1056,105 @@
+   font-size: 12px;
+ }
+ 
++/* --- Escolha de serviços, reserva e conflito (Goal016) ------------------- */
++.agenda-service-options {
++  display: grid;
++  gap: 8px;
++}
++.agenda-service-option {
++  min-height: 48px;
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 10px 14px;
++  border: 1px solid var(--border-strong);
++  border-radius: 10px;
++  background: var(--surface);
++  cursor: pointer;
++}
++.agenda-service-option input:checked ~ span {
++  color: var(--accent);
++  font-weight: 600;
++}
++.agenda-service-option:focus-within {
++  outline: 2px solid var(--accent);
++  outline-offset: 3px;
++}
++.agenda-manual-time {
++  margin-top: 18px;
++  display: grid;
++  gap: 10px;
++  align-items: end;
++  grid-template-columns: minmax(0, 1fr) auto;
++}
++.agenda-manual-time p {
++  grid-column: 1 / -1;
++  margin: 0;
++  font-size: 12px;
++}
++.agenda-hold-status {
++  margin-top: 16px;
++  padding: 12px 14px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++  color: var(--fg-soft);
++  font-size: 13px;
++}
++.agenda-conflict {
++  margin-top: 24px;
++  padding: 20px;
++  border: 1px solid var(--border-strong);
++  border-radius: var(--r-card);
++  background: var(--surface);
++}
++.agenda-conflict-list {
++  margin: 14px 0;
++  padding: 0;
++  list-style: none;
++  display: grid;
++  gap: 12px;
++}
++.agenda-conflict-list li {
++  display: grid;
++  gap: 4px;
++  padding: 12px 14px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++}
++.agenda-conflict-list .badge {
++  justify-self: start;
++}
++
++/* --- Série de atendimento (Goal016) -------------------------------------- */
++.agenda-series-list {
++  margin: 14px 0;
++  padding: 0;
++  list-style: none;
++  display: grid;
++  gap: 12px;
++}
++.agenda-series-item {
++  display: grid;
++  gap: 4px;
++  padding: 12px 14px;
++  border: 1px solid var(--border);
++  border-left: 3px solid var(--border-strong);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++}
++.agenda-series-item.is-adjusted {
++  border-left-color: var(--violet);
++}
++.agenda-series-item.is-unavailable {
++  border-left-color: var(--danger);
++  background: var(--danger-soft);
++}
++.agenda-series-actions {
++  grid-column: 1 / -1;
++}
++
+ @media (max-width: 1099px) {
+   .agenda-shell {
+     grid-template-columns: 88px minmax(0, 1fr);
+@@ -895,6 +1190,9 @@
+ }
+ 
+ @media (max-width: 767px) {
++  .agenda-manual-time {
++    grid-template-columns: minmax(0, 1fr);
++  }
+   .agenda-shell {
+     display: block;
+     min-height: 100dvh;
+@@ -1008,16 +1306,6 @@
+   .agenda-day-summary {
+     padding-inline: 16px;
+   }
+-  .agenda-day-list {
+-    padding-inline: 8px;
+-  }
+-  .agenda-item {
+-    padding-left: 74px;
+-    padding-right: 8px;
+-  }
+-  .agenda-item-time {
+-    left: 8px;
+-  }
+   .agenda-state-surface {
+     min-height: 470px;
+     margin-inline: -16px;
+@@ -1041,6 +1329,18 @@
+   .agenda-loading-grid > :nth-child(n + 3) {
+     display: none;
+   }
++  .month-day {
++    min-height: 64px;
++    padding: 4px;
++  }
++  .month-day-number {
++    width: 22px;
++    height: 22px;
++    font-size: 12px;
++  }
++  .month-entry {
++    font-size: 9px;
++  }
+   .agenda-flow-header {
+     grid-template-columns: auto minmax(0, 1fr);
+   }
+diff --git a/apps/frontend/src/shared/styles/atendly-customers.css b/apps/frontend/src/shared/styles/atendly-customers.css
+index 7672bcb..550e8a9 100644
+--- a/apps/frontend/src/shared/styles/atendly-customers.css
++++ b/apps/frontend/src/shared/styles/atendly-customers.css
+@@ -154,3 +154,195 @@
+     align-items: flex-start;
+   }
+ }
++
++.directory-detail-hero {
++  margin-bottom: 20px;
++  padding: 24px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) auto;
++  gap: 24px;
++  background: var(--surface);
++}
++.directory-detail-identity {
++  display: flex;
++  align-items: center;
++  gap: 14px;
++}
++.directory-detail-identity .avatar {
++  width: 48px;
++  height: 48px;
++  font-size: 15px;
++}
++.directory-detail-identity h1 {
++  font-size: 26px;
++}
++.directory-detail-phone {
++  margin-top: 3px;
++  color: var(--muted);
++  font-size: 14px;
++}
++.directory-detail-signals {
++  margin-top: 10px;
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++.directory-detail-actions {
++  display: flex;
++  align-items: flex-start;
++  flex-wrap: wrap;
++  gap: 10px;
++}
++.directory-detail-grid {
++  display: grid;
++  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
++  gap: 20px;
++  align-items: start;
++}
++.directory-section {
++  padding: 22px 24px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  background: var(--surface);
++}
++.directory-section + .directory-section {
++  margin-top: 20px;
++}
++.directory-section-header {
++  margin-bottom: 14px;
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 16px;
++}
++.directory-section-header h2 {
++  font-size: 18px;
++}
++.directory-section-header p {
++  margin-top: 3px;
++  color: var(--muted);
++  font-size: 12px;
++}
++.directory-appointment {
++  min-height: 82px;
++  padding: 14px 0;
++  border-bottom: 1px solid var(--border);
++  display: grid;
++  grid-template-columns: 96px minmax(0, 1fr) auto;
++  align-items: center;
++  gap: 14px;
++}
++.directory-appointment:last-child {
++  border-bottom: 0;
++}
++.directory-appointment time {
++  font: 600 12px/1.5 var(--font-mono);
++}
++.directory-appointment-copy {
++  display: grid;
++  gap: 2px;
++}
++.directory-appointment-copy strong {
++  font-size: 14px;
++}
++.directory-appointment-copy span {
++  color: var(--muted);
++  font-size: 12px;
++}
++.directory-timeline {
++  display: grid;
++  gap: 14px;
++}
++.directory-timeline-item {
++  position: relative;
++  padding-left: 22px;
++}
++.directory-timeline-item::before {
++  content: "";
++  position: absolute;
++  left: 1px;
++  top: 6px;
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: var(--border-strong);
++}
++.directory-timeline-item::after {
++  content: "";
++  position: absolute;
++  left: 4px;
++  top: 18px;
++  bottom: -16px;
++  width: 1px;
++  background: var(--border);
++}
++.directory-timeline-item:last-child::after {
++  display: none;
++}
++.directory-timeline-item strong,
++.directory-timeline-item span {
++  display: block;
++}
++.directory-timeline-item strong {
++  font-size: 13px;
++}
++.directory-timeline-item span {
++  margin-top: 2px;
++  color: var(--muted);
++  font-size: 12px;
++}
++.directory-readonly-field {
++  min-height: 48px;
++  padding: 12px 14px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  color: var(--muted);
++  background: var(--surface-interactive);
++  font-size: 14px;
++}
++.directory-readonly-field strong {
++  color: var(--fg);
++  font-weight: 500;
++}
++.directory-readonly-field + .directory-readonly-field {
++  margin-top: var(--s2);
++}
++
++@media (max-width: 767px) {
++  .directory-detail-hero {
++    padding: 20px 16px;
++    grid-template-columns: 1fr;
++  }
++  .directory-detail-actions {
++    display: grid;
++    grid-template-columns: 1fr 1fr;
++  }
++  .directory-detail-actions .btn {
++    width: 100%;
++  }
++  .directory-detail-grid {
++    grid-template-columns: 1fr;
++  }
++  .directory-section {
++    padding: 20px 16px;
++  }
++  .directory-appointment {
++    grid-template-columns: 82px minmax(0, 1fr);
++  }
++  .directory-appointment > .badge {
++    grid-column: 2;
++    justify-self: start;
++  }
++}
++
++@media (max-width: 390px) {
++  .directory-detail-actions {
++    grid-template-columns: 1fr;
++  }
++}
+diff --git a/apps/frontend/src/shared/styles/atendly-directory.css b/apps/frontend/src/shared/styles/atendly-directory.css
+deleted file mode 100644
+index 85dc39d..0000000
+--- a/apps/frontend/src/shared/styles/atendly-directory.css
++++ /dev/null
+@@ -1,889 +0,0 @@
+-.directory-shell {
+-  min-height: 100dvh;
+-  display: grid;
+-  grid-template-columns: 248px minmax(0, 1fr);
+-  background: var(--bg);
+-}
+-.directory-main {
+-  min-width: 0;
+-}
+-.directory-mobile-header,
+-.directory-bottom-nav {
+-  display: none;
+-}
+-.directory-bottom-nav .bottom-nav-item {
+-  text-decoration: none;
+-}
+-.directory-skip-link {
+-  position: fixed;
+-  z-index: 120;
+-  left: 16px;
+-  top: 12px;
+-  padding: 10px 14px;
+-  border-radius: var(--r-input);
+-  color: var(--surface);
+-  background: var(--navy);
+-  transform: translateY(-160%);
+-  transition: transform 140ms var(--ease);
+-}
+-.directory-skip-link:focus {
+-  transform: translateY(0);
+-}
+-.directory-disabled-item {
+-  color: var(--disabled-fg);
+-  cursor: default;
+-}
+-.directory-disabled-item:hover {
+-  color: var(--disabled-fg);
+-  background: transparent;
+-}
+-.directory-page {
+-  width: min(1240px, 100%);
+-  margin: 0 auto;
+-  padding: 28px 36px 64px;
+-}
+-.directory-page.is-form-page {
+-  width: min(920px, 100%);
+-}
+-.directory-page-header {
+-  margin-bottom: 22px;
+-  display: flex;
+-  align-items: flex-start;
+-  justify-content: space-between;
+-  gap: 24px;
+-}
+-.directory-page-header h1 {
+-  margin-bottom: 4px;
+-}
+-.directory-page-header p {
+-  max-width: 62ch;
+-  color: var(--muted);
+-  font-size: 14px;
+-}
+-.directory-page-actions {
+-  display: flex;
+-  align-items: center;
+-  justify-content: flex-end;
+-  flex-wrap: wrap;
+-  gap: 10px;
+-}
+-.directory-source-strip {
+-  min-height: 58px;
+-  margin-bottom: 18px;
+-  padding: 11px 14px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-input);
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 16px;
+-  background: var(--surface);
+-}
+-.directory-source-copy {
+-  min-width: 0;
+-  display: flex;
+-  align-items: center;
+-  gap: 11px;
+-}
+-.directory-source-icon {
+-  width: 34px;
+-  height: 34px;
+-  border-radius: 10px;
+-  display: grid;
+-  place-items: center;
+-  color: var(--accent);
+-  background: var(--accent-soft);
+-}
+-.directory-source-copy > div > strong,
+-.directory-source-copy > div > span {
+-  display: block;
+-}
+-.directory-source-copy > div > strong {
+-  font-size: 14px;
+-}
+-.directory-source-copy > div > span {
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-.directory-demo-note {
+-  margin-bottom: 18px;
+-}
+-.directory-toolbar {
+-  margin-bottom: 16px;
+-  display: grid;
+-  grid-template-columns: minmax(280px, 460px) minmax(0, 1fr);
+-  align-items: end;
+-  gap: 16px;
+-}
+-.directory-search {
+-  position: relative;
+-}
+-.directory-search .input {
+-  padding-left: 44px;
+-}
+-.directory-search .icon {
+-  position: absolute;
+-  left: 14px;
+-  top: 50%;
+-  transform: translateY(-50%);
+-  color: var(--muted);
+-  pointer-events: none;
+-}
+-.directory-filters {
+-  display: flex;
+-  justify-content: flex-end;
+-  gap: 8px;
+-  overflow-x: auto;
+-  padding: 2px;
+-  scrollbar-width: none;
+-}
+-.directory-filter {
+-  min-height: 44px;
+-  padding: 0 13px;
+-  border: 1px solid var(--border);
+-  border-radius: 999px;
+-  color: var(--fg-soft);
+-  background: var(--surface);
+-  font-size: 13px;
+-  font-weight: 600;
+-  white-space: nowrap;
+-}
+-.directory-filter:hover {
+-  border-color: var(--border-strong);
+-  background: var(--surface-secondary);
+-}
+-.directory-filter.is-active {
+-  color: var(--surface);
+-  background: var(--navy);
+-  border-color: var(--navy);
+-}
+-.directory-list-surface {
+-  overflow: hidden;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-.directory-list-meta {
+-  min-height: 48px;
+-  padding: 0 18px;
+-  border-bottom: 1px solid var(--border);
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 16px;
+-  color: var(--muted);
+-  font-size: 12px;
+-  background: var(--surface-secondary);
+-}
+-.directory-list-meta strong {
+-  color: var(--fg);
+-  font-size: 13px;
+-}
+-.directory-grid-head,
+-.directory-row {
+-  display: grid;
+-  align-items: center;
+-  gap: 16px;
+-}
+-.directory-grid-head {
+-  min-height: 44px;
+-  padding: 0 18px;
+-  border-bottom: 1px solid var(--border);
+-  color: var(--muted);
+-  background: var(--surface-secondary);
+-  font-size: 11px;
+-  font-weight: 700;
+-  letter-spacing: 0.06em;
+-  text-transform: uppercase;
+-}
+-.customer-grid {
+-  grid-template-columns:
+-    minmax(220px, 1.35fr) minmax(150px, 0.9fr) minmax(170px, 1fr)
+-    minmax(130px, 0.75fr) 44px;
+-}
+-.service-grid {
+-  grid-template-columns:
+-    minmax(220px, 1.3fr) 110px 140px 130px minmax(130px, 0.8fr)
+-    44px;
+-}
+-.directory-row {
+-  position: relative;
+-  min-height: 76px;
+-  padding: 12px 18px;
+-  border-bottom: 1px solid var(--border);
+-  color: var(--fg);
+-  text-decoration: none;
+-  transition: background 140ms var(--ease);
+-}
+-.directory-row:last-of-type {
+-  border-bottom: 0;
+-}
+-.directory-row:hover {
+-  background: var(--surface-secondary);
+-}
+-.directory-row-main {
+-  min-width: 0;
+-  display: flex;
+-  align-items: center;
+-  gap: 11px;
+-}
+-.directory-row-copy {
+-  min-width: 0;
+-  display: grid;
+-  gap: 2px;
+-}
+-.directory-row-copy strong {
+-  overflow: hidden;
+-  text-overflow: ellipsis;
+-  white-space: nowrap;
+-  font-size: 14px;
+-}
+-.directory-row-copy span,
+-.directory-cell {
+-  color: var(--muted);
+-  font-size: 13px;
+-}
+-.directory-cell strong {
+-  color: var(--fg);
+-  font-weight: 600;
+-}
+-.directory-cell-label {
+-  display: none;
+-  color: var(--muted);
+-  font-size: 11px;
+-}
+-.directory-row-action {
+-  justify-self: end;
+-  color: var(--muted);
+-}
+-.directory-row-badges {
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 6px;
+-}
+-.directory-no-results {
+-  padding: 56px 20px;
+-  color: var(--muted);
+-  text-align: center;
+-}
+-.directory-state-surface {
+-  min-height: 500px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  display: grid;
+-  place-items: center;
+-  background: var(--surface);
+-}
+-.directory-state-surface .empty-state,
+-.directory-state-surface .error-state {
+-  padding: 56px 24px;
+-}
+-.directory-state-surface h2 {
+-  margin-bottom: 8px;
+-  font-size: 22px;
+-}
+-.directory-state-actions {
+-  display: flex;
+-  justify-content: center;
+-  flex-wrap: wrap;
+-  gap: 10px;
+-}
+-.directory-retry-status {
+-  min-height: 20px;
+-  margin-top: 12px;
+-  color: var(--danger);
+-  font-size: 13px;
+-  line-height: 1.5;
+-}
+-.directory-loading-shell {
+-  overflow: hidden;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-.directory-loading-row {
+-  min-height: 76px;
+-  padding: 16px 18px;
+-  border-bottom: 1px solid var(--border);
+-  display: grid;
+-  grid-template-columns: 48px 1.4fr 1fr 1fr 0.7fr;
+-  align-items: center;
+-  gap: 16px;
+-}
+-.directory-loading-row:last-child {
+-  border-bottom: 0;
+-}
+-.directory-loading-avatar {
+-  width: 40px;
+-  height: 40px;
+-  border-radius: 12px;
+-}
+-.directory-loading-copy {
+-  display: grid;
+-  gap: 9px;
+-}
+-.directory-loading-copy .skeleton-line:last-child {
+-  width: 62%;
+-}
+-.directory-detail-hero {
+-  margin-bottom: 20px;
+-  padding: 24px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) auto;
+-  gap: 24px;
+-  background: var(--surface);
+-}
+-.directory-detail-identity {
+-  display: flex;
+-  align-items: center;
+-  gap: 14px;
+-}
+-.directory-detail-identity .avatar {
+-  width: 48px;
+-  height: 48px;
+-  font-size: 15px;
+-}
+-.directory-detail-identity h1 {
+-  font-size: 26px;
+-}
+-.directory-detail-phone {
+-  margin-top: 3px;
+-  color: var(--muted);
+-  font-size: 14px;
+-}
+-.directory-detail-signals {
+-  margin-top: 10px;
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 6px;
+-}
+-.directory-detail-actions {
+-  display: flex;
+-  align-items: flex-start;
+-  flex-wrap: wrap;
+-  gap: 10px;
+-}
+-.directory-detail-grid {
+-  display: grid;
+-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+-  gap: 20px;
+-  align-items: start;
+-}
+-.directory-section {
+-  padding: 22px 24px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-.directory-section + .directory-section {
+-  margin-top: 20px;
+-}
+-.directory-section-header {
+-  margin-bottom: 14px;
+-  display: flex;
+-  align-items: flex-start;
+-  justify-content: space-between;
+-  gap: 16px;
+-}
+-.directory-section-header h2 {
+-  font-size: 18px;
+-}
+-.directory-section-header p {
+-  margin-top: 3px;
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-.directory-appointment {
+-  min-height: 82px;
+-  padding: 14px 0;
+-  border-bottom: 1px solid var(--border);
+-  display: grid;
+-  grid-template-columns: 96px minmax(0, 1fr) auto;
+-  align-items: center;
+-  gap: 14px;
+-}
+-.directory-appointment:last-child {
+-  border-bottom: 0;
+-}
+-.directory-appointment time {
+-  font: 600 12px/1.5 var(--font-mono);
+-}
+-.directory-appointment-copy {
+-  display: grid;
+-  gap: 2px;
+-}
+-.directory-appointment-copy strong {
+-  font-size: 14px;
+-}
+-.directory-appointment-copy span {
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-.directory-timeline {
+-  display: grid;
+-  gap: 14px;
+-}
+-.directory-timeline-item {
+-  position: relative;
+-  padding-left: 22px;
+-}
+-.directory-timeline-item::before {
+-  content: "";
+-  position: absolute;
+-  left: 1px;
+-  top: 6px;
+-  width: 8px;
+-  height: 8px;
+-  border-radius: 50%;
+-  background: var(--border-strong);
+-}
+-.directory-timeline-item::after {
+-  content: "";
+-  position: absolute;
+-  left: 4px;
+-  top: 18px;
+-  bottom: -16px;
+-  width: 1px;
+-  background: var(--border);
+-}
+-.directory-timeline-item:last-child::after {
+-  display: none;
+-}
+-.directory-timeline-item strong,
+-.directory-timeline-item span {
+-  display: block;
+-}
+-.directory-timeline-item strong {
+-  font-size: 13px;
+-}
+-.directory-timeline-item span {
+-  margin-top: 2px;
+-  color: var(--muted);
+-  font-size: 12px;
+-}
+-.directory-note-form textarea {
+-  min-height: 128px;
+-  padding-block: 12px;
+-  resize: vertical;
+-}
+-.directory-form-status {
+-  min-height: 20px;
+-  margin-top: 10px;
+-  font-size: 13px;
+-}
+-.directory-form-status.is-success {
+-  color: var(--accent);
+-}
+-.directory-form-status.is-error {
+-  color: var(--danger);
+-}
+-.directory-note-actions {
+-  margin-top: 14px;
+-  display: flex;
+-  justify-content: flex-end;
+-}
+-.directory-readonly-field {
+-  min-height: 48px;
+-  padding: 12px 14px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-input);
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 12px;
+-  color: var(--muted);
+-  background: var(--surface-interactive);
+-  font-size: 14px;
+-}
+-.directory-readonly-field strong {
+-  color: var(--fg);
+-  font-weight: 500;
+-}
+-.directory-readonly-field + .directory-readonly-field {
+-  margin-top: var(--s2);
+-}
+-.directory-form-card {
+-  padding: 24px;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-card);
+-  background: var(--surface);
+-}
+-.directory-form-card h2 {
+-  margin-bottom: 18px;
+-  font-size: 18px;
+-}
+-.directory-form-grid {
+-  display: grid;
+-  grid-template-columns: 1fr 1fr;
+-  gap: 18px 16px;
+-}
+-.directory-form-grid .is-wide {
+-  grid-column: 1 / -1;
+-}
+-.directory-form-card textarea {
+-  min-height: 96px;
+-  padding-block: 12px;
+-  resize: vertical;
+-}
+-.directory-fieldset {
+-  min-width: 0;
+-  margin: 0;
+-  padding: 0;
+-  border: 0;
+-}
+-.directory-fieldset legend {
+-  margin-bottom: 9px;
+-  font-size: 14px;
+-  font-weight: 600;
+-}
+-.directory-segmented {
+-  display: grid;
+-  grid-template-columns: 1fr 1fr;
+-  gap: 8px;
+-}
+-.directory-segmented label {
+-  position: relative;
+-}
+-.directory-segmented input {
+-  position: absolute;
+-  opacity: 0;
+-}
+-.directory-segmented span {
+-  min-height: 48px;
+-  padding: 0 12px;
+-  border: 1px solid var(--border-strong);
+-  border-radius: 10px;
+-  display: grid;
+-  place-items: center;
+-  color: var(--fg-soft);
+-  background: var(--surface);
+-  font-size: 13px;
+-  font-weight: 600;
+-  cursor: pointer;
+-}
+-.directory-segmented input:checked + span {
+-  color: var(--accent);
+-  border-color: var(--accent);
+-  background: var(--accent-soft);
+-}
+-.directory-segmented input:focus-visible + span {
+-  outline: 2px solid var(--accent);
+-  outline-offset: 3px;
+-}
+-.directory-form-note {
+-  padding: 12px 14px;
+-  border-radius: var(--r-input);
+-  color: var(--muted);
+-  background: var(--surface-interactive);
+-  font-size: 12px;
+-}
+-.directory-active-control {
+-  min-height: 68px;
+-  padding: 12px 14px;
+-  align-items: center;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-input);
+-  background: var(--surface-secondary);
+-}
+-.directory-active-copy {
+-  min-width: 0;
+-  display: grid;
+-  gap: 2px;
+-}
+-.directory-active-copy strong,
+-.directory-active-copy .field-help {
+-  display: block;
+-}
+-.directory-form-footer {
+-  margin-top: 24px;
+-  padding-top: 20px;
+-  border-top: 1px solid var(--border);
+-  display: flex;
+-  align-items: center;
+-  justify-content: flex-end;
+-  gap: 10px;
+-}
+-.directory-inline-error {
+-  margin-top: 16px;
+-  padding: 12px 14px;
+-  border: 1px solid color-mix(in oklch, var(--danger), white 68%);
+-  border-radius: var(--r-input);
+-  color: var(--danger);
+-  background: var(--danger-soft);
+-  font-size: 13px;
+-}
+-.directory-dialog-field + .directory-dialog-field {
+-  margin-top: var(--s4);
+-}
+-.directory-external-feedback {
+-  margin-top: 12px;
+-  padding: 12px 14px;
+-  border-radius: var(--r-input);
+-  color: var(--fg-soft);
+-  background: var(--surface-interactive);
+-  font-size: 13px;
+-}
+-.directory-mobile-primary {
+-  display: none;
+-}
+-
+-@media (max-width: 1099px) {
+-  .directory-shell {
+-    grid-template-columns: 88px minmax(0, 1fr);
+-  }
+-  .directory-shell .sidebar .brand span,
+-  .directory-shell .sidebar .business-name,
+-  .directory-shell .sidebar .wa-status span,
+-  .directory-shell .sidebar .nav-item span,
+-  .directory-shell .sidebar .account-button .business-name {
+-    display: none;
+-  }
+-  .directory-shell .sidebar .business-context,
+-  .directory-shell .sidebar .nav-item,
+-  .directory-shell .sidebar .account-button {
+-    justify-content: center;
+-  }
+-  .directory-shell .sidebar .nav-item {
+-    padding-inline: 0;
+-  }
+-  .directory-shell .sidebar .nav-item.is-active::after {
+-    display: none;
+-  }
+-  .directory-shell .sidebar .brand .brand-mark {
+-    display: inline-block;
+-  }
+-  .directory-shell .sidebar .wa-status {
+-    justify-content: center;
+-  }
+-  .directory-shell .sidebar .wa-status .status-dot {
+-    display: block;
+-  }
+-  .directory-shell .sidebar .account-button > .icon {
+-    display: none;
+-  }
+-  .directory-page {
+-    padding-inline: 24px;
+-  }
+-  .customer-grid {
+-    grid-template-columns:
+-      minmax(210px, 1.2fr) minmax(140px, 0.8fr) minmax(150px, 0.9fr)
+-      44px;
+-  }
+-  .customer-grid > :nth-child(4) {
+-    display: none;
+-  }
+-  .service-grid {
+-    grid-template-columns: minmax(200px, 1.25fr) 100px 130px 120px 44px;
+-  }
+-  .service-grid > :nth-child(5) {
+-    display: none;
+-  }
+-}
+-
+-@media (max-width: 767px) {
+-  .directory-shell {
+-    display: block;
+-    min-height: 100dvh;
+-    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+-  }
+-  .directory-shell > .sidebar {
+-    display: none;
+-  }
+-  .directory-mobile-header {
+-    position: sticky;
+-    z-index: 30;
+-    top: 0;
+-    min-height: calc(60px + env(safe-area-inset-top));
+-    padding: env(safe-area-inset-top) 16px 0;
+-    display: flex;
+-    align-items: center;
+-    justify-content: space-between;
+-    background: color-mix(in oklch, var(--surface), transparent 4%);
+-    border-bottom: 1px solid var(--border);
+-    backdrop-filter: blur(12px);
+-  }
+-  .directory-page {
+-    padding: 20px 16px 32px;
+-  }
+-  .directory-page-header {
+-    margin-bottom: 18px;
+-    display: grid;
+-    grid-template-columns: minmax(0, 1fr) auto;
+-    gap: 12px;
+-  }
+-  .directory-page-header h1 {
+-    font-size: 26px;
+-  }
+-  .directory-page-header p {
+-    font-size: 13px;
+-  }
+-  .directory-page-actions .btn span {
+-    display: none;
+-  }
+-  .directory-page-actions .btn {
+-    width: 52px;
+-    padding-inline: 0;
+-  }
+-  .directory-source-strip {
+-    align-items: flex-start;
+-  }
+-  .directory-source-strip > .badge {
+-    flex: 0 0 auto;
+-  }
+-  .directory-demo-note {
+-    grid-template-columns: auto 1fr;
+-  }
+-  .directory-toolbar {
+-    grid-template-columns: 1fr;
+-    gap: 12px;
+-  }
+-  .directory-filters {
+-    justify-content: flex-start;
+-    margin-inline: -16px;
+-    padding-inline: 16px;
+-  }
+-  .directory-list-surface,
+-  .directory-state-surface,
+-  .directory-loading-shell {
+-    margin-inline: -16px;
+-    border-inline: 0;
+-    border-radius: 0;
+-  }
+-  .directory-grid-head {
+-    display: none;
+-  }
+-  .directory-list-meta {
+-    padding-inline: 16px;
+-  }
+-  .directory-row.customer-grid,
+-  .directory-row.service-grid {
+-    min-height: 0;
+-    padding: 16px;
+-    grid-template-columns: minmax(0, 1fr) auto;
+-    gap: 12px 10px;
+-  }
+-  .directory-row.customer-grid > :nth-child(4),
+-  .directory-row.service-grid > :nth-child(5) {
+-    display: grid;
+-  }
+-  .directory-row-main {
+-    grid-column: 1;
+-  }
+-  .directory-row-action {
+-    grid-column: 2;
+-    grid-row: 1;
+-    align-self: center;
+-  }
+-  .directory-cell {
+-    display: grid !important;
+-    gap: 2px;
+-  }
+-  .directory-cell-label {
+-    display: block;
+-  }
+-  .customer-grid .directory-cell:nth-child(2),
+-  .service-grid .directory-cell:nth-child(2),
+-  .service-grid .directory-cell:nth-child(3) {
+-    grid-column: auto;
+-  }
+-  .customer-grid .directory-cell:nth-child(3),
+-  .customer-grid .directory-cell:nth-child(4),
+-  .service-grid .directory-cell:nth-child(4),
+-  .service-grid .directory-cell:nth-child(5) {
+-    grid-column: span 2;
+-  }
+-  .directory-state-surface {
+-    min-height: 470px;
+-  }
+-  .directory-loading-row {
+-    grid-template-columns: 44px 1fr;
+-    padding-inline: 16px;
+-  }
+-  .directory-loading-row > :nth-child(n + 3) {
+-    display: none;
+-  }
+-  .directory-detail-hero {
+-    padding: 20px 16px;
+-    grid-template-columns: 1fr;
+-  }
+-  .directory-detail-actions {
+-    display: grid;
+-    grid-template-columns: 1fr 1fr;
+-  }
+-  .directory-detail-actions .btn {
+-    width: 100%;
+-  }
+-  .directory-detail-grid {
+-    grid-template-columns: 1fr;
+-  }
+-  .directory-section {
+-    padding: 20px 16px;
+-  }
+-  .directory-appointment {
+-    grid-template-columns: 82px minmax(0, 1fr);
+-  }
+-  .directory-appointment > .badge {
+-    grid-column: 2;
+-    justify-self: start;
+-  }
+-  .directory-note-actions .btn {
+-    width: 100%;
+-  }
+-  .directory-form-card {
+-    padding: 20px 16px;
+-  }
+-  .directory-form-grid {
+-    grid-template-columns: 1fr;
+-  }
+-  .directory-form-grid .is-wide {
+-    grid-column: auto;
+-  }
+-  .directory-form-footer {
+-    flex-direction: column-reverse;
+-  }
+-  .directory-form-footer .btn {
+-    width: 100%;
+-  }
+-  .directory-bottom-nav {
+-    position: fixed;
+-    z-index: 50;
+-    left: 0;
+-    right: 0;
+-    bottom: 0;
+-    min-height: calc(68px + env(safe-area-inset-bottom));
+-    padding: 6px 8px env(safe-area-inset-bottom);
+-    display: grid;
+-    grid-template-columns: repeat(5, 1fr);
+-    background: var(--surface);
+-    border-top: 1px solid var(--border);
+-  }
+-}
+-
+-@media (max-width: 390px) {
+-  .directory-source-strip {
+-    display: grid;
+-    grid-template-columns: 1fr;
+-  }
+-  .directory-source-strip > .badge {
+-    justify-self: start;
+-  }
+-  .directory-source-copy > div > span {
+-    max-width: 30ch;
+-  }
+-  .directory-detail-actions {
+-    grid-template-columns: 1fr;
+-  }
+-  .directory-segmented {
+-    grid-template-columns: 1fr;
+-  }
+-}
+-
+-@media (prefers-reduced-motion: reduce) {
+-  .directory-row,
+-  .directory-filter,
+-  .directory-skip-link {
+-    transition: none;
+-  }
+-}
+diff --git a/apps/frontend/src/shared/styles/atendly-services.css b/apps/frontend/src/shared/styles/atendly-services.css
+index 1094258..aa3ba65 100644
+--- a/apps/frontend/src/shared/styles/atendly-services.css
++++ b/apps/frontend/src/shared/styles/atendly-services.css
+@@ -72,3 +72,386 @@
+ .service-swatch[data-color="SLATE"] {
+   --swatch: #64748b;
+ }
++
++.directory-toolbar {
++  margin-bottom: 16px;
++  display: grid;
++  grid-template-columns: minmax(280px, 460px) minmax(0, 1fr);
++  align-items: end;
++  gap: 16px;
++}
++.directory-search {
++  position: relative;
++}
++.directory-search .input {
++  padding-left: 44px;
++}
++.directory-search .icon {
++  position: absolute;
++  left: 14px;
++  top: 50%;
++  transform: translateY(-50%);
++  color: var(--muted);
++  pointer-events: none;
++}
++.directory-filters {
++  display: flex;
++  justify-content: flex-end;
++  gap: 8px;
++  overflow-x: auto;
++  padding: 2px;
++  scrollbar-width: none;
++}
++.directory-filter {
++  min-height: 44px;
++  padding: 0 13px;
++  border: 1px solid var(--border);
++  border-radius: 999px;
++  color: var(--fg-soft);
++  background: var(--surface);
++  font-size: 13px;
++  font-weight: 600;
++  white-space: nowrap;
++}
++.directory-filter:hover {
++  border-color: var(--border-strong);
++  background: var(--surface-secondary);
++}
++.directory-filter.is-active {
++  color: var(--surface);
++  background: var(--navy);
++  border-color: var(--navy);
++}
++.directory-list-surface {
++  overflow: hidden;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  background: var(--surface);
++}
++.directory-list-meta {
++  min-height: 48px;
++  padding: 0 18px;
++  border-bottom: 1px solid var(--border);
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  color: var(--muted);
++  font-size: 12px;
++  background: var(--surface-secondary);
++}
++.directory-list-meta strong {
++  color: var(--fg);
++  font-size: 13px;
++}
++.directory-grid-head,
++.directory-row {
++  display: grid;
++  align-items: center;
++  gap: 16px;
++}
++.directory-grid-head {
++  min-height: 44px;
++  padding: 0 18px;
++  border-bottom: 1px solid var(--border);
++  color: var(--muted);
++  background: var(--surface-secondary);
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++}
++.service-grid {
++  grid-template-columns:
++    minmax(220px, 1.3fr) 110px 140px 130px minmax(130px, 0.8fr)
++    44px;
++}
++.directory-row {
++  position: relative;
++  min-height: 76px;
++  padding: 12px 18px;
++  border-bottom: 1px solid var(--border);
++  color: var(--fg);
++  text-decoration: none;
++  transition: background 140ms var(--ease);
++}
++.directory-row:last-of-type {
++  border-bottom: 0;
++}
++.directory-row:hover {
++  background: var(--surface-secondary);
++}
++.directory-row-main {
++  min-width: 0;
++  display: flex;
++  align-items: center;
++  gap: 11px;
++}
++.directory-row-copy {
++  min-width: 0;
++  display: grid;
++  gap: 2px;
++}
++.directory-row-copy strong {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++  font-size: 14px;
++}
++.directory-row-copy span,
++.directory-cell {
++  color: var(--muted);
++  font-size: 13px;
++}
++.directory-cell strong {
++  color: var(--fg);
++  font-weight: 600;
++}
++.directory-cell-label {
++  display: none;
++  color: var(--muted);
++  font-size: 11px;
++}
++.directory-row-action {
++  justify-self: end;
++  color: var(--muted);
++}
++.directory-row-badges {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++.directory-no-results {
++  padding: 56px 20px;
++  color: var(--muted);
++  text-align: center;
++}
++.directory-state-surface {
++  min-height: 500px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  display: grid;
++  place-items: center;
++  background: var(--surface);
++}
++.directory-state-surface .empty-state,
++.directory-state-surface .error-state {
++  padding: 56px 24px;
++}
++.directory-state-surface h2 {
++  margin-bottom: 8px;
++  font-size: 22px;
++}
++.directory-retry-status {
++  min-height: 20px;
++  margin-top: 12px;
++  color: var(--danger);
++  font-size: 13px;
++  line-height: 1.5;
++}
++.directory-form-card {
++  padding: 24px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  background: var(--surface);
++}
++.directory-form-card h2 {
++  margin-bottom: 18px;
++  font-size: 18px;
++}
++.directory-form-grid {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 18px 16px;
++}
++.directory-form-grid .is-wide {
++  grid-column: 1 / -1;
++}
++.directory-form-card textarea {
++  min-height: 96px;
++  padding-block: 12px;
++  resize: vertical;
++}
++.directory-fieldset {
++  min-width: 0;
++  margin: 0;
++  padding: 0;
++  border: 0;
++}
++.directory-fieldset legend {
++  margin-bottom: 9px;
++  font-size: 14px;
++  font-weight: 600;
++}
++.directory-segmented {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 8px;
++}
++.directory-segmented label {
++  position: relative;
++}
++.directory-segmented input {
++  position: absolute;
++  opacity: 0;
++}
++.directory-segmented span {
++  min-height: 48px;
++  padding: 0 12px;
++  border: 1px solid var(--border-strong);
++  border-radius: 10px;
++  display: grid;
++  place-items: center;
++  color: var(--fg-soft);
++  background: var(--surface);
++  font-size: 13px;
++  font-weight: 600;
++  cursor: pointer;
++}
++.directory-segmented input:checked + span {
++  color: var(--accent);
++  border-color: var(--accent);
++  background: var(--accent-soft);
++}
++.directory-segmented input:focus-visible + span {
++  outline: 2px solid var(--accent);
++  outline-offset: 3px;
++}
++.directory-form-note {
++  padding: 12px 14px;
++  border-radius: var(--r-input);
++  color: var(--muted);
++  background: var(--surface-interactive);
++  font-size: 12px;
++}
++.directory-active-control {
++  min-height: 68px;
++  padding: 12px 14px;
++  align-items: center;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  background: var(--surface-secondary);
++}
++.directory-active-copy {
++  min-width: 0;
++  display: grid;
++  gap: 2px;
++}
++.directory-active-copy strong,
++.directory-active-copy .field-help {
++  display: block;
++}
++.directory-form-footer {
++  margin-top: 24px;
++  padding-top: 20px;
++  border-top: 1px solid var(--border);
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  gap: 10px;
++}
++.directory-inline-error {
++  margin-top: 16px;
++  padding: 12px 14px;
++  border: 1px solid color-mix(in oklch, var(--danger), white 68%);
++  border-radius: var(--r-input);
++  color: var(--danger);
++  background: var(--danger-soft);
++  font-size: 13px;
++}
++
++@media (max-width: 1099px) {
++  .service-grid {
++    grid-template-columns: minmax(200px, 1.25fr) 100px 130px 120px 44px;
++  }
++  .service-grid > :nth-child(5) {
++    display: none;
++  }
++}
++
++@media (max-width: 767px) {
++  .directory-toolbar {
++    grid-template-columns: 1fr;
++    gap: 12px;
++  }
++  .directory-filters {
++    justify-content: flex-start;
++    margin-inline: -16px;
++    padding-inline: 16px;
++  }
++  .directory-list-surface,
++  .directory-state-surface {
++    margin-inline: -16px;
++    border-inline: 0;
++    border-radius: 0;
++  }
++  .directory-grid-head {
++    display: none;
++  }
++  .directory-list-meta {
++    padding-inline: 16px;
++  }
++  .directory-row.service-grid {
++    min-height: 0;
++    padding: 16px;
++    grid-template-columns: minmax(0, 1fr) auto;
++    gap: 12px 10px;
++  }
++  .directory-row.service-grid > :nth-child(5) {
++    display: grid;
++  }
++  .directory-row-main {
++    grid-column: 1;
++  }
++  .directory-row-action {
++    grid-column: 2;
++    grid-row: 1;
++    align-self: center;
++  }
++  .directory-cell {
++    display: grid !important;
++    gap: 2px;
++  }
++  .directory-cell-label {
++    display: block;
++  }
++  .service-grid .directory-cell:nth-child(2),
++  .service-grid .directory-cell:nth-child(3) {
++    grid-column: auto;
++  }
++  .service-grid .directory-cell:nth-child(4),
++  .service-grid .directory-cell:nth-child(5) {
++    grid-column: span 2;
++  }
++  .directory-state-surface {
++    min-height: 470px;
++  }
++  .directory-form-card {
++    padding: 20px 16px;
++  }
++  .directory-form-grid {
++    grid-template-columns: 1fr;
++  }
++  .directory-form-grid .is-wide {
++    grid-column: auto;
++  }
++  .directory-form-footer {
++    flex-direction: column-reverse;
++  }
++  .directory-form-footer .btn {
++    width: 100%;
++  }
++}
++
++@media (max-width: 390px) {
++  .directory-segmented {
++    grid-template-columns: 1fr;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .directory-row,
++  .directory-filter {
++    transition: none;
++  }
++}
+diff --git a/apps/frontend/src/shared/styles/atendly.css b/apps/frontend/src/shared/styles/atendly.css
+index b6574d4..5ddb827 100644
+--- a/apps/frontend/src/shared/styles/atendly.css
++++ b/apps/frontend/src/shared/styles/atendly.css
+@@ -4097,3 +4097,158 @@ p {
+     transform: none;
+   }
+ }
++
++.directory-page {
++  width: min(1240px, 100%);
++  margin: 0 auto;
++  padding: 28px 36px 64px;
++}
++.directory-page.is-form-page {
++  width: min(920px, 100%);
++}
++.directory-page-header {
++  margin-bottom: 22px;
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 24px;
++}
++.directory-page-header h1 {
++  margin-bottom: 4px;
++}
++.directory-page-header p {
++  max-width: 62ch;
++  color: var(--muted);
++  font-size: 14px;
++}
++.directory-page-actions {
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  flex-wrap: wrap;
++  gap: 10px;
++}
++.directory-source-strip {
++  min-height: 58px;
++  margin-bottom: 18px;
++  padding: 11px 14px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-input);
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  background: var(--surface);
++}
++.directory-source-copy {
++  min-width: 0;
++  display: flex;
++  align-items: center;
++  gap: 11px;
++}
++.directory-source-icon {
++  width: 34px;
++  height: 34px;
++  border-radius: 10px;
++  display: grid;
++  place-items: center;
++  color: var(--accent);
++  background: var(--accent-soft);
++}
++.directory-source-copy > div > strong,
++.directory-source-copy > div > span {
++  display: block;
++}
++.directory-source-copy > div > strong {
++  font-size: 14px;
++}
++.directory-source-copy > div > span {
++  color: var(--muted);
++  font-size: 12px;
++}
++.directory-loading-shell {
++  overflow: hidden;
++  border: 1px solid var(--border);
++  border-radius: var(--r-card);
++  background: var(--surface);
++}
++.directory-loading-row {
++  min-height: 76px;
++  padding: 16px 18px;
++  border-bottom: 1px solid var(--border);
++  display: grid;
++  grid-template-columns: 48px 1.4fr 1fr 1fr 0.7fr;
++  align-items: center;
++  gap: 16px;
++}
++.directory-loading-row:last-child {
++  border-bottom: 0;
++}
++.directory-loading-avatar {
++  width: 40px;
++  height: 40px;
++  border-radius: 12px;
++}
++.directory-loading-copy {
++  display: grid;
++  gap: 9px;
++}
++.directory-loading-copy .skeleton-line:last-child {
++  width: 62%;
++}
++
++@media (max-width: 767px) {
++  .directory-page {
++    padding: 20px 16px 32px;
++  }
++  .directory-page-header {
++    margin-bottom: 18px;
++    display: grid;
++    grid-template-columns: minmax(0, 1fr) auto;
++    gap: 12px;
++  }
++  .directory-page-header h1 {
++    font-size: 26px;
++  }
++  .directory-page-header p {
++    font-size: 13px;
++  }
++  .directory-page-actions .btn span {
++    display: none;
++  }
++  .directory-page-actions .btn {
++    width: 52px;
++    padding-inline: 0;
++  }
++  .directory-source-strip {
++    align-items: flex-start;
++  }
++  .directory-source-strip > .badge {
++    flex: 0 0 auto;
++  }
++  .directory-loading-shell {
++    margin-inline: -16px;
++    border-inline: 0;
++    border-radius: 0;
++  }
++  .directory-loading-row {
++    grid-template-columns: 44px 1fr;
++    padding-inline: 16px;
++  }
++  .directory-loading-row > :nth-child(n + 3) {
++    display: none;
++  }
++}
++
++@media (max-width: 390px) {
++  .directory-source-strip {
++    display: grid;
++    grid-template-columns: 1fr;
++  }
++  .directory-source-strip > .badge {
++    justify-self: start;
++  }
++  .directory-source-copy > div > span {
++    max-width: 30ch;
++  }
++}
+diff --git a/apps/frontend/tests/goal015-customers.test.tsx b/apps/frontend/tests/goal015-customers.test.tsx
+index 66790ed..adca91b 100644
+--- a/apps/frontend/tests/goal015-customers.test.tsx
++++ b/apps/frontend/tests/goal015-customers.test.tsx
+@@ -426,6 +426,34 @@ describe("número compartilhado no cadastro exige escolha explícita", () => {
+     });
+     expect(replace).toHaveBeenCalledWith("/clientes/detalhes?id=c3");
+   });
++
++  test("'Revisar dados' preserva o nome e o telefone já digitados", async () => {
++    calendarGetCalendar.mockResolvedValue(calendarStateFixture());
++    customersListCandidatesByPhone.mockResolvedValue({
++      items: [
++        customerFixture({ id: "c1", name: "Marina Duarte", phone: "11999990000" }),
++      ],
++      managedExternally: false,
++      source: "ATENDLY",
++    });
++
++    const user = userEvent.setup();
++    render(
++      <ShellConfigProvider>
++        <ProductCustomersScreen scenario="new" />
++      </ShellConfigProvider>,
++    );
++
++    await user.type(await screen.findByLabelText("Nome"), "Cliente Novo");
++    await user.type(screen.getByLabelText("Telefone"), "11999990000");
++    await user.click(screen.getByRole("button", { name: "Criar cliente" }));
++
++    await screen.findByText(/Encontramos 1 cadastro com o telefone/);
++    await user.click(screen.getByRole("button", { name: "Revisar dados" }));
++
++    expect(screen.getByLabelText("Nome")).toHaveValue("Cliente Novo");
++    expect(screen.getByLabelText("Telefone")).toHaveValue("11999990000");
++  });
+ });
+ 
+ describe("acessibilidade das telas novas de Clientes", () => {
+diff --git a/apps/scheduling-service/src/modules/calendar/time-blocks.ts b/apps/scheduling-service/src/modules/calendar/time-blocks.ts
+index 947c5a2..3b41054 100644
+--- a/apps/scheduling-service/src/modules/calendar/time-blocks.ts
++++ b/apps/scheduling-service/src/modules/calendar/time-blocks.ts
+@@ -1,4 +1,8 @@
+ import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
++import {
++  addMinutes,
++  localDateTimeToInstant,
++} from "../../shared/date-time/calendar-date-time.js";
+ import { AppError } from "../../shared/errors/app-error.js";
+ import {
+   calendarDaysBetween,
+@@ -95,6 +99,32 @@ export async function createTimeBlockRow(
+   });
+ }
+ 
++// Leitura da grade (Goal016): janela local -> instante, mesma conversao que
++// a checagem de conflito de excecao ja faz. A janela e obrigatoria — sem ela
++// a rota seria uma varredura sem limite do tenant inteiro.
++export async function listTimeBlocks(
++  prisma: PrismaClient,
++  input: TimeBlockScope & { startDate: string; endDate: string },
++) {
++  const rangeStart = localDateTimeToInstant(
++    input.startDate,
++    "00:00",
++    input.timeZone,
++  );
++  const rangeEnd = addMinutes(
++    localDateTimeToInstant(input.endDate, "00:00", input.timeZone),
++    24 * 60,
++  );
++  return prisma.timeBlock.findMany({
++    where: {
++      tenantId: input.tenantId,
++      startAt: { lt: rangeEnd },
++      endAt: { gt: rangeStart },
++    },
++    orderBy: [{ startAt: "asc" }],
++  });
++}
++
+ export async function removeTimeBlock(
+   prisma: PrismaClient,
+   input: TimeBlockScope & { id: string },
+diff --git a/apps/scheduling-service/src/modules/internal-api/routes.ts b/apps/scheduling-service/src/modules/internal-api/routes.ts
+index bfc7874..16f4f0d 100644
+--- a/apps/scheduling-service/src/modules/internal-api/routes.ts
++++ b/apps/scheduling-service/src/modules/internal-api/routes.ts
+@@ -40,7 +40,11 @@ import {
+   CalendarService,
+ } from "../calendar/calendar-service.js";
+ import { CalendarMutationIdempotency } from "../calendar/idempotency.js";
+-import { createTimeBlock, removeTimeBlock } from "../calendar/time-blocks.js";
++import {
++  createTimeBlock,
++  listTimeBlocks,
++  removeTimeBlock,
++} from "../calendar/time-blocks.js";
+ import { AtendlyCustomerService } from "../customers/atendly-customer-service.js";
+ import { encryptIntegrationCredentials } from "../integrations/credentials.js";
+ import { parseMinhaAgendaConnection } from "../integrations/minha-agenda/config.js";
+@@ -962,6 +966,21 @@ export async function registerManagementRoutes(
+     },
+   );
+ 
++  // Leitura da grade (Goal016): so leitura, nenhuma sobreposicao de janela
++  // permitida — startDate/endDate sao obrigatorios.
++  app.get("/internal/time-blocks", internalOnly, async (request) => {
++    const context = currentInternalContext(request);
++    const calendar = await requireAtendlyCalendar(prisma, context.tenantId);
++    const query = parse(exceptionListQuerySchema, request.query);
++    const blocks = await listTimeBlocks(prisma, {
++      tenantId: context.tenantId,
++      timeZone: calendar.timezone,
++      startDate: query.startDate,
++      endDate: query.endDate,
++    });
++    return data(request, blocks.map(timeBlockDto));
++  });
++
+   // Bloqueio ocupa e libera tempo como qualquer atendimento: mesma transacao,
+   // mesmo lock e conflito checado dentro dela (Goal008).
+   app.post("/internal/time-blocks", internalOnly, async (request, reply) => {
+diff --git a/tools/ia-loop/lib/temporary-postgres.mjs b/tools/ia-loop/lib/temporary-postgres.mjs
+index 6d6f14f..c5a9515 100644
+--- a/tools/ia-loop/lib/temporary-postgres.mjs
++++ b/tools/ia-loop/lib/temporary-postgres.mjs
+@@ -169,9 +169,18 @@ export function createPostgresDriver({ pgBin = resolvePgBinDirectory() } = {}) {
+   };
+ }
+ 
+-/** A database name derived from an env var name: BFF_TEST_DATABASE_URL -> bff. */
++/**
++ * A database name derived from an env var name: BFF_TEST_DATABASE_URL ->
++ * ia_bff_test.
++ *
++ * The gate scripts refuse any database whose name doesn't contain "test" as
++ * a bounded word (`validate-integration.mjs`'s `DISPOSABLE_NAME`) — the one
++ * signal they have that a database is throwaway. Dropping that word here, as
++ * an earlier version of this function did, produced names like "ia_bff" that
++ * the very gate this module exists to satisfy would refuse on sight.
++ */
+ export function databaseNameForEnv(name) {
+-  return `ia_${String(name).toLowerCase().replace(/_test_database_url$/, '').replace(/[^a-z0-9]+/g, '_')}`;
++  return `ia_${String(name).toLowerCase().replace(/_test_database_url$/, '').replace(/[^a-z0-9]+/g, '_')}_test`;
+ }
+ 
+ /** Reads the postgres data directory's postmaster.pid for the live PID, if any. */
+diff --git a/tools/ia-loop/tests/test-databases.test.mjs b/tools/ia-loop/tests/test-databases.test.mjs
+index c1a4ccf..f0bafd6 100644
+--- a/tools/ia-loop/tests/test-databases.test.mjs
++++ b/tools/ia-loop/tests/test-databases.test.mjs
+@@ -93,9 +93,9 @@ async function withTempRoot(body) {
+ // --- naming --------------------------------------------------------------
+ 
+ test('a database name is derived from the variable that asked for it', () => {
+-  assert.equal(databaseNameForEnv('BFF_TEST_DATABASE_URL'), 'ia_bff');
+-  assert.equal(databaseNameForEnv('AI_TEST_DATABASE_URL'), 'ia_ai');
+-  assert.equal(databaseNameForEnv('SCHEDULING_TEST_DATABASE_URL'), 'ia_scheduling');
++  assert.equal(databaseNameForEnv('BFF_TEST_DATABASE_URL'), 'ia_bff_test');
++  assert.equal(databaseNameForEnv('AI_TEST_DATABASE_URL'), 'ia_ai_test');
++  assert.equal(databaseNameForEnv('SCHEDULING_TEST_DATABASE_URL'), 'ia_scheduling_test');
+ });
+ 
+ test('each service gets its OWN database, so one migration cannot decide another schema', () => {
+@@ -129,7 +129,7 @@ test('the cluster is stopped after the action, on the happy path', async () => {
+       { registry, stateDir, attemptId: 'a1' }, ['BFF_TEST_DATABASE_URL'], () => 'ok', { driver, tempRoot },
+     );
+     assert.ok(stopped(log), 'the cluster must not outlive the action');
+-    assert.ok(log.indexOf('createdb:ia_bff') < log.findIndex((l) => l === 'status:STOPPING'));
++    assert.ok(log.indexOf('createdb:ia_bff_test') < log.findIndex((l) => l === 'status:STOPPING'));
+   });
+ });
+ 
+@@ -149,7 +149,7 @@ test('the cluster is stopped even when the action THROWS', async () => {
+ 
+ test('the cluster is stopped even when creating a database fails halfway', async () => {
+   await withTempRoot(async ({ stateDir, tempRoot }) => {
+-    const { registry, driver, log, created } = harness({ failOn: 'ia_ai' });
++    const { registry, driver, log, created } = harness({ failOn: 'ia_ai_test' });
+     await assert.rejects(
+       () => withTestDatabases(
+         { registry, stateDir, attemptId: 'a1' },
+@@ -158,7 +158,7 @@ test('the cluster is stopped even when creating a database fails halfway', async
+       ),
+       /createdb refused/,
+     );
+-    assert.deepEqual(created, ['ia_bff'], 'the first one was made');
++    assert.deepEqual(created, ['ia_bff_test'], 'the first one was made');
+     assert.ok(stopped(log), 'and the cluster was still torn down');
+   });
+ });
+@@ -179,8 +179,8 @@ test('the action receives one URL per variable, on the cluster that was started'
+     // The port is chosen from a free one in the configured range, so it is
+     // asserted by shape rather than pinned to a number a parallel run could
+     // legitimately take.
+-    assert.match(env.BFF_TEST_DATABASE_URL, new RegExp(`^postgresql://${USER}@127\\.0\\.0\\.1:555\\d\\d/ia_bff$`));
+-    assert.match(env.AI_TEST_DATABASE_URL, /\/ia_ai$/);
++    assert.match(env.BFF_TEST_DATABASE_URL, new RegExp(`^postgresql://${USER}@127\\.0\\.0\\.1:555\\d\\d/ia_bff_test$`));
++    assert.match(env.AI_TEST_DATABASE_URL, /\/ia_ai_test$/);
+     const port = (url) => url.match(/:(\d+)\//)[1];
+     assert.equal(port(env.BFF_TEST_DATABASE_URL), port(env.AI_TEST_DATABASE_URL),
+       'both databases live on the ONE cluster that was started, not two');
+@@ -199,6 +199,6 @@ test('a repeated variable is one database, not two', async () => {
+       ['BFF_TEST_DATABASE_URL', 'BFF_TEST_DATABASE_URL', '  ', null],
+       () => {}, { driver, tempRoot },
+     );
+-    assert.deepEqual(created, ['ia_bff']);
++    assert.deepEqual(created, ['ia_bff_test']);
+   });
+ });

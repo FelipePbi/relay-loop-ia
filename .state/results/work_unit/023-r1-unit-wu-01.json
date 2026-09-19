@@ -1,0 +1,73 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T20:21:05.365Z",
+  "attemptId": "023-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Tabela nasce vazia por migration aditiva, sem UPDATE em linha existente, e reaplicar a migration sobre banco já migrado não falha",
+          "met": true,
+          "detail": "migration.sql usa CREATE TABLE IF NOT EXISTS e ADD CONSTRAINT guardada por DO $$ IF NOT EXISTS; verificado contra Postgres 16 real (docker): `prisma migrate deploy` aplicou a migration, e reexecutar o mesmo migration.sql via psql devolveu apenas NOTICE 'already exists, skipping' sem erro."
+        },
+        {
+          "criterion": "Ausência de linha vale como Comercial 90 / Pessoal 30",
+          "met": true,
+          "detail": "settings.ts:resolveCurrent resolve o default em código quando findUnique retorna null; verificado com GET real sem linha: {commercialRetentionDays:90, personalRetentionDays:30}."
+        },
+        {
+          "criterion": "Valores aceitos são exatamente 30, 90, 180 e 365, validados no servidor; fora disso recusa e não grava",
+          "met": true,
+          "detail": "retentionDaysSchema é união de z.literal(30|90|180|365); PATCH com 60 devolveu 400 VALIDATION_ERROR e o GET seguinte confirmou que nada foi gravado (permaneceu 90)."
+        },
+        {
+          "criterion": "Comercial e Pessoal podem ter prazos diferentes ao mesmo tempo",
+          "met": true,
+          "detail": "PATCH {commercialRetentionDays:365, personalRetentionDays:180} aplicado com sucesso e refletido no GET; upsert grava os dois campos na mesma linha, independentes."
+        },
+        {
+          "criterion": "PATCH que reduza qualquer prazo sem confirmação explícita é recusado com erro nomeado que diz categoria e de/para; aumentar não exige confirmação",
+          "met": true,
+          "detail": "applyRetentionPatch compara next vs current por categoria; reduzir comercial de 365 para 90 sem confirmReduction devolveu 409 RETENTION_REDUCTION_REQUIRES_CONFIRMATION com details.reductions=[{category:COMMERCIAL,from:365,to:90}]; aumentar (90->365) devolveu 200 sem confirmReduction."
+        },
+        {
+          "criterion": "As duas rotas estão sob requireTenantContext e nenhuma aceita tenantId do chamador",
+          "met": true,
+          "detail": "routes.ts usa requireTenantContext como preHandler e currentTenantContext para resolver o tenant; zod não é .strict(), então tenantId enviado no corpo é descartado — verificado: PATCH de A com tenantId de B só alterou a linha de A, GET de B continuou no default 90/30."
+        },
+        {
+          "criterion": "A resposta deixa claro que a redução só passa a valer na varredura seguinte; nenhuma rota pública apaga dado",
+          "met": true,
+          "detail": "GET e PATCH sempre devolvem appliesFrom: \"NEXT_SWEEP\"; nenhum DELETE é exposto e nenhum código do módulo remove linha ou dado."
+        },
+        {
+          "criterion": "Não existe prazo, coluna, parâmetro ou default para UNCLASSIFIED",
+          "met": true,
+          "detail": "Schema Prisma, migration.sql, retentionPatchSchema e RetentionState só declaram commercialRetentionDays/personalRetentionDays; nenhuma terceira categoria em nenhum arquivo do módulo."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/bff/prisma/schema.prisma",
+        "apps/bff/prisma/migrations/20260915150000_goal023_retention/migration.sql",
+        "apps/bff/src/modules/retention/settings.ts",
+        "apps/bff/src/modules/retention/routes.ts",
+        "apps/bff/src/modules/retention/index.ts",
+        "apps/bff/src/app.ts",
+        "apps/bff/src/lib/errors.ts",
+        "apps/bff/tests/goal023-retention-settings.test.ts",
+        "apps/bff/PUBLIC_API_V1.md"
+      ],
+      "protocolVersion": 2,
+      "jobId": "023-r1-unit-wu-01",
+      "goal": "023",
+      "round": 1,
+      "workUnitId": "WU-01",
+      "status": "COMPLETED",
+      "summary": "Adicionado RetentionSettings (Comercial/Pessoal, default 90/30) ao BFF com migration aditiva retomável e rotas GET/PATCH /v1/settings/retention com allowlist 30/90/180/365 e recusa nomeada de redução sem confirmação.",
+      "report": "O que mudou: modelo `RetentionSettings` (uma linha por tenant, `tenantId` como PK) em `apps/bff/prisma/schema.prisma`, seguindo o padrão de `ReminderSettings` do Goal021 — ausência de linha é o default do produto (Comercial 90 / Pessoal 30), resolvido em código, nunca em boot. Migration `20260915150000_goal023_retention` usa `CREATE TABLE IF NOT EXISTS` e uma constraint de FK guardada por `DO $$ IF NOT EXISTS`, tornando-a retomável, corrigindo a divergência de idempotência que o review022 tinha registrado para o padrão anterior.\n\nMódulo novo `apps/bff/src/modules/retention/`: `settings.ts` define a allowlist fechada (30/90/180/365) por zod, resolve o estado corrente (linha gravada ou default), e `applyRetentionPatch` compara cada categoria pedida contra a corrente — qualquer redução sem `confirmReduction: true` lança `AppError(\"RETENTION_REDUCTION_REQUIRES_CONFIRMATION\", ..., 409, { reductions: [{category, from, to}] })` antes de qualquer escrita; aumentar nunca exige confirmação. `routes.ts` registra `GET/PATCH /v1/settings/retention` sob `requireTenantContext`, resolvendo o tenant só por `currentTenantContext` (a sessão decide, nunca o corpo). `index.ts` é o barrel. Registrado em `app.ts`. Novo código de erro `RETENTION_REDUCTION_REQUIRES_CONFIRMATION` em `lib/errors.ts`. `PUBLIC_API_V1.md` ganhou seção e linha de roteamento para o contrato novo, já que a rota pública mudou.\n\nTeste `apps/bff/tests/goal023-retention-settings.test.ts` segue o padrão RUN_INTEGRATION/skipIf dos demais testes de rota contra Postgres real (401 sem sessão, default sem linha, allowlist recusando sem gravar, categorias divergindo, aumento sem confirmação, redução recusada e depois aceita com confirmação, tenantId do corpo não escapando da sessão).\n\nComandos executados e resultado real:\n- `npm run typecheck` (prisma generate + tsc --noEmit): passou limpo.\n- `npm run lint` (eslint src --max-warnings=0): 1 erro de ordenação de export corrigido com `eslint --fix`; segunda execução limpa.\n- `npx prettier --check`/`--write` nos arquivos novos/alterados: formatação corrigida, checagem final limpa.\n- `npx vitest run tests/goal023-retention-settings.test.ts` sem `BFF_RUN_INTEGRATION_TESTS`: 8 testes skip (comportamento esperado, sem DB configurado no ambiente).\n- Como este sandbox não tinha `DATABASE_URL`/Postgres de teste configurado, eu subi um Postgres 16 descartável via Docker (`docker run ... postgres:16-alpine`), rodei `prisma migrate deploy` com sucesso (aplicou todas as 21 migrations incluindo a nova), e reexecutei o `migration.sql` da 023 diretamente via `psql` sobre o banco já migrado — só `NOTICE ... already exists, skipping`, sem erro, confirmando a resumibilidade exigida pelo critério 1.\n- O harness de teste (`tests/helpers/integration.ts:assertDisposableTarget`) recusou a conexão porque, neste Docker Desktop no Windows, `inet_server_addr()`/porta observados pelo Postgres dentro do container não batem com loopback/porta declarados mesmo com o container mapeado corretamente — é uma peculiaridade de rede do sandbox, não do código; não alterei esse arquivo (é infraestrutura compartilhada de testes, fora do escopo desta WU). Para validar o comportamento real fim a fim sem depender dessa checagem, escrevi um script ad-hoc temporário (`apps/bff/scratch-verify-goal023.ts`, removido antes de terminar) que chama `buildApp()` e `app.inject` direto contra o mesmo Postgres real: confirmei 401 sem sessão, GET default 90/30 com `appliesFrom: NEXT_SWEEP`, PATCH 60 recusado com 400 sem gravar, PATCH aumentando as duas categorias aceito, PATCH reduzindo sem confirmação recusado com 409 e `details.reductions` nomeando `COMMERCIAL 365->90`, PATCH com `confirmReduction: true` aceito, e PATCH de um tenant enviando o `tenantId` de outro no corpo só alterou a própria linha (o outro tenant permaneceu no default). O container Docker e o script temporário foram removidos ao final; `git status` mostra só os arquivos esperados desta WU."
+    },
+    "attemptId": "023-r1-unit-wu-01-a1"
+  }
+}

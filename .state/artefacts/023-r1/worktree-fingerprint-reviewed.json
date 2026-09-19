@@ -1,0 +1,166 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-15T21:44:56.616Z",
+  "base": "0ae5d29adb58a731d7d16fe2fa6a25c05e83ae88",
+  "worktreeInitialHead": "0ae5d29adb58a731d7d16fe2fa6a25c05e83ae88",
+  "head": "0ae5d29adb58a731d7d16fe2fa6a25c05e83ae88",
+  "branch": "ai-loop/goal-023",
+  "trackedDiffHash": "ddab35ae26815b71eceb7b3ad76fceee0d3c9483b98003d45d7a54b7b417bac2",
+  "trackedFileCount": 34,
+  "trackedFiles": [
+    "apps/ai-orchestrator/prisma/schema.prisma",
+    "apps/ai-orchestrator/src/lib/internal-credentials.ts",
+    "apps/ai-orchestrator/src/modules/internal/routes.ts",
+    "apps/ai-orchestrator/tests/security/internal-credentials.test.ts",
+    "apps/bff/.env.example",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/prisma/schema.prisma",
+    "apps/bff/src/app.ts",
+    "apps/bff/src/clients/ai-orchestrator/index.ts",
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/config/env.ts",
+    "apps/bff/src/lib/errors.ts",
+    "apps/bff/src/modules/notifications/routes.ts",
+    "apps/bff/src/modules/notifications/store.ts",
+    "apps/evolution-go/pkg/events/webhook/webhook_durability_test.go",
+    "apps/evolution-go/pkg/events/webhook/webhook_outbox.go",
+    "apps/evolution-go/pkg/events/webhook/webhook_producer.go",
+    "apps/frontend/src/data/index.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/registry.ts",
+    "apps/frontend/src/features/conversations/ConversationThread.tsx",
+    "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+    "apps/frontend/src/features/conversations/format.ts",
+    "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+    "apps/scheduling-service/prisma/schema.prisma",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "docs/migration/CURRENT_STATE.md",
+    "docs/migration/DATA_MIGRATION.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "docs/migration/REUSE_ANALYSIS.md",
+    "docs/migration/VALIDATION_GATE.md",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "254e506bb6077ff2737c7f43dabcb2b950c9fc6a05d45dd09ef72ad105ec6b21",
+  "untrackedFileCount": 23,
+  "untracked": [
+    {
+      "path": "apps/ai-orchestrator/prisma/migrations/20260915160000_goal023_conversation_content_expiry/migration.sql",
+      "sha256": "26331668e9fcf5ba3c0bc01c9343ed57e3692caaa97a342583cb34dc308c1a2b",
+      "bytes": 602
+    },
+    {
+      "path": "apps/ai-orchestrator/src/modules/retention/content-purge-service.ts",
+      "sha256": "a26ef738ce6d1998bee9fe9adc5f6b1399680d6fc76a2d4fa1bb7b7d82daee75",
+      "bytes": 8551
+    },
+    {
+      "path": "apps/ai-orchestrator/tests/retention/content-purge.test.ts",
+      "sha256": "faf2f89fe6d62d52c3633f551c50a82782bd566dd1c7ce96a9b88bcc3261c737",
+      "bytes": 19694
+    },
+    {
+      "path": "apps/bff/prisma/migrations/20260915150000_goal023_retention/migration.sql",
+      "sha256": "13b5b436b4593415a9359760d7b8789de5d7e94926a6aec7a47e982457884d1b",
+      "bytes": 1223
+    },
+    {
+      "path": "apps/bff/prisma/migrations/20260915180000_goal023_retention_sweep/migration.sql",
+      "sha256": "cb2a7cb7d5c65937e6bb7cf9765e57fa3d9770840b4ed38dd4b71eda0f97af78",
+      "bytes": 2582
+    },
+    {
+      "path": "apps/bff/src/modules/notifications/retention.ts",
+      "sha256": "af09f3eac74310ec6f9dbe59abec1b240501f14f88b38c9a050c4cadfd49e05c",
+      "bytes": 2378
+    },
+    {
+      "path": "apps/bff/src/modules/retention/RetentionSweepWorker.ts",
+      "sha256": "8ec50d4095162662e7c5f3e8eaf2f95e6a2fce65f1c65e00ba54c4cd179abcdc",
+      "bytes": 4019
+    },
+    {
+      "path": "apps/bff/src/modules/retention/index.ts",
+      "sha256": "c39b1f2f62996c1ac6c7887e0af38c3714a03c76be6a225e06a679f4c1c31c87",
+      "bytes": 1042
+    },
+    {
+      "path": "apps/bff/src/modules/retention/routes.ts",
+      "sha256": "e8a47cf4c0087edf4edfa0ae57fe678e8d0e4932777f132093010652333dda80",
+      "bytes": 1336
+    },
+    {
+      "path": "apps/bff/src/modules/retention/settings.ts",
+      "sha256": "c71c823a19fab5f940f9174faf877071e7ac27f23595adf9bd5dab5d85b59e28",
+      "bytes": 4808
+    },
+    {
+      "path": "apps/bff/src/modules/retention/sweep.ts",
+      "sha256": "031ba3abdca12b53fa7b768f60b1e5e359a92ae0fbe1afbda4fdbc4a77c00a29",
+      "bytes": 16827
+    },
+    {
+      "path": "apps/bff/tests/goal023-notification-retention.test.ts",
+      "sha256": "f3aaa34f1b8d71ce245f738a7f09096ce29fc344caff4fab3bb7911985596e66",
+      "bytes": 9115
+    },
+    {
+      "path": "apps/bff/tests/goal023-retention-settings.test.ts",
+      "sha256": "11280e00519633865663537891aca5e744ff6fc29dc739dca251adbce2f72cfa",
+      "bytes": 7277
+    },
+    {
+      "path": "apps/bff/tests/goal023-retention-sweep.test.ts",
+      "sha256": "bd882fb6a5748bf14f3f5649b48fbd85126d12efc5ade463f876366802e52cf0",
+      "bytes": 19680
+    },
+    {
+      "path": "apps/evolution-go/pkg/events/webhook/webhook_retention_test.go",
+      "sha256": "5d8ec4bdc2a2dbbc43c6a584c2c6a3589fccc00d62ddeaeeafed221947611994",
+      "bytes": 4716
+    },
+    {
+      "path": "apps/frontend/src/data/services/BffRetentionService.ts",
+      "sha256": "0ca1ae2a6d93804e4791b2eed1d2c8eb346d0fb866a4bb9c373c947e4dbfdaf6",
+      "bytes": 928
+    },
+    {
+      "path": "apps/frontend/src/features/settings/RetentionSection.tsx",
+      "sha256": "3c4e08fa1925810f46c8b04279d0a3be10da829470e86806286e37fc2bc6fc82",
+      "bytes": 6361
+    },
+    {
+      "path": "apps/frontend/tests/goal023-conversation-expired.test.tsx",
+      "sha256": "07876cb5984039a8a664661571815f2ba3feb975a69b0f73ebbebc86c3d70c0e",
+      "bytes": 4833
+    },
+    {
+      "path": "apps/frontend/tests/goal023-retention-settings.test.tsx",
+      "sha256": "5128daabed0735ea82772c5ea4a52e5e36ad8490e962287ea13f841e53fc5bfe",
+      "bytes": 7024
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260915170000_goal023_notification_content_retention_index/migration.sql",
+      "sha256": "f1fe728fd485e08403e395a420307cfa8c9a0e4379ef469ba7ad393a6cd76750",
+      "bytes": 535
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/reminders/notification-retention-service.ts",
+      "sha256": "2bc40fa7c7092656cedda85cbf0593ae9dce66b0b09e60b34501ccb3a5c387fb",
+      "bytes": 3221
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/notification-retention.test.ts",
+      "sha256": "9bdfc914efd95c6b373e752e694ca55d47d1832fc6d3a20d886a66ea712ac07c",
+      "bytes": 7893
+    },
+    {
+      "path": "scripts/goal023-retention-migration-rehearsal.mjs",
+      "sha256": "20f24baa51ac147d97bbc2c41b286bcd213132a689bd118413d7b6a2cc3b673a",
+      "bytes": 23347
+    }
+  ],
+  "contentHash": "fe1a24462379acc2809bd9df200df6940933144bbaeb07730518812186eaa4c1"
+}

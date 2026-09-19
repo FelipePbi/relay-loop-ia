@@ -1,0 +1,29 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T08:23:45.523Z",
+  "attemptId": "014-r3-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r3-unit-fix-001",
+      "goal": "014",
+      "round": 3,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Removed the leftover duplicate useShellConfig call in RealDashboard so the existing \"single call site\" comment in ProductDashboardScreen is now factually true.",
+      "report": "Blocker: DashboardScreen.tsx had a comment at lines 136-141 claiming useShellConfig was called only once (in ProductDashboardScreen), but RealDashboard (the child rendered in the same tree) still called useShellConfig again at lines 331-337 with an equivalent but separately computed config (active, attention, module, source, title). This was dead-weight redundancy left over from a prior incomplete edit, contradicting the comment.\n\nFix: deleted the second useShellConfig(...) call inside RealDashboard (previously at lines 331-337), right after the `today` date computation and before the `return (` of the JSX. No other logic in RealDashboard changed — primaryIssue, attentionCount, and external remain used elsewhere in that function's JSX (banners, badges, status strip), so no unused variables were introduced. ProductDashboardScreen's existing call (lines 142-158) already computes equivalent attention/source values via dashboardNeedsAttention()/dashboardSource() for the loaded-dashboard case, so shell config behavior for the dashboard route is unchanged; only the duplicate call site was removed.\n\nCommands executed and results:\n- `npx tsc --noEmit -p tsconfig.json` (apps/frontend) → no output, exit clean.\n- `npx eslint src/features/dashboard/DashboardScreen.tsx` (apps/frontend) → no output, exit clean.\n- `npx vitest run` (apps/frontend) → 14 test files passed, 101 tests passed.\n- `grep -n \"useShellConfig\" src/features/dashboard/DashboardScreen.tsx` → confirms exactly one call remains (the import line plus the single invocation inside ProductDashboardScreen; the comment referencing it).\n\nNo other files touched. Did not commit, push, or change branch, per constraints.",
+      "changedFiles": [
+        "apps/frontend/src/features/dashboard/DashboardScreen.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: a chamada duplicada de useShellConfig em RealDashboard (antes em DashboardScreen.tsx:331-337) foi removida, tornando o comentário 'Único ponto de useShellConfig desta tela' em DashboardScreen.tsx:136-141 factualmente correto.",
+          "met": true,
+          "detail": "Edit removeu o bloco useShellConfig({...}) de RealDashboard; grep confirma apenas uma invocação de useShellConfig no arquivo (dentro de ProductDashboardScreen). tsc, eslint e vitest (101 testes) passaram sem erros após a mudança."
+        }
+      ]
+    },
+    "attemptId": "014-r3-unit-fix-001-a1"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:39:26.196Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "018-r1-unit-wu-05-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "018-r1-unit-wu-05-a1",
+      "status": "WAITING_FOR_CAPACITY",
+      "reason": "UNKNOWN_TRANSIENT",
+      "startedAt": "2026-09-14T19:39:26.196Z",
+      "endedAt": "2026-09-14T19:46:35.093Z",
+      "classification": "UNKNOWN_TRANSIENT",
+      "code": "CONTRACT_FIELD_INVALID",
+      "retryReason": "UNKNOWN_TRANSIENT",
+      "nextRetryAt": "2026-09-14T19:46:35.075Z",
+      "capacityWait": false,
+      "role": "work_unit"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "018-r1-unit-wu-05",
+    "role": "work_unit",
+    "goal": "018",
+    "round": 1,
+    "workUnitId": "WU-05",
+    "unitType": "STANDARD",
+    "complexity": "LOW",
+    "risk": "LOW",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-018",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\018-negocio-onboarding-quatro-blocos.md",
+    "parentJobId": "018-r1-developer-5dd042fe",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "LOW",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_LOW"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-14T19:48:59.571Z",
+  "attemptStartedAt": "2026-09-14T19:46:35.093Z",
+  "requeuedAt": "2026-09-14T19:46:35.093Z"
+}

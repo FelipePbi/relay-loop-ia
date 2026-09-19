@@ -1,0 +1,87 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-09T22:21:50.948Z",
+  "base": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "worktreeInitialHead": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "head": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "branch": "ai-loop/goal-009",
+  "trackedDiffHash": "a17e906e8c55005be3b25157027c94bc10c34a261c63619bbe7e29ef43dcd358",
+  "trackedFileCount": 30,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+    "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+    "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+    "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/modules/calendar/routes.ts",
+    "apps/bff/src/modules/settings/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffCalendarService.ts",
+    "apps/frontend/src/data/services/BffSettingsService.ts",
+    "apps/scheduling-service/prisma/schema.prisma",
+    "apps/scheduling-service/src/config/env.ts",
+    "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+    "apps/scheduling-service/src/modules/calendar/routes.ts",
+    "apps/scheduling-service/src/modules/calendar/time-blocks.ts",
+    "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+    "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+    "apps/scheduling-service/src/shared/auth/internal-auth.ts",
+    "apps/scheduling-service/tests/integration/support/reset-tenant.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "docs/migration/DATA_MIGRATION.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "055d227cd80ac30298f82a988e57dce0465abcc64ca618d0e61541909ba18f2e",
+  "untrackedFileCount": 8,
+  "untracked": [
+    {
+      "path": "apps/frontend/tests/goal009-schema.test.ts",
+      "sha256": "a7258dd270a25f67f78e4200ababbb22a3336755b4d799f216c988de83e1115b",
+      "bytes": 4631
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260909190000_goal009_offer_rules_and_series/migration.sql",
+      "sha256": "1715f9c6fca273934f5ff092bc1a180372fab3786bdba07ce2aa301d60148fde",
+      "bytes": 7901
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/appointments/appointment-series-service.ts",
+      "sha256": "669535c68fc36f436ffa9ab886c341c3ad3c5db03867ee9959a362ac97f40445",
+      "bytes": 15044
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/availability-exceptions.ts",
+      "sha256": "94a9da2dff58f8e8e9cc98c2634e9ecc2e1d5a0cfbca56609c8227269b6337f6",
+      "bytes": 5835
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/block-series.ts",
+      "sha256": "aa635011fe2e317953cce5024307fdce1b53354f49eb86686ddb4bca8c2c0057",
+      "bytes": 15743
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/goal009-occupancy.test.ts",
+      "sha256": "025927cb9555f61e96f2243be0a17e6b2032d7acec8633e1fd4488abbb19bda8",
+      "bytes": 5874
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/goal009-occupancy.test.ts",
+      "sha256": "9b20a4e5dc0b52475ff36acc823c756ffc1e8a109ac034175a1f072493a5e94d",
+      "bytes": 23009
+    },
+    {
+      "path": "scripts/goal009-migration-rehearsal.mjs",
+      "sha256": "c14e63d839952937dfab3d154b5f64e9e74ff146456d690b1ce5a71f1b9f2529",
+      "bytes": 19681
+    }
+  ],
+  "contentHash": "41404954128fb6ae6e16f7702a2189ee8af222348308a1afcec081c08eade602"
+}

@@ -1,0 +1,13 @@
+{
+  "storeVersion": 1,
+  "role": "tech_lead",
+  "pid": 22564,
+  "state": "IDLE",
+  "model": "claude-opus-5",
+  "sessionStrategy": "STATELESS",
+  "sessionIdShort": "6dee5c24",
+  "detail": null,
+  "capacityReason": null,
+  "nextRetryAt": null,
+  "lastHeartbeat": "2026-09-19T23:19:11.468Z"
+}

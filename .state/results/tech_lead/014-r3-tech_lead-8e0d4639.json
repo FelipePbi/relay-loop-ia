@@ -1,0 +1,377 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T08:37:11.335Z",
+  "attemptId": "014-r3-tech_lead-8e0d4639-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r3-tech_lead-8e0d4639",
+      "goal": "014",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "015",
+      "nextGoalTitle": "Clientes e Serviços na UI",
+      "nextGoalPath": "docs/migration/goals/015-ui-clientes-servicos.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Decompõe um monolito de 1318 linhas com sete consumers sobre a invariante de shell que já causou loop de runtime no 014, e carrega o guardrail de autorização de IA negada por padrão.",
+      "summary": "Goal014 registrado como ACCEPTED na baseline 0bbfbf35c6855aca71dc96c986879dec1ed91985 (origem 2ae46106). Roadmap mantido: 015 continua sendo o próximo Goal, com escopo ajustado por duas evidências novas da baseline — o monolito ProductDirectoryScreen concentra sete rotas e cinco chamadas de useShellConfig, e o perfil do cliente carrega histórico por telefone, identidade que o Goal006 removeu. Adapters e schemas do frontend já cobrem todas as rotas de /v1/customers e /v1/services: falta exclusivamente tela. Somente o 015 está READY.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/015-ui-clientes-servicos.md",
+        "docs/migration/goals/014-fundacao-visual-shell-auth.md",
+        "docs/migration/goals/013-audio-e-midia.md",
+        "docs/migration/goals/012-conhecimento-memoria-sugestoes.md"
+      ],
+      "reason": "O roadmap vigente aponta 015 — Clientes e Serviços na UI, com dependências 006, 007 e 014 todas ACCEPTED. A evidência do fechamento do 014 não justifica reordenar nem inserir Goal: ela confirma a posição e refina o escopo. Nenhuma decisão nova foi registrada porque D-030 já captura toda a evidência do fechamento, inclusive a invariante de uma chamada de useShellConfig por árvore renderizada e o fato de nenhum gate cobrir tela autenticada. O MASTER_PLAN ganhou apenas o registro do resíduo dirigido do review014 ao bloco 015–018.",
+      "remainingCriticalGaps": [
+        "G-15 parte de interface (perfil do cliente: relações, observações, tags, memória, resumo)",
+        "G-17 parte de tela (catálogo com progressive disclosure, pendência de revisão, cor, buffers, recorrência)",
+        "G-31 telas de módulo (Clientes, Serviços, Agenda, Conversas, onboarding, Home/Configurações)",
+        "G-25/G-26 negócio, onboarding e ativação real (Goal018)",
+        "G-27/G-28 lembretes, jobs e central de notificações (Goals 020–021)",
+        "Matriz de larguras do gate renderizado só cobre rotas públicas; tela autenticada continua sem prova de layout",
+        "GET /v1/customers não expõe último/próximo atendimento nem contagem (read model multi-serviço)",
+        "PUBLIC_API_V1.md diverge do código num canto de ai.state (dirigido ao Goal018)"
+      ],
+      "executionPlan": {
+        "goalSummary": "Goal 015 entrega as duas telas de cadastro de que a operação depende — Clientes e Serviços — dentro do shell do Goal014. Decompõe features/directory/ProductDirectoryScreen.tsx (1318 linhas, 7 rotas, 5 chamadas de useShellConfig) em módulos de feature separados preservando a invariante de uma chamada por árvore renderizada (D-030). Clientes ganha lista com busca, criação sem telefone com escolha explícita entre candidatos de número compartilhado, e perfil por ID com responsável principal (proveniência, propor/confirmar/remover), observações, tags, memória e resumo — todos com autorização de IA nascendo negada — mais agenda e histórico requisitados por customerId, corrigindo o filtro por telefone que contradiz o Goal006. Serviços ganha lista com as quatro semânticas de preço, duração ausente explícita e pendência needsReview, mais formulário progressivo com descrição, colorToken, buffers, recorrência e ativo/inativo. Adapters e schemas já cobrem tudo; a única mudança de data layer é customerId opcional em ListAppointmentsQuery. Fecha o resíduo do review014 montando telas autenticadas reais em jsdom com ShellConfigProvider. Fora: modalidades e regras privadas (018), métricas do cliente (sem read model), Playwright em rota autenticada.",
+        "executionStrategy": "Estrutura antes de conteúdo: a decomposição (WU-01) estabelece as fronteiras de arquivo para que as unidades de feature recebam contexto restrito em vez de um monolito de 1318 linhas, e o data layer (WU-02) fixa o modelo real antes de qualquer tela consumi-lo. Clientes e Serviços seguem em trilhas independentes a partir daí — WU-03→WU-04→WU-05 encadeadas pelo perfil, WU-06 paralela —, e WU-05 fica isolada porque concentra o guardrail de privacidade (autorização de IA negada por padrão nas três superfícies). WU-07 consolida as provas, incluindo a que fecha o resíduo nominal do review014. A verificação determinística vem no fim, dirigida antes de global: typecheck e lint do frontend em paralelo, depois os testes do Goal, git-diff-check, validate-core e por último validate-ui, que depende do build que o core produz e cobre apenas as rotas públicas — nenhum critério de largura, contraste ou foco em tela autenticada pode ser declarado provado.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "Decompor ProductDirectoryScreen em módulos de clientes e serviços",
+            "objective": "Separar o monolito features/directory/ProductDirectoryScreen.tsx (1318 linhas) em features/customers e features/services, reapontar as sete rotas de app/(platform)/clientes/** e servicos/**, e garantir exatamente uma chamada de useShellConfig por árvore renderizada, declarada no componente de topo com valores derivados do estado. Comportamento preservado: nenhuma funcionalidade nova entra aqui.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+              "apps/frontend/src/features/services/ProductServicesScreen.tsx",
+              "apps/frontend/src/app/(platform)/clientes/page.tsx",
+              "apps/frontend/src/app/(platform)/clientes/novo/page.tsx",
+              "apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx",
+              "apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx",
+              "apps/frontend/src/app/(platform)/servicos/page.tsx",
+              "apps/frontend/src/app/(platform)/servicos/novo/page.tsx",
+              "apps/frontend/src/app/(platform)/servicos/editar/page.tsx",
+              "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+              "apps/frontend/src/shared/layout/ShellConfig.tsx",
+              "apps/frontend/src/app/(platform)/layout.tsx",
+              "docs/migration/DECISIONS.md"
+            ],
+            "acceptanceCriteria": [
+              "As sete rotas continuam renderizando sem erro e mantêm destino, título e ação contextual corretos no shell",
+              "Nenhuma árvore renderizada faz mais de uma chamada de useShellConfig; a chamada vive no componente de topo de cada tela e deriva seus valores do estado",
+              "features/directory/ProductDirectoryScreen.tsx deixa de existir ou fica sem consumidores, sem código morto remanescente",
+              "O CSS de módulo do diretório continua aplicado e herdando os tokens do Goal014; nenhuma tela fica visualmente partida",
+              "Nenhuma funcionalidade nova foi adicionada nesta unidade"
+            ],
+            "implementationHints": "As cinco chamadas atuais estão nas linhas 103, 302, 550, 713 e 881 e hoje são mutuamente exclusivas por branch. Ao dividir, o risco é recriar pai+filho chamando o hook na mesma cadeia: foi exatamente isso que produziu Maximum update depth exceeded no Goal014, porque useShellConfig roda um layout effect sem lista de dependências e sameConfig compara campo a campo.",
+            "verification": []
+          },
+          {
+            "id": "WU-02",
+            "title": "Modelo real de cliente e filtro de agenda por customerId",
+            "objective": "Acrescentar customerId opcional a ListAppointmentsQuery e ao query emitido por BffCalendarService.listAppointments (a rota do BFF já o aceita), substituir o tipo local Customer de features/customers/types.ts pelo modelo derivado dos schemas — eliminando lastContact, nextAppointment e appointments e respeitando name e phone nullable — e remover src/mocks/data/directory.ts, código morto que é o único importador desses tipos.",
+            "type": "MECHANICAL",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/data/services/BffCalendarService.ts",
+              "apps/frontend/src/features/customers/types.ts",
+              "apps/frontend/src/features/services/types.ts",
+              "apps/frontend/src/mocks/data/directory.ts"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/bff/src/modules/calendar/routes.ts",
+              "apps/frontend/src/mocks/index.ts"
+            ],
+            "acceptanceCriteria": [
+              "ListAppointmentsQuery aceita customerId opcional e listAppointments o envia como query parameter quando informado; customerPhone continua existindo e funcionando para os chamadores atuais",
+              "features/customers/types.ts não declara mais lastContact, nextAppointment nem appointments, e name e phone acompanham a nulidade de customerSchema",
+              "src/mocks/data/directory.ts foi removido do repositório",
+              "mocks/services/MockAuthService.ts, src/mocks/index.ts e o branch preview do AuthScreen permanecem intactos",
+              "Nenhum contrato público do BFF foi alterado"
+            ],
+            "implementationHints": "appointmentsQuerySchema em apps/bff/src/modules/calendar/routes.ts já valida customerId; a mudança é só no adapter do frontend, aditiva e compatível.",
+            "verification": []
+          },
+          {
+            "id": "WU-03",
+            "title": "Clientes: lista, busca e criação com número compartilhado",
+            "objective": "Entregar a lista de clientes com busca local por nome e telefone, apresentação própria e explícita para cliente sem nome e cliente sem telefone, skeleton no carregamento, empty state, erro recuperável com retry preservando a estrutura e + contextual criando cliente. A criação não exige telefone; quando o número já pertence a outras pessoas, listCandidatesByPhone apresenta os candidatos e exige escolha explícita, sem fusão nem adivinhação.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01",
+              "WU-02"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+              "apps/frontend/src/features/customers/CustomerList.tsx",
+              "apps/frontend/src/features/customers/CustomerForm.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffCustomerService.ts",
+              "apps/frontend/src/shared/ui/ListItem.tsx",
+              "apps/frontend/src/shared/ui/Field.tsx",
+              "apps/frontend/src/shared/ui/States.tsx",
+              "docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md"
+            ],
+            "acceptanceCriteria": [
+              "A busca filtra por nome e por telefone sobre a lista carregada e a interface não sugere paginação nem filtro de servidor que não existe",
+              "Cliente sem nome e cliente sem telefone têm apresentação própria e explícita, nunca string vazia nem placeholder que finja um dado",
+              "Último atendimento, próximo atendimento e contagem não aparecem na lista, porque GET /v1/customers não os devolve",
+              "Carregando usa skeleton, vazio usa empty state e erro é recuperável com retry preservando a estrutura da tela",
+              "Criar cliente sem telefone funciona; número já pertencente a outras pessoas apresenta os candidatos e exige seleção explícita por customerId antes de prosseguir"
+            ],
+            "implementationHints": "Field, ListItem, Spinner e Toast existem em shared/ui/ desde o Goal014 e ainda não têm consumidor — esta é a tela que os usa.",
+            "verification": []
+          },
+          {
+            "id": "WU-04",
+            "title": "Clientes: perfil com dados, responsável principal e agenda por ID",
+            "objective": "Entregar o perfil do cliente carregado por ID com dados editáveis e ausência explícita, responsável principal exibindo proveniência (quem propôs, quando, PROPOSED ou CONFIRMED) e permitindo propor, confirmar e remover, e próximos atendimentos mais histórico requisitados por customerId — nunca por customerPhone —, de modo que cliente sem telefone tenha agenda e número compartilhado não misture atendimentos de pessoas diferentes.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-02",
+              "WU-03"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/customers/CustomerProfile.tsx",
+              "apps/frontend/src/features/customers/PrimaryGuardianPanel.tsx",
+              "apps/frontend/src/features/customers/CustomerAgenda.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffCustomerService.ts",
+              "apps/frontend/src/data/services/BffCalendarService.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "docs/product-vault/01-Regras/04-Clientes-e-Memoria.md"
+            ],
+            "acceptanceCriteria": [
+              "Toda requisição de agenda ou histórico feita pelo perfil usa customerId; nenhuma usa customerPhone",
+              "Cliente sem telefone exibe próximos atendimentos e histórico normalmente",
+              "Responsável principal mostra quem propôs, quando e o estado PROPOSED ou CONFIRMED, e permite propor, confirmar e remover",
+              "Nome e telefone são editáveis e a ausência de cada um é apresentada explicitamente, não como campo vazio",
+              "Erro de carregamento do perfil é recuperável e preserva a estrutura da tela"
+            ],
+            "implementationHints": "O comportamento atual em CustomerDetail (janela de ±365 dias por customerPhone, e nada carregado quando não há telefone) é o que precisa sair.",
+            "verification": []
+          },
+          {
+            "id": "WU-05",
+            "title": "Clientes: observações, tags, memória e resumo com autorização de IA negada por padrão",
+            "objective": "Entregar no perfil as observações e tags (criar, alternar autorização, remover), a memória do cliente com origem, permissão e idade (cadastrar manualmente, alternar permissão, remover) e o resumo gerado sob demanda deixando claro que cobre apenas material autorizado. A autorização de uso pela IA nasce negada nas três superfícies e só muda por ação explícita, com o efeito da alternância legível para quem opera.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-04"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/customers/CustomerNotes.tsx",
+              "apps/frontend/src/features/customers/CustomerTags.tsx",
+              "apps/frontend/src/features/customers/CustomerMemory.tsx",
+              "apps/frontend/src/features/customers/CustomerSummary.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffCustomerService.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/product-vault/01-Regras/04-Clientes-e-Memoria.md"
+            ],
+            "acceptanceCriteria": [
+              "Observação, tag e memória criadas pela profissional saem com aiAuthorized/aiAllowed falso; nenhum controle de autorização nasce marcado, nem por conveniência de formulário",
+              "Alternar autorização é uma ação explícita e a interface torna legível o que ela significa: a IA pode usar aquele conteúdo com o cliente",
+              "Memória exibe origem, permissão e idade; remover e cadastrar manualmente funcionam",
+              "Resumo é gerado sob demanda e a tela explicita que ele cobre apenas material autorizado",
+              "Estado de autorização nunca é comunicado só por cor"
+            ],
+            "implementationHints": "Os métodos createNote, setNoteAuthorization, createTag, setTagAuthorization, listMemory, createMemory, setMemoryPermission e generateSummary já existem em BffCustomerService; o default negado é a regra de produto do Goal006/Goal012 e não pode ser relaxado pela UI.",
+            "verification": []
+          },
+          {
+            "id": "WU-06",
+            "title": "Serviços: lista com pendência e formulário progressivo",
+            "objective": "Entregar a lista de serviços com nome, duração ou ausência explícita de duração, preço nas quatro semânticas (FIXED, STARTING_AT, ON_REQUEST, NOT_INFORMED), estado ativo/inativo e indicador de pendência quando needsReview for verdadeiro com a origem IMPORT ou MANUAL legível; e o formulário de criar/editar com progressive disclosure — essencial visível (nome, duração, preço, tipo de preço) e avançado revelado (descrição, colorToken com preview, buffers antes e depois, intervalo de recorrência, ativo/inativo).",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01",
+              "WU-02"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/services/ProductServicesScreen.tsx",
+              "apps/frontend/src/features/services/ServiceList.tsx",
+              "apps/frontend/src/features/services/ServiceForm.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/services/BffServiceCatalogService.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/shared/ui/Badge.tsx",
+              "apps/frontend/src/shared/ui/CurrencyInput.tsx",
+              "docs/product-vault/03-UX-UI/04-Especificacao-das-Telas.md"
+            ],
+            "acceptanceCriteria": [
+              "As quatro semânticas de preço são apresentadas corretamente e distinguem preço não informado de preço sob consulta",
+              "Duração ausente aparece como ausente, nunca como zero ou valor inventado, e gera pendência",
+              "needsReview aparece na lista com a origem legível, e o estado não é comunicado só por cor",
+              "O formulário revela descrição, colorToken com preview, buffers antes/depois, recorrência e ativo/inativo atrás de progressive disclosure, mantendo nome, duração e preço sempre visíveis",
+              "Preço FIXED sem valor é recusado junto ao campo, preservando os demais valores do formulário",
+              "Modalidades e regras privadas para a IA não aparecem: ficam no Goal018"
+            ],
+            "implementationHints": "ServiceInput em BffServiceCatalogService já aceita todos os campos avançados; serviceSchema já valida needsReview, reviewOrigin, colorToken, os dois buffers e recurrenceIntervalDays.",
+            "verification": []
+          },
+          {
+            "id": "WU-07",
+            "title": "Provas renderizadas das telas autenticadas e das regras do Goal",
+            "objective": "Escrever as suítes do Goal em jsdom: montar ShellConfigProvider mais as telas reais de Clientes e Serviços de forma que a árvore falhe se entrar em Maximum update depth (fecha a ação (b) do blocker da rodada 2 do review014); provar autorização de IA nascendo negada nas três superfícies; provar que a agenda do perfil é requisitada por customerId e nunca por customerPhone; cobrir cliente sem nome e sem telefone sem placeholder fabricado, as quatro semânticas de preço, a pendência de revisão, a recusa de FIXED sem valor e os candidatos por número compartilhado; verificar acessibilidade com o helper de axe existente.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-03",
+              "WU-04",
+              "WU-05",
+              "WU-06"
+            ],
+            "scope": "apps/frontend",
+            "pattern": "goal015",
+            "expectedFiles": [
+              "apps/frontend/tests/goal015-customers.test.tsx",
+              "apps/frontend/tests/goal015-services.test.tsx",
+              "apps/frontend/tests/goal015-shell-invariant.test.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/tests/goal014-auth.test.tsx",
+              "apps/frontend/tests/support/a11y.ts",
+              "apps/frontend/tests/setup/dom.ts",
+              "apps/frontend/vitest.config.mts"
+            ],
+            "acceptanceCriteria": [
+              "Existe teste que monta ShellConfigProvider mais a tela autenticada real de Clientes e a de Serviços e falha em Maximum update depth se a invariante de uma chamada de useShellConfig por árvore for violada",
+              "Um teste por superfície (nota, tag, memória) prova que a criação sai não autorizada e que a autorização só muda por ação explícita",
+              "Um teste sobre a requisição emitida prova que o perfil usa customerId e que nenhuma chamada do perfil usa customerPhone",
+              "Cliente sem nome e sem telefone são renderizados sem placeholder fabricado; as quatro semânticas de preço, a pendência de revisão e a recusa de FIXED sem valor têm cobertura",
+              "A verificação de axe nas telas novas não acusa violação nova",
+              "Nenhum teste afirma comportamento de largura, contraste ou foco em tela autenticada como provado: isso depende de layout e cascata reais e o gate renderizado só cobre rotas públicas"
+            ],
+            "implementationHints": "goal014-auth.test.tsx é o precedente de teste renderizado com Testing Library neste repositório; tests/support/a11y.ts já encapsula o axe.",
+            "verification": []
+          },
+          {
+            "id": "WU-08",
+            "objective": "Rodar o typecheck do frontend sobre a decomposição e as telas novas.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07"
+            ],
+            "verification": [
+              "typecheck"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "objective": "Rodar o lint do frontend com zero warnings sobre os arquivos tocados.",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07"
+            ],
+            "verification": [
+              "lint"
+            ]
+          },
+          {
+            "id": "WU-10",
+            "objective": "Rodar as suítes do Goal 015 no frontend.",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/frontend",
+            "pattern": "goal015",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07"
+            ],
+            "verification": [
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-11",
+            "objective": "Conferir o diff quanto a espaço em branco e marcador de conflito.",
+            "type": "DETERMINISTIC",
+            "action": "git-diff-check",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-08",
+              "WU-09",
+              "WU-10"
+            ],
+            "verification": [
+              "git-diff-check"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "objective": "Rodar o gate global de núcleo, que inclui next build, lint e os testes do frontend, mantendo os skips explícitos do Goal002.",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-11"
+            ],
+            "verification": [
+              "validate-core"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "objective": "Rodar o gate renderizado do frontend nas larguras 360, 390, 768, 1024 e 1440 sobre as rotas públicas, confirmando ausência de regressão de overflow horizontal, alvo de toque, contraste computado, foco visível e prefers-reduced-motion após a mudança de composição. Depende do build que o validate-core produz. O gate não alcança tela autenticada e não decide fidelidade visual à referência aprovada.",
+            "type": "DETERMINISTIC",
+            "action": "validate-ui",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-12"
+            ],
+            "verification": [
+              "validate-ui"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "014-r3-tech_lead-8e0d4639-a1"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-1544089a",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-16T12:47:00.952Z",
+  "currentGoal": "025",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "d24d68146617ffe1ebb7eedb6617947a843a9bb8",
+  "pauseRequested": true,
+  "pauseAfterGoal": true,
+  "attempt": 1,
+  "ownerInstanceId": "11016-008688d7",
+  "humanRequired": {
+    "reason": "MAX_CORRECTION_ROUNDS_REACHED",
+    "detail": "Goal 025 ended as HUMAN_REQUIRED",
+    "at": "2026-09-16T13:06:31.874Z"
+  },
+  "archivedAt": "2026-09-16T16:12:32.644Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "Conserto estrutural c38853a: rodada de correcao agora reexecuta os gates declarados pelo Goal. O validate:integration da rodada 1 sera reexecutado sobre a arvore corrigida. Limite elevado a 5 apenas nesta execucao."
+}

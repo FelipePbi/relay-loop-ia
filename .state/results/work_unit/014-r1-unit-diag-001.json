@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T07:52:53.815Z",
+  "attemptId": "014-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r1-unit-diag-001",
+      "goal": "014",
+      "round": 1,
+      "workUnitId": "DIAG-001",
+      "status": "COMPLETED",
+      "summary": "validate:core falhava porque esta worktree nunca teve `npm install` rodado em packages/contracts, apps/scheduling-service e apps/health-worker; instalei as dependências e o gate agora passa (exit 0).",
+      "report": "Diagnóstico: a mensagem 'tsc não é reconhecido' em build:contracts vinha de packages/contracts/node_modules inexistente nesta worktree (git worktree não compartilha node_modules, que é gitignored). Verifiquei com `find . -maxdepth 3 -iname node_modules` que não havia nenhum node_modules na worktree, exceto que apps/ai-orchestrator, apps/bff e apps/frontend já tinham sido instalados anteriormente; packages/contracts, apps/scheduling-service e apps/health-worker estavam sem instalar. Não é um bug de código: o próprio checkout principal (E:\\Projetos\\atendly-ia) também tem vários node_modules ausentes (scheduling-service, ai-orchestrator, bff), confirmando que instalar dependências é uma responsabilidade por ambiente, não algo commitado.\n\nCorreção: rodei `npm ci` em packages/contracts, apps/scheduling-service e apps/health-worker (os 3 pacotes que estavam sem node_modules e são exercitados por validate:core). Usei npm ci (não install) para respeitar exatamente os lockfiles existentes, sem alterar nenhum arquivo versionado. Nenhum código, script ou configuração do gate foi tocado — validate-core continua com a mesma lógica (scripts/validate-core.mjs inalterado).\n\nComandos executados e resultado:\n- `find . -maxdepth 3 -iname node_modules` (worktree) → nenhum resultado inicialmente\n- `cd packages/contracts && npm ci` → 'added 2 packages... found 0 vulnerabilities'\n- `cd apps/scheduling-service && npm ci` → 'added 350 packages... found 0 vulnerabilities' (com warning informativo de allow-scripts, não bloqueante)\n- `cd apps/scheduling-service && npm run build` → prisma generate + tsc OK, exit 0\n- `cd apps/health-worker && npm ci` → 'up to date, audited 1 package... found 0 vulnerabilities'\n- `npm run validate:core` (raiz da worktree) → todos os 14 steps executáveis com status 'passed', 3 'skipped' (test:bff, test:contracts, test:health-worker — skips declarados no próprio script, pré-existentes), 0 'failed', 0 'notRun'. Saída final: 'validate:core PASSED'.\n- Reexecutei `npm run validate:core` redirecionando stdout/stderr e chequei `$?` → exit=0, confirmando o código de saída do processo.\n\n`git status --short` após a correção não mostra nenhuma mudança em arquivos rastreados por git (só node_modules, que é gitignored) — nenhum arquivo de código, script ou documento foi alterado por esta Work Unit.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-core\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "`npm run validate:core` imprimiu 'validate:core PASSED' com 14 passed / 3 skipped (skips pré-existentes e declarados) / 0 failed / 0 notRun, e exit code confirmado como 0. scripts/validate-core.mjs não foi modificado (git status não mostra diff no arquivo)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "Nenhum arquivo versionado por git foi alterado (git status --short idêntico antes e depois, exceto node_modules gitignored). Apenas dependências npm foram instaladas via `npm ci`, respeitando os lockfiles já commitados por outras Work Units."
+        }
+      ]
+    },
+    "attemptId": "014-r1-unit-diag-001-a1"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:06:51.541Z",
+  "attemptId": "020-r1-unit-wu-011-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "020-r1-unit-wu-011",
+      "goal": "020",
+      "round": 1,
+      "workUnitId": "WU-011",
+      "status": "COMPLETED",
+      "summary": "Adicionadas as três suítes transversais do módulo de importação (invariante do shell, axe e alcançabilidade), no mesmo padrão de goal016/goal017/goal019.",
+      "report": "Criei os três arquivos exatamente como listados em `expectedFiles`, seguindo o padrão de `goal017-shell-invariant.test.tsx`, `goal017-a11y.test.tsx` e `goal017-reachability.test.tsx`:\n\n- `goal020-shell-invariant.test.tsx`: monta `ShellConfigProvider` + `ImportsScreen` (único ponto do módulo que chama `useShellConfig`) e exercita interação repetida (4 iterações) em quatro etapas — digitação contínua no formulário de conexão, alternância resumo/seleção com marcação/desmarcação de categoria, expandir/alternar decisão/recolher item de conflito, e abrir/fechar os dois diálogos da execução (trocar de conta, conclusão) e a revisão de pendências. Nenhuma interação lança \"Maximum update depth exceeded\".\n- `goal020-a11y.test.tsx`: roda `expectNoA11yViolations` em cada etapa (conexão, resumo, seleção, lista de conflitos, item expandido, execução com pendências, histórico) e prova foco por teclado nos dois diálogos novos do módulo (trocar de conta e confirmação final de conclusão) — foco entra no botão \"Fechar\", Tab fica preso no diálogo, Esc devolve o foco a quem abriu. Também prova que o conflito é comunicado por texto, não só pela cor do badge.\n- `goal020-reachability.test.tsx`: monta as rotas reais `app/(platform)/importacao/page.tsx` e `app/(platform)/configuracoes/agenda/page.tsx` — não os componentes de `features/imports/` importados direto — e prova que as quatro etapas da jornada (conexão, análise com conflitos, execução com pendências, histórico) são alcançadas pela mesma rota `/importacao`, que o link de Configurações → Agenda aponta para essa rota, e que a entrada \"Importação\" de `MORE_DESTINATIONS` (`shared/layout/navigation.ts`) declara o mesmo `href` que a rota real monta — fechando a suspeita de rota órfã.\n\nDurante a escrita descobri (via debug isolado) que a suíte de execução tem uma pegadinha de teste, não um bug de produto: `ReplaceAccountZone` (com o botão \"Conectar outra conta\") também é renderizado na tela de carregamento transitória de `ImportRunScreen`, antes de `getImportProgress` resolver. Um `findByRole` ansioso por esse botão pega a instância da renderização de carregamento (que já foi substituída no DOM), e o clique subsequente não faz nada porque o nó ficou destacado. Corrigi esperando primeiro pelo heading estável `\"Importação parcial em andamento\"` (STATUS_LABELS) antes de buscar o botão com `getByRole` síncrono — mesmo padrão já usado em `goal020-import-run.test.tsx`.\n\nComandos executados com resultado real:\n- `npx vitest run tests/goal020-shell-invariant.test.tsx tests/goal020-a11y.test.tsx tests/goal020-reachability.test.tsx` → 3 arquivos, 22 testes, todos passando.\n- `npx tsc --noEmit -p tsconfig.json` (apps/frontend) → sem erros.\n- `npx eslint tests/goal020-shell-invariant.test.tsx tests/goal020-a11y.test.tsx tests/goal020-reachability.test.tsx` → 1 erro de ordenação de import corrigido com `--fix`; relint limpo depois.\n- `npx vitest run` (suíte completa do frontend) → 52 de 53 arquivos passando (525/527 testes). A única falha é em `goal016-a11y.test.tsx` (módulo Agenda, Goal016), reproduzida também isoladamente e sem qualquer relação com os arquivos desta unidade — nenhum arquivo de Agenda foi tocado por mim. Está fora do escopo desta Work Unit (que é só o módulo de importação) e não é resultado das minhas mudanças.\n\nNenhum arquivo além dos três listados em `expectedFiles` foi alterado.",
+      "changedFiles": [
+        "apps/frontend/tests/goal020-shell-invariant.test.tsx",
+        "apps/frontend/tests/goal020-a11y.test.tsx",
+        "apps/frontend/tests/goal020-reachability.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Uma única chamada de useShellConfig por árvore renderizada, provada por render",
+          "met": true,
+          "detail": "goal020-shell-invariant.test.tsx: ShellConfigProvider + ImportsScreen sobrevive a 4 rodadas de interação em 4 cenários (conexão, seleção/conflitos, item de conflito, execução com dois diálogos) sem lançar 'Maximum update depth exceeded'; único chamador do hook no módulo é ImportsScreen."
+        },
+        {
+          "criterion": "Suíte axe cobre as telas novas",
+          "met": true,
+          "detail": "goal020-a11y.test.tsx: expectNoA11yViolations em conexão, resumo, seleção, lista de conflitos, item expandido, execução, e nos dois diálogos (document.body); todos os 9 testes passam."
+        },
+        {
+          "criterion": "Todas as rotas novas são alcançáveis e nenhuma rota fica órfã",
+          "met": true,
+          "detail": "goal020-reachability.test.tsx: monta app/(platform)/importacao/page.tsx (4 etapas da jornada) e app/(platform)/configuracoes/agenda/page.tsx pela rota real; confirma que MORE_DESTINATIONS declara href '/importacao' idêntico ao que a rota monta."
+        },
+        {
+          "criterion": "Nenhuma suíte afirma que a origem real respondeu",
+          "met": true,
+          "detail": "Todos os serviços (migration.*, calendar.connectIntegration, settings.get, whatsapp.get) são vi.fn() mockados via vi.mock('@/shared/runtime/ProductRuntime'); nenhuma chamada de rede real ocorre."
+        }
+      ]
+    },
+    "attemptId": "020-r1-unit-wu-011-a1"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T18:06:54.220Z",
+  "attemptId": "008-r2-unit-fix-001-a2",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "008-r2-unit-fix-001",
+      "goal": "008",
+      "round": 2,
+      "workUnitId": "FIX-001",
+      "status": "COMPLETED",
+      "summary": "Os 9 blockers da rodada 1 estão resolvidos: `validate:core` e `validate:integration` passam integralmente, com a suíte de integração do Goal008 e os testes de hold da IA criados nesta rodada.",
+      "report": "## Ponto de partida\n\nA tentativa 1 desta rodada (interrompida por USAGE_LIMIT) já havia escrito boa parte da correção — migration de fixups, rotas do Scheduling, WU-06 (IA), WU-07 (BFF/frontend) e o helper `resetTenant`. Comecei conferindo o que existia de fato no worktree em vez de reimplementar, e completei o que faltava. Nenhuma unidade concluída foi revertida.\n\n## O que faltava e o que fiz\n\n**Blocker 6 (suíte de integração do Goal008) — ausente, criada por mim.**\n`apps/scheduling-service/tests/integration/goal008-agenda.test.ts` (764 linhas, 15 testes) contra PostgreSQL real, cobrindo exatamente o que o blocker lista: duas confirmações do mesmo slot, bloqueio versus confirmação, cancelar versus remarcar, hold concorrente, hold vencido por fixture de `expiresAt`, queda simulada após o commit recuperada pela referência de efeito, conclusão automática pelo relógio do banco e lease entre duas instâncias. Concorrência é real (duas `PrismaClient` distintas, não duas promessas na mesma conexão); o relógio anda por fixture (`UPDATE` de `expiresAt`/`createdAt`/`endAt`), nunca por `sleep`. Rodei a suíte 8 vezes seguidas para confirmar que não é flaky.\n\nDuas asserções minhas estavam erradas e foram corrigidas depois de o banco me contradizer, não relaxadas:\n- cancelar-versus-remarcar: eu assumia que status final `CANCELLED` implicava remarcação recusada. Remarcar e depois cancelar é uma ordem legítima. Passei a asserir o invariante certo — o estado final concorda com o que cada operação relatou, `startAt` corresponde ao resultado da remarcação, e uma remarcação recusada traz erro próprio (`APPOINTMENT_CANCELLED`/`CALENDAR_WRITE_RETRY_EXCEEDED`).\n- ordem do histórico: eu esperava `occurredAt` idêntico entre eventos da mesma transação; o Prisma 7 grava o valor por linha e eles diferiam em milissegundos. Passei a forçar o empate por fixture — que é justamente o caso que a coluna `sequence` existe para resolver — em vez de depender do acaso.\n\n**Blocker 1 (constraint do hold) — a migration de fixups não aplicava.** `ALTER COLUMN \"sequence\" ADD GENERATED ... AS IDENTITY` exige coluna já `NOT NULL`, o que é impossível antes do backfill; o passo inteiro abortava e, com ele, a correção da constraint. Reescrevi o passo 3 de `20260909182000_goal008_agenda_fixups/migration.sql` para sequência própria com `OWNED BY` + `DEFAULT` (coluna anulável → sequência → backfill → default → `NOT NULL`), que é a única ordem que fecha o ciclo e mantém o nome que o `autoincrement()` do Prisma espera. Editei o arquivo em vez de somar um quarto passo porque essa migration nunca aplicou com sucesso em lugar nenhum — não havia checksum a preservar.\n\n**Blocker 4 (IA) — implementação existia, os testes previstos não.** Adicionei 6 testes em `assistant-tools.test.ts` (hold ao propor guardado no rascunho, confirmação consumindo, hold vencido devolvendo alternativas sem confirmar, remarcação segurando só o novo horário, proposta sem reserva quando a fonte não tem hold, e a asserção por dublê que falha se receber override ou atendimento sem serviço) e estendi o dublê da agenda com `createHold`/`releaseHold`.\n\n**Blocker 9 (`validate:core`) — falhava por duas causas reais de código, não de ambiente.** (1) `SchedulingAppointment.title` virou obrigatório sem que a fixture de teste da IA fosse atualizada; (2) `audit:static` recusava `assistant-tools.ts` porque a WU-06 introduziu conhecimento de \"Minha Agenda\" na IA, violando o invariante `ai_does_not_access_minha_agenda`. Removi o código `MINHA_AGENDA_WRITES_DISABLED` do `holdsUnsupported` — ele era inalcançável (`createHold` do provider externo recusa incondicionalmente com o código genérico `EXTERNAL_CALENDAR_HOLD_UNSUPPORTED`) e quebrava a fronteira IA/provider.\n\n**Blockers 2, 3, 5, 7 e 8** já estavam corrigidos pela tentativa 1; verifiquei cada um contra o código e contra o banco antes de declará-los atendidos, e a suíte nova passou a asseverar 7 e 8 em integração.\n\n## Comandos executados e resultado\n\n- `npm run validate:core` → **PASSED** (14 passos, 3 skips declarados). Antes das minhas correções falhava em `build:ai-orchestrator` e depois em `test:gate-scripts`.\n- `npm run validate:integration` → **PASSED**, 18/18, incluindo `rehearse:goal008-agenda-migration` e `test:scheduling-integration`. Antes falhava em `rehearse:goal008-agenda-migration`.\n- `npx vitest run --dir tests/integration` (scheduling) → 34/34, repetido 8×, estável.\n- `npx vitest run tests/tools/assistant-tools.test.ts` → 27/27.\n- `node --test scripts/tests/**/*.test.mjs` → 31/31.\n- `node scripts/goal008-migration-rehearsal.mjs` → PASSED.\n- `git diff --check` → limpo.\n- Repro exata do reviewer para o blocker 1, em psql contra o banco migrado (`INSERT` de hold com `startAt = now()+1 day`, `expiresAt = now()+5 min`): **aceito**. Constraint vigente: `CHECK (\"expiresAt\" > (\"createdAt\" AT TIME ZONE 'UTC'))`.\n\n## Limitações e observações\n\n- Docker não estava rodando e eu não tinha credenciais do PostgreSQL 18 instalado na máquina, então provisionei um cluster descartável próprio via `initdb` no scratchpad da sessão (porta 55432, trust, loopback) e rodei os gates contra ele; parei o servidor ao terminar. O alvo satisfaz as regras do próprio gate (loopback, nome com `test`), e nenhum banco compartilhado foi tocado.\n- Os testes de `tests/integration` do scheduling não são cobertos pelo `tsc` do app (o `tsconfig.json` inclui só `src/**`); isso é o padrão vigente das suítes existentes e não foi alterado.\n- Não houve commit, push, mudança de branch nem alteração no checkout principal. `HEAD` continua em `26593db`, branch `ai-loop/goal-008`.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+        "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+        "apps/scheduling-service/prisma/migrations/20260909182000_goal008_agenda_fixups/migration.sql",
+        "apps/scheduling-service/tests/integration/goal008-agenda.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: R1-01 — constraint AppointmentHold_expiresAt_check recusava todo hold real",
+          "met": true,
+          "detail": "A constraint agora é CHECK (\"expiresAt\" > (\"createdAt\" AT TIME ZONE 'UTC')). Tive de consertar a migration de fixups (passo do IDENTITY não aplicava), sem o que a correção nunca chegava ao banco. Repro exata do reviewer (startAt=now()+1 dia, expiresAt=now()+5min) executada em psql: INSERT aceito. Coberta também pelo rehearsal e pelos testes de hold da suíte nova."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: R1-02 — validate:integration falhava em test:scheduling-integration por FK AppointmentEvent (P2003)",
+          "met": true,
+          "detail": "resetTenant (tests/integration/support/reset-tenant.ts) apaga AppointmentEvent antes de Appointment e é usado por customer-identity e service-catalog. validate:integration executado ponta a ponta: 18/18 passos, test:scheduling-integration verde."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: R1-03 — rotas de hold, ciclo de vida, histórico e bloqueio (WU-05)",
+          "met": true,
+          "detail": "calendar/routes.ts expõe POST/GET /internal/holds, GET e DELETE /internal/holds/:id, POST /internal/appointments, /:id/reschedule, /:id/cancel, /:id/complete, /:id/no-show, /:id/final-value, /:id/presence e GET /:id/events. internal-api/routes.ts passou time-blocks para createTimeBlock/removeTimeBlock (política única) e expõe /internal/appointments/auto-complete. Rotas exercitadas indiretamente pelos serviços na suíte de integração."
+        },
+        {
+          "criterion": "Blocker 4 resolvido: R1-04 — WU-06 (IA) não executada",
+          "met": true,
+          "detail": "client.ts/types.ts/assistant-tools.ts criam hold ao propor, guardam holdId no rascunho, enviam holdId na confirmação e remarcação, tratam APPOINTMENT_HOLD_EXPIRED consultando de novo, e conhecem title e os estados novos. Os testes previstos faltavam: escrevi 6 nesta rodada (27/27 verdes), incluindo a asserção por dublê que falha se receber override ou atendimento sem serviço."
+        },
+        {
+          "criterion": "Blocker 5 resolvido: R1-05 — WU-07 (BFF, PUBLIC_API_V1.md, frontend) não executada",
+          "met": true,
+          "detail": "BFF expõe /v1/holds (POST/GET), DELETE /v1/holds/:id e /v1/appointments/:id/{complete,no-show,final-value,presence,events}; PUBLIC_API_V1.md ganhou a seção Goal008 com estados, hold, sobreposição, ciclo de vida, histórico e agenda disputada; os schemas do frontend aceitam title e CONFIRMED/COMPLETED/NO_SHOW mantendo SCHEDULED decodificável. build:bff e build:frontend verdes em validate:core."
+        },
+        {
+          "criterion": "Blocker 6 resolvido: R1-06 — suíte de integração do Goal008 inexistente",
+          "met": true,
+          "detail": "Criei tests/integration/goal008-agenda.test.ts: 15 testes cobrindo duas confirmações do mesmo slot, bloqueio versus confirmação, cancelar versus remarcar, hold concorrente, hold vencido por fixture de expiresAt, queda após commit recuperada pela referência de efeito, conclusão automática pelo relógio do banco e lease entre duas instâncias (mais isolamento por tenant, override humano e transições inválidas). Suíte completa 34/34, repetida 8× sem flakiness."
+        },
+        {
+          "criterion": "Blocker 7 resolvido: R1-07 — statusRaw reescrito a cada transição",
+          "met": true,
+          "detail": "statusRaw é gravado uma única vez: pela migration nas linhas legadas e por provider.ts:194 na criação. Cancelamento (provider.ts:402) e ciclo de vida (lifecycle-service linhas 121 e 207) documentam e não o reescrevem. Asserido em integração: após cancelar, status=CANCELLED e statusRaw=CONFIRMED."
+        },
+        {
+          "criterion": "Blocker 8 resolvido: R1-08 — leitura cronológica ambígua dentro da mesma transação",
+          "met": true,
+          "detail": "Coluna sequence (BIGINT NOT NULL DEFAULT nextval) em AppointmentEvent, com índice por (tenantId, appointmentId, sequence); listAppointmentEvents ordena por occurredAt e depois sequence. Teste de integração força o empate de occurredAt por fixture e prova que a ordem CREATED→HOLD_CONSUMED se mantém."
+        },
+        {
+          "criterion": "Blocker 9 resolvido: R1-09 — validate:core não executado e falhando",
+          "met": true,
+          "detail": "Executado e PASSED (14 passos, 3 skips declarados). Corrigi as duas causas reais: fixture da IA sem o campo title obrigatório, e violação do invariante ai_does_not_access_minha_agenda introduzida pela WU-06 (código MINHA_AGENDA_WRITES_DISABLED inalcançável no client da IA). validate:integration também PASSED, 18/18, e git diff --check limpo."
+        }
+      ]
+    },
+    "attemptId": "008-r2-unit-fix-001-a2"
+  }
+}

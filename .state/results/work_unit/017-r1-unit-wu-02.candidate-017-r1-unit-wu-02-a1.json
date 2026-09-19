@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T17:25:28.933Z",
+  "role": "work_unit",
+  "jobId": "017-r1-unit-wu-02",
+  "attemptId": "017-r1-unit-wu-02-a1",
+  "requestedModel": "claude-haiku-4-5-20251001",
+  "modelVerificationError": null,
+  "observedModels": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "payload": {
+    "protocolVersion": 2,
+    "jobId": "017-r1-unit-wu-02",
+    "goal": "017",
+    "round": 1,
+    "workUnitId": "WU-02",
+    "status": "BLOCKED",
+    "summary": "Bloqueado por falta de permissão para editar arquivos em sessão automatizada sem superfície de aprovação.",
+    "report": "Diagnóstico: Esta sessão de WU-02 foi inicializada como execução automatizada (harness de Goal 017) sem interface de aprovação interativa. Tentativa de editar publicApiSchemas.ts foi rejeitada com mensagem \"Permission for this tool use was denied\" — nenhuma superfície de aprovação disponível.\n\nContexto: A WU-02 requer implementação mecânica de dois arquivos:\n1. Modificar conversationSchema em apps/frontend/src/data/mappers/publicApiSchemas.ts para aceitar customerId nulável e opcional\n2. Criar apps/frontend/tests/goal017-schema.test.ts com suíte aditiva de decodificação\n\nInvestigação realizada:\n- ✓ Leitura de goal016-schema.test.ts (padrão aditivo confirmado)\n- ✓ Leitura de publicApiSchemas.ts (conversationSchema localizado em L499)\n- ✓ Leitura de BffConversationService.ts (sem modificações necessárias além de schema)\n- ✗ Tentativa de editar: NEGADA (permissão bloqueada)\n\nBloqueador: Ferramenta Edit requer aprovação interativa, indisponível em contexto de automação.\n\nPróximos passos: Requer reexecução em contexto com superfície de aprovação, ou concessão de permissão de escrita permanente para esta sessão.",
+    "blockedReason": "Sem permissão para editar ou criar arquivos. Sessão automatizada não possui superfície de aprovação interativa para conceder permissões de escrita (Edit/Write tools).",
+    "changedFiles": [],
+    "acceptance": []
+  }
+}

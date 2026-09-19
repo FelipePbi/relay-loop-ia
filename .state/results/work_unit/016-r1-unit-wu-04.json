@@ -1,0 +1,56 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T13:44:14.558Z",
+  "attemptId": "016-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Dia, Semana e Mês existem, são alternáveis, a escolha fica visível e a seleção no Mês leva ao Dia",
+          "met": true,
+          "detail": "AgendaBoard.tsx renderiza três abas role=\"tab\" com aria-selected refletindo a visualização atual; MonthView.onSelectDay troca cursor e view para \"day\". Provado em tests/goal016-agenda-views.test.tsx > \"a escolha da visualização fica marcada por aria-selected, e selecionar um dia no Mês abre o Dia\"."
+        },
+        {
+          "criterion": "A grade mostra atendimentos, bloqueios, compromissos pessoais, exceções e ocupação por buffer, distinguíveis por texto e forma",
+          "met": true,
+          "detail": "occupancy.ts gera AgendaEntry por tipo com describeEntry() dando ícone+rótulo próprios; CSS dá borda/padrão distinto por tipo (.is-buffer pontilhado, .is-block hachurado, .is-personal tracejado, .is-exception-* com faixa). Teste prova os 5 rótulos textuais juntos na mesma tela; distinção visual pura de forma é CSS, fora do alcance do jsdom (cabe ao gate Playwright do AGENTS.md, não executado aqui)."
+        },
+        {
+          "criterion": "Atendimento cancelado e com falta ficam visualmente distintos de confirmado e não ocupam a agenda",
+          "met": true,
+          "detail": "appointmentEntries() descarta CANCELLED por completo e só gera buffer quando isActiveAppointmentStatus é true, então NO_SHOW aparece distinto (rótulo/ícone/riscado) mas nunca ocupa buffer. Teste prova cliente do cancelado ausente do DOM e nenhum \"Buffer\" quando só há um falta."
+        },
+        {
+          "criterion": "Carregando, vazio e erro recuperável cujo retry de fato sai do erro, provado por teste",
+          "met": true,
+          "detail": "3 testes: esqueleto antes da resposta; dia sem eventos mostra vazio; retry mostra erro, clica \"Tentar novamente\" e confirma que o erro some e o conteúdo real aparece (mesmo padrão exigido pelo review015)."
+        },
+        {
+          "criterion": "Nenhum campo ausente do read model é fabricado na tela",
+          "met": true,
+          "detail": "customerLabel/serviceNames só usam campos do schema com fallback textual explícito; timeBlock sem title/reason cai no rótulo genérico do tipo. Teste prova cliente/serviço ausentes exibindo só texto genérico, nunca dado inventado."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/AgendaBoard.tsx",
+        "apps/frontend/src/features/agenda/DayView.tsx",
+        "apps/frontend/src/features/agenda/WeekView.tsx",
+        "apps/frontend/src/features/agenda/MonthView.tsx",
+        "apps/frontend/src/features/agenda/occupancy.ts",
+        "apps/frontend/src/shared/styles/atendly-agenda.css",
+        "apps/frontend/tests/goal016-agenda-views.test.tsx"
+      ],
+      "goal": "016",
+      "jobId": "016-r1-unit-wu-04",
+      "protocolVersion": 2,
+      "report": "Implementei as três visualizações da Agenda (Dia/Semana/Mês) sobre a base decomposta pela WU-03, com ocupação honesta calculada a partir do read model.\n\n**occupancy.ts** (novo): módulo puro de lógica — helpers de data/hora (timeToMinutes, minutesToTime, isoDate, parseDate, addDays/addMonths, startOfWeek/Month, endOfMonth, zonedDateTimeParts para converter TimeBlock.startAt/endAt absolutos para o fuso do calendário), os helpers de formatação que já existiam em AgendaBoard.tsx (customerLabel, serviceNames, sourceLabel, statusLabel, formatDate, formatAppointmentDate, requestError, compareAppointments — movidos para cá para evitar import circular, e re-exportados por AgendaBoard.tsx porque AppointmentFlowShell.tsx depende deles), e o núcleo novo: AgendaEntry/AgendaEntryKind, appointmentEntries (descarta CANCELLED, gera buffer antes/depois só quando isActiveAppointmentStatus é true), timeBlockEntries, exceptionEntries, buildAgendaEntries, entriesForDate, groupEntriesByDate e describeEntry (ícone+rótulo textual por tipo, nunca por cor).\n\n**DayView.tsx / WeekView.tsx / MonthView.tsx** (novos): consomem AgendaEntry[] e renderizam a mesma informação em três formatos — lista cronológica com `.agenda-item` (Dia), grade horária com barras posicionadas por `--start`/`--span` reaproveitando o `.week-*` CSS que já existia mas nunca fora usado (Semana), e grade de células com chips empilhados e overflow \"+N\" (Mês, com `aria-current=\"date\"` no dia de hoje e clique chamando `onSelectDay` para voltar ao Dia).\n\n**AgendaBoard.tsx** (reescrito): mantém os exports que AppointmentFlowShell.tsx consome; agora orquestra view/cursor, calcula o range de fetch por visualização, busca calendar+appointments+timeBlocks+availabilityExceptions em paralelo, monta os AgendaEntry via occupancy.ts e alterna entre DayView/WeekView/MonthView através de abas `role=\"tab\"`/`aria-selected`. Corrigi um bug de arquitetura que só apareceu ao testar: o gate de carregamento inicial usava `loading` (que eu tinha começado a setar dentro do `useEffect`, o que o `react-hooks/set-state-in-effect` do eslint rejeita) e escondia as abas inteiras durante qualquer refetch, então clicar Semana→Mês em sequência clicava num nó desmontado. Troquei o gate de carregamento inicial para depender de `calendar !== null` (as abas ficam montadas assim que o primeiro load termina) e movi os `setLoading(true)` para os handlers de navegação (mesmo padrão que o código anterior já usava nos botões de semana).\n\n**atendly-agenda.css**: adicionei estilos para os cinco tipos de entrada (buffer pontilhado, bloqueio hachurado, compromisso pessoal tracejado, exceção com faixa lateral colorida) tanto em `.agenda-item` quanto em `.week-appointment`, reset de botão para `.week-day-head` (virou `<button>` para navegar direto para o Dia a partir da Semana), e toda a grade `.month-*` nova (cabeçalho de dias da semana, células, chips, \"+N\", ajuste mobile em 767px).\n\n**goal016-agenda-views.test.tsx** (novo): 7 testes cobrindo, em ordem, os cinco critérios de aceite (alternância+seleção visível+Mês→Dia; os cinco tipos com rótulo textual distinto; cancelado fora da grade e falta sem buffer; campo ausente não fabricado; e a tríade carregando/vazio/erro-com-retry-que-sai-do-erro).\n\nComandos executados (todos na worktree, dentro de `apps/frontend`): `npx tsc --noEmit` (limpo), `npx eslint src --max-warnings=0` (limpo, corrigi um erro real de `react-hooks/set-state-in-effect` e dois de ordenação de import via `--fix`), `npx prettier --write` nos arquivos tocados, `npx vitest run` (139/139 testes passando nos 19 arquivos, incluindo os 8 já existentes de Goal014/015 que dependem de AgendaBoard/AppointmentFlowShell — sem regressão) e `npx vitest run tests/goal016-agenda-views.test.tsx tests/goal016-schema.test.ts` isolado (11/11).\n\nLimitação assumida: não validei viewport real (360/768/1024px) nem contraste — isso é o gate Playwright `validate:ui` descrito no AGENTS.md do frontend, que é uma unidade determinística separada do orquestrador e eu não tenho navegador para operar aqui; a prova que entreguei é a que jsdom consegue dar (estrutura acessível, texto, aria-selected/aria-current, retry que sai do erro).",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Implementei Dia/Semana/Mês com ocupação honesta (atendimentos, buffer, bloqueios, compromissos pessoais e exceções) em DayView/WeekView/MonthView + occupancy.ts, com AgendaBoard.tsx orquestrando e todos os testes/typecheck/lint passando.",
+      "workUnitId": "WU-04"
+    },
+    "attemptId": "016-r1-unit-wu-04-a1"
+  }
+}

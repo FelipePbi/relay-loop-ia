@@ -1,0 +1,40 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T23:19:07.733Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "006-r1-tech_lead-3f7879f7-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "006-r1-tech_lead-3f7879f7",
+    "role": "tech_lead",
+    "type": "NEXT_GOAL_PLANNING",
+    "goal": "006",
+    "round": 1,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\plan-after-goal-006",
+    "planningContext": {
+      "closedGoal": "006",
+      "closedGoalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\006-clientes-como-pessoas.md",
+      "closedGoalDecision": "ACCEPTED",
+      "previousMigrationBaseline": "30fc42f62616ba826d0f2fc737386b038fbf9fb7",
+      "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+      "sourceClosureCommit": "7f87967b9a053b53ee68d2e20340daa6ea7f9452",
+      "integratedClosureCommit": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+      "closureDocuments": [
+        "docs/migration/reviews/006-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "writeScope": "docs/migration/",
+      "instruction": "Escreva SOMENTE o próximo Goal e marque apenas ele READY."
+    }
+  },
+  "statusAt": "2026-09-08T23:24:58.625Z"
+}

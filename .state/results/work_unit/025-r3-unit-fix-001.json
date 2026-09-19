@@ -1,0 +1,41 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T06:34:51.767Z",
+  "attemptId": "025-r3-unit-fix-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Blocker 1 resolvido: aviso persistente precede e suprime o banner errado",
+          "met": true,
+          "detail": "AppShell.tsx: banner de exclusão agora é o PRIMEIRO renderizado; whatsappDisconnected e aiUnavailable só renderizam com `!deletionDueAt &&`, suprimidos durante a exclusão. Teste goal025-account-deletion-shell-banner.test.tsx reescrito com 2 casos provando supressão (getAllByRole('alert') length 1); suíte + goal022 passaram (47 testes, 0 falhas)."
+        },
+        {
+          "criterion": "Blocker 2 resolvido: PUBLIC_API_V1.md não afirma mais o contrário do critério 9",
+          "met": true,
+          "detail": "Parágrafo 'sessão também é revogada' (só de POST /v1/auth/logout-all, confirmado em auth/routes.ts:270) estava deslocado para o fim de 'Ciclo de vida da conta', sugerindo que DELETE /v1/account/deletion também revoga sessões. Movido de volta para dentro de 'Sair de todos os dispositivos'; cópia órfã removida."
+        },
+        {
+          "criterion": "Blocker 3 resolvido: gates exercitados sobre esta árvore, com as correções acima",
+          "met": true,
+          "detail": "npm run validate:core: PASSED (14 passos, 0 falhas), rodado 2x; 1 flake isolado por concorrência (goal024-settings-shell-invariant) confirmado não-regressão ao isolar e rodar suite completa do frontend (663 testes, 0 falhas). validate:integration: REFUSED por BFF_TEST_DATABASE_URL ausente — gap de ambiente pré-existente, fora do escopo desta correção pontual."
+        }
+      ],
+      "changedFiles": [
+        "apps/frontend/src/shared/layout/AppShell.tsx",
+        "apps/frontend/tests/goal025-account-deletion-shell-banner.test.tsx",
+        "apps/bff/PUBLIC_API_V1.md"
+      ],
+      "goal": "025",
+      "jobId": "025-r3-unit-fix-001",
+      "protocolVersion": 2,
+      "report": "Três blockers da rodada 2 corrigidos, sem tocar em nada além do necessário.\n\n1) AppShell.tsx (apps/frontend/src/shared/layout/AppShell.tsx): o banner de exclusão de conta (`deletionDueAt`) passou a ser o PRIMEIRO bloco renderizado no `<main>`, antes de `whatsappDisconnected` e `aiUnavailable`. Os outros dois agora só renderizam quando `!deletionDueAt`, ou seja, ficam suprimidos enquanto a exclusão está `SCHEDULED` — decisão coerente porque, durante a exclusão, tanto \"Reconecte o WhatsApp\" quanto \"Ver configurações da IA\" seriam orientação enganosa (religar a IA está bloqueado com 409 CONFLICT nesse estado, e desconectar o WhatsApp é efeito colateral esperado da própria exclusão). Atualizei o teste `goal025-account-deletion-shell-banner.test.tsx` (arquivo não rastreado de uma unidade anterior, ainda não commitado): removi o caso que esperava dois `role=alert` simultâneos (contradizia o próprio blocker) e escrevi dois casos novos — WhatsApp desconectado e IA indisponível — provando que só o banner de exclusão aparece, com `expectNoA11yViolations`.\n\n2) PUBLIC_API_V1.md (apps/bff/PUBLIC_API_V1.md): o parágrafo \"A sessão que fez a chamada também é revogada...\" — que descreve exclusivamente `POST /v1/auth/logout-all` (confirmei em apps/bff/src/modules/auth/routes.ts:270 que só essa rota chama `revokeAllUserSessions(..., \"LOGOUT_ALL_DEVICES\")`; nada em apps/bff/src/modules/account faz isso) — estava fisicamente no fim da seção \"## Ciclo de vida da conta\", depois de toda a documentação de `DELETE /v1/account/deletion`, sem heading separando, dando a entender que cancelar a exclusão também revoga sessões. Movi o parágrafo de volta para dentro de \"## Sair de todos os dispositivos\", logo após o primeiro parágrafo dela, e removi a cópia órfã do fim de \"Ciclo de vida da conta\". As duas seções agora são blocos fechados e corretos.\n\n3) Validação executada nesta árvore, depois das correções acima: `npm run validate:core` PASSOU (14 passos, 0 falhas: build dos 4 apps + evolution-go, test:ai-orchestrator, test:scheduling-service com 372 testes, test:frontend, test:evolution-go, test:gate-scripts, audit:static; 3 skipped esperados). Rodei duas vezes — a primeira mostrou 1 falha isolada em goal024-settings-shell-invariant.test.tsx por timing (skeleton em `aria-busy` sob concorrência plena dos 71 arquivos); isolei o arquivo e depois rodei a suíte completa do frontend sozinha (`npx vitest run`, 71 arquivos, 663 testes) e ambos passaram 100%, confirmando flake pré-existente de concorrência, não regressão minha. Segunda rodada de `validate:core` veio limpa. `npm run validate:integration` continua REFUSED por `BFF_TEST_DATABASE_URL is not set` — gap de ambiente pré-existente (falta um Postgres descartável provisionado), documentado como known issue e fora do que esta correção pontual (2 arquivos de código/doc) poderia endereçar sem ampliar escopo.\n\nNenhum commit, push ou mudança de branch foi feito. Nenhum arquivo de controle da migração foi tocado.",
+      "round": 3,
+      "status": "COMPLETED",
+      "summary": "Reordenei/suprimi os banners do AppShell durante exclusão agendada, corrigi a seção deslocada em PUBLIC_API_V1.md, e reexecutei validate:core (PASSED) confirmando as correções nesta árvore.",
+      "workUnitId": "FIX-001"
+    },
+    "attemptId": "025-r3-unit-fix-001-a1"
+  }
+}

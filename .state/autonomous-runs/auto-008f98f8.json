@@ -1,0 +1,40 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-008f98f8",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-08T02:14:55.646Z",
+  "currentGoal": "005",
+  "completedGoals": [],
+  "migrationAcceptedBaseline": "ecaf7058f2b81ffe4bd4d2966e233b4b58c16dd5",
+  "pauseRequested": false,
+  "pauseAfterGoal": false,
+  "attempt": 1,
+  "ownerInstanceId": "12260-1edaec60",
+  "humanRequired": {
+    "reason": "HARNESS_ERROR",
+    "detail": "Goal 005 ended as ACCEPTED",
+    "at": "2026-09-08T19:00:46.603Z",
+    "reclassifiedFrom": "UNKNOWN_FATAL"
+  },
+  "reclassifiedFrom": {
+    "reason": "UNKNOWN_FATAL",
+    "to": "USAGE_LIMIT",
+    "at": "2026-09-08T13:41:01.163Z",
+    "jobId": "005-r1-tech_lead-ca1d7bf4"
+  },
+  "repairedBy": {
+    "kind": "HARNESS_RETRY",
+    "jobId": "005-r1-tech_lead-ca1d7bf4",
+    "sourceAttemptId": "005-r1-tech_lead-ca1d7bf4-a2",
+    "at": "2026-09-08T15:04:57.131Z"
+  },
+  "reconciledFrom": {
+    "reason": "STALE_ATTEMPT_RESULT_CONSUMED",
+    "jobId": "005-r1-tech_lead-ca1d7bf4",
+    "decision": "CHANGES_REQUIRED",
+    "at": "2026-09-08T15:37:42.723Z"
+  },
+  "archivedAt": "2026-09-08T19:32:35.909Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "A pausa do Goal005 foi causada por INVALID_TRANSITION no harness durante a retomada de um Goal já ACCEPTED. O fluxo de guarded closure foi corrigido no commit c5ca9b7. O Review R2 autoritativo permanece COMPLETED/ACCEPTED e o runtime foi reconciliado."
+}

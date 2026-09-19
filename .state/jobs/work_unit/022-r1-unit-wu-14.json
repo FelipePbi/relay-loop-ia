@@ -1,0 +1,27 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T18:48:16.339Z",
+  "status": "FAILED",
+  "attempt": 1,
+  "currentAttemptId": "022-r1-unit-wu-14-a1",
+  "attemptStatus": "FAILED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "022-r1-unit-wu-14",
+    "role": "work_unit",
+    "goal": "022",
+    "round": 1,
+    "workUnitId": "WU-14",
+    "unitType": "DETERMINISTIC",
+    "complexity": "LOW",
+    "risk": "MEDIUM",
+    "action": "validate-core",
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-022",
+    "goalPath": null,
+    "parentJobId": null,
+    "routing": null
+  },
+  "statusAt": "2026-09-15T18:49:06.689Z"
+}

@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T15:54:15.159Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "008-r1-unit-wu-05-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "008-r1-unit-wu-05",
+    "role": "work_unit",
+    "goal": "008",
+    "round": 1,
+    "workUnitId": "WU-05",
+    "unitType": "MECHANICAL",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-008",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\008-transacoes-holds-historico-agenda.md",
+    "parentJobId": "008-r1-developer-1c8e1a2d",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "haiku",
+      "model": "claude-haiku-4-5-20251001",
+      "family": "haiku",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "MECHANICAL",
+        "RISK_MEDIUM"
+      ],
+      "reason": "MECHANICAL_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-09T15:56:22.349Z"
+}

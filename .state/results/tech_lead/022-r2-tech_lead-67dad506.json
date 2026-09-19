@@ -1,0 +1,24 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T19:13:36.958Z",
+  "attemptId": "022-r2-tech_lead-67dad506-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "022-r2-tech_lead-67dad506",
+      "goal": "022",
+      "summary": "Fechamento documental do Goal022 (ACCEPTED na rodada 2). Criei reviews/022-review.md com a identidade do diff (60 arquivos, hash 1b71b549…, base c3142fd, dois commits só documentais entre a baseline cb0312b e a base), os dois blockers da rodada 1 (condição resolvida que nunca reabria; telefone gravado em payload durável), o fechamento de ambos na rodada 2 com verificação independente, a evidência dos oito gates (validate:integration 26/26, exit 0) e os limites do aceite. Registrei D-038 em DECISIONS.md com os contratos adotados: idempotência do índice (tenantId, dedupeKey) e não de código, dedupe pela identidade do fato no dono, nível/forma por tabela fixa, materialização por leitura reconciliada sem worker e sem inverter a direção da chamada interna, reabertura de condição, payload durável mínimo sem telefone, uma fonte por superfície (banner do /v1/status, central do store) e preferência silenciosa por default. Acrescentei a entrada v41 ao MASTER_PLAN. Em CURRENT_STATE corrigi o cabeçalho do delta de \"em execução\" para ACCEPTED na rodada 2, acrescentei dois LIMITE substantivos (unreadCount conta fora da janela de 90 dias da lista; os dois casos de integração da reabertura foram escritos e nunca executados, então o critério 46 está verificado sobre a árvore da rodada 1) e corrigi \"sexta aba\" para \"quinta aba\" do bottom nav, que tem quatro abas mais \"Mais\". Em GAP_ANALYSIS liguei a linha G-28 ao review e a D-038. Atualizei o cabeçalho do documento do Goal022 de READY para ACCEPTED, omissão que no Goal021 exigiu commit extra. Não toquei DATA_MIGRATION, REUSE_ANALYSIS nem VALIDATION_GATE: as atualizações do executor estão corretas e completas. MIGRATION_STATUS, baseline nova, próximo Goal, código, testes e tooling ficaram intocados; git diff --check limpo e nenhuma alteração fora de docs/migration/.",
+      "documentsUpdated": [
+        "docs/migration/reviews/022-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/goals/022-central-de-notificacoes-e-alertas-persistentes.md"
+      ],
+      "notes": "Ressalva propagada do review da rodada 2: os oito gates declarados são da rodada 1, anteriores a reopenResolvedConditions. Os dois casos de reabertura em apps/bff/tests/goal022-notification-center.integration.test.ts foram escritos e nunca executados (RUN_INTEGRATION desligado no ambiente do executor), então o critério 46 está verificado sobre a árvore da rodada 1, não sobre a árvore final. Não rodei validate:integration nesta etapa porque o cluster PostgreSQL descartável é provisionado pelo orquestrador e subi-lo manualmente sairia do escopo do fechamento documental; a lacuna está declarada no review e em CURRENT_STATE. Rodar validate:integration sobre esta árvore antes do commit de fechamento a fecha sem mudar nada."
+    },
+    "attemptId": "022-r2-tech_lead-67dad506-a1"
+  }
+}

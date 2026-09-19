@@ -1,0 +1,27 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-07T09:18:12.978Z",
+  "status": "COMPLETED",
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "003-r2-correction-fccf56eb",
+    "role": "developer",
+    "goal": "003",
+    "round": 2,
+    "type": "CORRECTION",
+    "migrationAcceptedBaseline": "1e874e2785d2bc78860db0eb571ea901a4395c17",
+    "executionBase": "99a7210101f481b994a008a57c4f663bc3d5c566",
+    "worktreeInitialHead": "99a7210101f481b994a008a57c4f663bc3d5c566",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-003",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\003-tenant-sessao-vinculo-whatsapp.md",
+    "blockers": [
+      "CSRF inoperante em produção por cookie cross-host. O adapter apps/frontend/src/data/http/BffHttpClient.ts lê o token de CSRF do cookie atendly_csrf via document.cookie, mas em produção (render.yaml) o browser chama o BFF diretamente em https://atendly-ia-bff.onrender.com (registry.ts usa NEXT_PUBLIC_BFF_URL com credentials: 'include' e COOKIE_SAME_SITE=none) a partir de https://atendly-ia-frontend.onrender.com. O cookie é gravado no host do BFF e é ilegível pelo script do frontend (hosts distintos; onrender.com está na public suffix list), então getCsrfToken devolve undefined e toda mutação autenticada por cookie — inclusive POST /v1/auth/logout, que exige assertCsrfToken — recebe 403 CSRF_TOKEN_REJECTED. Em dev funciona apenas porque cookies de localhost ignoram porta, e o frontend não tem suíte automatizada (validate-core pula test:frontend), então o critério 2 do Goal ('atualizar o adapter frontend e provar login/logout/cadastro e mutações legítimas') não está provado. Corrigir entregando o token por canal legível cross-origin: no corpo das respostas de login/register/session e de PATCH /v1/auth/password (ou em header x-csrf-token de resposta incluído em exposedHeaders do CORS), guardado em memória pelo adapter; ou rotear o browser pelo rewrite same-origin /api/bff já existente em next.config.ts. Cobrir com teste do adapter que não dependa de cookie jar compartilhado, garantir que logout funcione pelo browser e atualizar apps/bff/PUBLIC_API_V1.md.",
+      "Perda de eventos inbound na transição do webhook. apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts linha 75 chama channelConnections.resolveChannelCredential(connection) de forma eager, antes do reply 202 e antes de handleInboundMessage. A migration 20260907120000_goal003_channel_credential_projection deixa todo ChannelConnection existente com credentialVersion 0, então após o deploy todo webhook de tenant já conectado lança CHANNEL_CREDENTIAL_NOT_PROVISIONED e a mensagem do cliente nunca é persistida. O reprovisionamento só acontece em POST /v1/whatsapp/connect e /reconnect (provisionChannel); GET /v1/whatsapp não reprovisiona, logo a recuperação depende de cada dono reconectar manualmente. Isso viola 'não perder eventos silenciosamente durante a transição' e 'ativar o consumer compatível antes de retirar campos do produtor'. Exigido: (a) resolver a credencial de forma lazy no momento do envio, ou persistir o inbound antes de resolver, de modo que a mensagem seja gravada e só a resposta falhe com erro explícito e logado, sem cair em EVOLUTION_API_KEY; (b) caminho de transição que reprovisione vínculos existentes sem reconexão manual, por exemplo provisionChannel idempotente em GET /v1/whatsapp quando há vínculo resolvido, ou script operacional documentado; (c) teste cobrindo inbound para conexão com credentialVersion 0: persistido, sem envio pela chave global; (d) registrar a ordem de corte resultante no relatório e em docs/migration/VALIDATION_GATE.md ou documento de migração pertinente.",
+      "Vínculo pendente sem caminho de resolução. apps/bff/src/modules/whatsapp/instance-link.ts recusa com 409 'Reconnect the number to restore access' a linha legada que o backfill deixou sem tenantId, mas todas as rotas que poderiam resolver o estado — POST /v1/whatsapp/connect (ensureInstance), POST /v1/whatsapp/reconnect e DELETE /v1/whatsapp — chamam findLinkedInstance primeiro e devolvem o mesmo 409. Não existe autoatendimento nem procedimento operacional documentado, e a mensagem promete um caminho que não existe, contrariando 'estado ambíguo impede uso do vínculo até resolução explícita'. Exigido: permitir que o dono autenticado da linha pendente (userId coincidente com o contexto autenticado) a descarte via DELETE /v1/whatsapp e crie um vínculo novo, ou documentar procedimento explícito de resolução no documento de migração; ajustar a mensagem de erro; cobrir o caminho escolhido com teste de integração em apps/bff/tests/tenant-instance-link.integration.test.ts."
+    ],
+    "previousImplementationReport": null,
+    "previousDecision": "CHANGES_REQUIRED",
+    "changedFiles": []
+  },
+  "statusAt": "2026-09-07T15:33:07.692Z"
+}

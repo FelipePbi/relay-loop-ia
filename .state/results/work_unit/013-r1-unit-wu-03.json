@@ -1,0 +1,71 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T22:19:41.184Z",
+  "attemptId": "013-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "013-r1-unit-wu-03",
+      "goal": "013",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Transcrição de áudio por porta, download sob demanda no Evolution Go e nó transcribeAudio entre recordInbound e sessionGate, com áudio virando texto marcado do turno e testes com dublê que conta chamadas.",
+      "report": "## O que mudou e por quê\n\n### Módulo de mídia (src/modules/media/)\n- `transcription-provider.ts`: porta `TranscriptionProvider` (bytes → texto + proveniência). Existe como porta para que o teste possa **contar chamadas** — \"contato ignorado não é transcrito\" só está provado se o provedor puder dizer que não foi chamado.\n- `openai-transcription-provider.ts`: implementação HTTP (`multipart/form-data`) contra `${OPENAI_BASE_URL}/audio/transcriptions`, modelo `OPENAI_TRANSCRIPTION_MODEL` (padrão `gpt-4o-mini-transcribe`), idioma `pt` explícito (sem ele a API pode traduzir em vez de transcrever) e timeout próprio (`OPENAI_TRANSCRIPTION_TIMEOUT_MS`, 120 s) — a transcrição roda dentro do lease da inbox, já renovado pelo heartbeat existente, então o que faltava era o teto.\n- `fake-transcription-provider.ts`: dublê com `callCount`/`requests`, em `src/` de propósito (é contrato da porta; nenhum teste chama a OpenAI real).\n- `audio-transcription.ts`: `AudioTranscriptionService`. Ordem fixa: política (CONTACT_IGNORED/PERSONAL_SESSION) → tetos (`tooLarge`, `AUDIO_TRANSCRIPTION_MAX_BYTES` 25 MiB, `AUDIO_TRANSCRIPTION_MAX_SECONDS` 600) → bytes (base64 do evento, senão download sob demanda) → rede. Todo caminho grava desfecho no attachment: `DONE` com transcript/provider/model/transcribedAt, `FAILED` com motivo (`MEDIA_UNAVAILABLE`, `PROVIDER_FAILED`, `EMPTY_TRANSCRIPT`), `SKIPPED` com `skipReason`. Status terminal já gravado é reaproveitado sem nova chamada — é o que permite o mesmo áudio atravessar a passagem diferida e a final do lote pagando uma transcrição só.\n- `message-attachment-store.ts` (porta + `PrismaMessageAttachmentStore`), `media-bytes.ts` (base64 inline, proto para download sem os bytes, decode de data URL), `audio-turn.ts` (marcador `[audio transcrito]`).\n\n### Canal\n- `ports/WhatsAppProvider.ts`: `downloadMedia?` opcional (`{ message: proto }` → data URL).\n- `EvolutionProvider.downloadMedia`: `POST /message/downloadmedia` com a **credencial de instância** (mesma do envio; sem queda para `EVOLUTION_API_KEY`), timeout próprio, erros com código (`EVOLUTION_DOWNLOAD_MEDIA_{TIMEOUT,FAILED,EMPTY}`).\n- `inbound-processor-factory.ts`: monta o serviço com o store Prisma, o provider OpenAI e o próprio `EvolutionProvider` como porta de download.\n\n### Grafo\n- Nó `transcribeAudio` entre `recordInbound` e `sessionGate`: lê `guardDecision` para decidir SKIPPED por política; transcreve em qualquer outro estado (IA desligada, pausa, atendimento humano). Falha não derruba o turno.\n- `graph-state.ts`: `inboundRecordId` (o `Message.id` **deste** turno, diferente de `inputMessageIds` no lote), `audioTranscription` e `GraphBufferedRecord.text`.\n- `bufferRecordedInbound`: fragmento já persistido e transcrito entra no lote sem repersistir; `handleInboundBatch` agora agrupa áudio como texto e junta os fragmentos pelo texto que o grafo entendeu (áudio não tem texto no payload).\n- `understandMessage` aceita áudio transcrito como texto do turno (mesma classificação, RAG, prompt, modelo e tools — sem rota paralela); `agent` responde `audioNotUnderstoodReply` quando o áudio ficou sem transcrição, em vez da genérica.\n\n### Prompt\n- `prompts/audio.ts`: seção fixa \"AUDIO TRANSCRITO\" (marcador, risco de erro, confirmação clara vale como confirmação sujeita às mesmas regras, ambíguo pergunta, nunca inventar áudio). Entra em `buildStablePromptContent` e no prompt real; `PROMPT_TEMPLATE_VERSION` subiu de `v2` para `v3` e os três hashes fixados foram atualizados conscientemente (`prompt-v3-professional-8a08266b6e`, `prompt-v3-balanced-04995d48b1`, `prompt-v3-casual-64e9afb011`).\n\n### Env\n- `OPENAI_BASE_URL`, `OPENAI_TRANSCRIPTION_MODEL`, `OPENAI_TRANSCRIPTION_LANGUAGE`, `OPENAI_TRANSCRIPTION_TIMEOUT_MS`, `AUDIO_TRANSCRIPTION_MAX_BYTES`, `AUDIO_TRANSCRIPTION_MAX_SECONDS`, `EVOLUTION_DOWNLOAD_MEDIA_PATH`, `EVOLUTION_DOWNLOAD_MEDIA_TIMEOUT_MS` em `env.ts` e `.env.example`.\n\n## Comandos executados (resultado real)\nO hook do RTK quebra `npx ... --max-warnings=0` (\"could not determine executable to run\"), então as verificações finais foram por `rtk proxy`.\n- `rtk proxy npx vitest run` → **Test Files 57 passed | 6 skipped (63); Tests 490 passed | 55 skipped (545)**, 0 falhas.\n- `rtk proxy npx tsc -p tsconfig.json --noEmit` → exit 0.\n- `rtk proxy npx eslint src --max-warnings=0` → exit 0.\n- `rtk proxy npx prettier --check` nos arquivos desta unidade → todos limpos (`src/modules/media/media-metadata.ts`, da WU-02, continua fora de formato; não toquei).\n- Antes das correções, `npx eslint src` acusou 2 erros (`no-unnecessary-type-assertion` em `message-attachment-store.ts`) e `npx vitest run` acusou os 2 hashes de prompt — ambos corrigidos.\n\n## Testes novos\n- `tests/media/audio-transcription.test.ts` (18 casos): política sem chamada ao provedor, tooLarge/tamanho/duração → SKIPPED, base64 inline vs download sob demanda, download falho → MEDIA_UNAVAILABLE sem chamar o provedor, falha do provedor → FAILED com motivo e sem texto, transcrição vazia → FAILED, reuso de DONE sem segunda chamada.\n- `tests/media/media-bytes.test.ts`, `tests/media/evolution-download-media.test.ts` (fetch dublado; prova que a chave global presente no ambiente **não** é usada).\n- `tests/session/message-graph-audio.test.ts` (12 casos, fim a fim pelo `InboundMessageProcessor`): ignorado/pessoal com `callCount === 0`, atendimento humano e IA desligada transcrevendo sem `prepareGraphTurn`, turno marcado com `turnId` derivado igual ao do texto, download sob demanda, falha pedindo texto, tooLarge, sem porta = comportamento anterior, e lote texto+áudio virando um turno só com uma transcrição.\n- `tests/tools/explicit-confirmation.test.ts`: bloco novo com turnos de áudio (`deriveTurnId`) — mesmo áudio recusa com `CONFIRMATION_REQUIRED_SAME_TURN` e sem efeito no gateway; áudio seguinte confirma.\n\n## Limites do que não foi verificado\n- \"Transcrição ambígua faz a IA perguntar\" está garantido por instrução de prompt (asserida no teste de prompt) somada ao guard determinístico de mesmo turno; não há eval com modelo aqui — os evals são da WU-05.\n- Nada foi verificado contra PostgreSQL real nem contra o Go real; o `PrismaMessageAttachmentStore` é exercitado só por tipo (`tsc`), com as regras de negócio testadas pela porta.\n- Não atualizei `docs/migration/CURRENT_STATE.md`, `PUBLIC_API_V1.md` nem `DATA_MIGRATION`: são documentos de outras unidades/do fechamento. `apps/ai-orchestrator/AGENTS.md` já dizia \"áudio: compreender e aceitar confirmação clara\" — passou a ser verdade, não ficou mentindo.\n- Sem commit, push, merge, PR ou troca de branch; trabalho todo dentro da worktree `goal-013`.",
+      "changedFiles": [
+        "apps/ai-orchestrator/.env.example",
+        "apps/ai-orchestrator/src/config/env.ts",
+        "apps/ai-orchestrator/src/modules/media/transcription-provider.ts",
+        "apps/ai-orchestrator/src/modules/media/openai-transcription-provider.ts",
+        "apps/ai-orchestrator/src/modules/media/fake-transcription-provider.ts",
+        "apps/ai-orchestrator/src/modules/media/audio-transcription.ts",
+        "apps/ai-orchestrator/src/modules/media/audio-turn.ts",
+        "apps/ai-orchestrator/src/modules/media/media-bytes.ts",
+        "apps/ai-orchestrator/src/modules/media/message-attachment-store.ts",
+        "apps/ai-orchestrator/src/modules/channel/ports/WhatsAppProvider.ts",
+        "apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts",
+        "apps/ai-orchestrator/src/modules/channel/inbound-processor-factory.ts",
+        "apps/ai-orchestrator/src/modules/channel/InboundMessageProcessor.ts",
+        "apps/ai-orchestrator/src/modules/graph/graph-state.ts",
+        "apps/ai-orchestrator/src/modules/graph/message-graph.ts",
+        "apps/ai-orchestrator/src/modules/prompts/audio.ts",
+        "apps/ai-orchestrator/src/modules/prompts/system.ts",
+        "apps/ai-orchestrator/tests/media/audio-transcription.test.ts",
+        "apps/ai-orchestrator/tests/media/media-bytes.test.ts",
+        "apps/ai-orchestrator/tests/media/evolution-download-media.test.ts",
+        "apps/ai-orchestrator/tests/session/message-graph-audio.test.ts",
+        "apps/ai-orchestrator/tests/prompts/system.test.ts",
+        "apps/ai-orchestrator/tests/tools/explicit-confirmation.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Contato ignorado e sessão pessoal nunca chamam o provider; atendimento humano e IA desligada transcrevem sem a IA agir; provado com dublê que conta chamadas",
+          "met": true,
+          "detail": "tests/session/message-graph-audio.test.ts: casos bloqueados terminam em ignored_contact/personal_session com callCount === 0, downloadMedia não chamado e SKIPPED gravado com CONTACT_IGNORED/PERSONAL_SESSION; humanHandling e aiEnabled:false terminam em paused_conversation/bot_disabled com callCount === 1, DONE gravado, prepareGraphTurn e sendText não chamados. audio-transcription.test.ts repete no nível da porta."
+        },
+        {
+          "criterion": "Transcrição concluída vira texto do turno marcado no prompt; confirmação clara em áudio confirma pelo mesmo caminho e guards do 011; ambígua pergunta; mesmo turno continua recusado",
+          "met": true,
+          "detail": "message-graph-audio: prepareGraphTurn recebe '[audio transcrito] ...' e turnId 'channel-1:message-audio' (mesma deriveTurnId do texto), inclusive com 'sim, pode confirmar'. explicit-confirmation.test.ts: em turno de áudio, prepare+confirm no mesmo áudio dá CONFIRMATION_REQUIRED_SAME_TURN sem efeito no gateway, e o áudio seguinte confirma. A regra de perguntar quando ambíguo é instrução de prompt asserida em system.test.ts (sem eval com modelo: é da WU-05)."
+        },
+        {
+          "criterion": "Falha do provider grava FAILED com motivo, não inventa texto e responde pedindo texto; áudio acima do teto ou tooLarge grava SKIPPED",
+          "met": true,
+          "detail": "audio-transcription.test.ts: provider que lança gera FAILED com error contendo 'PROVIDER_FAILED' e transcript undefined; transcrição vazia gera EMPTY_TRANSCRIPT; tooLarge, sizeBytes e durationSeconds acima do teto geram SKIPPED (MEDIA_TOO_LARGE/AUDIO_TOO_LONG) sem chamar o provider. message-graph-audio: esses casos terminam em unsupported_message com sendText contendo 'Recebi seu audio' e pedido de texto, sem prepareGraphTurn nem invokeGraphAgent."
+        },
+        {
+          "criterion": "Download sob demanda usa a credencial de instância e o proto guardado; falha vira MEDIA_UNAVAILABLE sem derrubar o turno",
+          "met": true,
+          "detail": "evolution-download-media.test.ts: POST em /message/downloadmedia com apikey='instance-token' (a chave global está no ambiente e não é usada), instanceId e corpo { message: proto }; sem credencial dá EVOLUTION_CHANNEL_NOT_CONFIGURED sem fetch; HTTP 500 e resposta vazia têm códigos próprios. message-graph-audio: downloadMedia rejeitado grava FAILED com error 'MEDIA_UNAVAILABLE', não chama o provider e o turno continua respondendo."
+        },
+        {
+          "criterion": "Nenhum teste chama OpenAI ou Go reais; hashes de versão atualizados conscientemente",
+          "met": true,
+          "detail": "Todos os testes usam FakeTranscriptionProvider ou fetch dublado (vi.stubGlobal); OpenAiTranscriptionProvider só é construído na factory, nunca invocado em teste. PROMPT_TEMPLATE_VERSION v2 para v3 com justificativa no comentário e os três hashes atualizados em tests/prompts/system.test.ts (professional-8a08266b6e, balanced-04995d48b1, casual-64e9afb011); suíte completa 490 passed / 0 failed."
+        }
+      ]
+    },
+    "attemptId": "013-r1-unit-wu-03-a1"
+  }
+}

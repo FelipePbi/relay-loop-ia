@@ -1,0 +1,74 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T23:03:39.178Z",
+  "attemptId": "019-r1-unit-wu-004-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "019-r1-unit-wu-004",
+      "goal": "019",
+      "round": 1,
+      "workUnitId": "WU-004",
+      "status": "ESCALATION_REQUIRED",
+      "summary": "Limpeza por IDs gravados, idempotente e com resíduo entregue e provada contra PostgreSQL; o critério 3 não fecha porque não existe operação que remova agendamento e cliente dos read models.",
+      "report": "## O que mudou e por quê\n\n**Vocabulário da limpeza** — `apps/ai-orchestrator/src/modules/activation-test/activation-test-cleanup.ts` (novo). Declara alvos (`MESSAGE`, `CONVERSATION`, `CONTACT`, `APPOINTMENT`, `CUSTOMER`), razões de resíduo (`OPERATION_UNAVAILABLE`, `WOULD_TOUCH_OTHER_ROWS`, `REMOVAL_FAILED`, `STILL_VISIBLE`) e `activationTestCleanupState`, que só devolve `CLEAN` com resíduo vazio — limpeza parcial relatada como completa não tem representação. Nenhuma forma deste arquivo tem campo de telefone, nome, data ou padrão.\n\n**Serviço de limpeza** — `ActivationTestCleanupService.ts` (novo). Remove mensagens/conversa/contato pelos IDs que a execução gravou; cancela o agendamento pelo ID com chave `activation-test-cleanup-${runId}`; depois **lê os read models** (`findFutureAppointmentsForCustomer`/`ForPhone` e `findCustomerCandidatesByPhone`) e grava como resíduo o que continuar lá. Falha de uma remoção vira resíduo e não interrompe as outras nem vira 500.\n\n**Persistência** — `ActivationTestRunStore.ts`: `openTestConversation` passou a devolver `createdConversation`/`createdContact` (lê antes do upsert só para isso), e as remoções aceitam **apenas** `(tenantId, id)`. `schema.prisma` + migration aditiva `20260914130000_goal019_activation_test_cleanup` acrescentam `createdConversationId`, `createdContactId`, `cleanupState` (enum `PENDING|CLEAN|RESIDUAL`), `cleanupAt`, `cleanupResidue`, sem backfill: execução anterior fica `PENDING`, que é a verdade sobre ela.\n\n**Ligação** — `ActivationTestService` monta a limpeza com as próprias dependências e a executa em estado terminal (`SUCCEEDED` e `FAILED`), nunca em `PAUSED_BY_HUMAN` — a conversa pausada tem mensagem da pessoa dentro.\n\n**Achado corrigido:** `Message.conversation` e `ConversationSession.contact` são `onDelete: Cascade` (schema.prisma L390, L349). Apagar a conversa de teste com uma mensagem de terceiro dentro **removeria essa mensagem**. A limpeza passou a conferir dependentes antes (`conversationDependents`/`contactDependents`) e, sobrando algum, não apaga e registra `WOULD_TOUCH_OTHER_ROWS`.\n\n**Harness** — `scripts/goal019-activation-test-migration-rehearsal.mjs`: `prepareAiDurabilityTarget` agora aplica as duas migrations do Goal019 no banco `_goal004`, que é para onde `validate-integration.mjs` aponta `AI_TEST_DATABASE_URL` (L215). Sem isso a suíte nova não teria schema no gate. Edição aditiva, não reimplementação.\n\n**Teste de WU-003 ajustado (1 assert):** `activation-test-service.test.ts` comparava a fonte dos marcos com as linhas vivas de `runs.messages`; com a limpeza rodando no fim, elas não existem mais. O assert passou a comparar com `createdMessageIds` — o registro do que a execução criou — e ganhou `expect(runs.messages).toHaveLength(0)`. A invariante (\"marco aponta para fato gravado\") continua e ficou mais forte.\n\n## Comandos executados\n\n- `npx tsc -p tsconfig.json --noEmit` (apps/ai-orchestrator) → sem erros.\n- `npm run lint` (`eslint src --max-warnings=0`) → limpo (após `--fix` de ordem de import).\n- `npx prettier --write` nos arquivos novos/alterados de `activation-test` e do teste de integração.\n- `npx vitest run` (apps/ai-orchestrator, com banco) → **668 passed, 1 failed, 2 skipped**.\n  - A única falha é `tests/integration/transport-durability.test.ts > keeps the legacy replay fixture readable`. Ela lê linhas de `tenant-legacy`, semeadas por `scripts/goal004-migration-rehearsal.mjs`; `validate-integration.mjs` aponta `AI_TEST_DATABASE_URL` para `<db>_goal004`, que é o banco deixado por esse ensaio. Meu PostgreSQL descartável não passou por ele. **Não é causada por esta unidade** — nada aqui toca `Message.deliveryState`.\n- `npx vitest run tests/integration/activation-test-cleanup.test.ts tests/integration/activation-test-run.test.ts --reporter=verbose` → **10 passed** (5 de WU-003 continuam verdes com o schema novo).\n- `npx vitest run tests/activation-test/` → **33 passed**.\n- `npx prisma migrate deploy` num PostgreSQL 18 descartável (initdb próprio, port 55599, destruído ao fim): as duas migrations do Goal019 aplicaram limpo. Reapliquei o `migration.sql` da limpeza a mão: todos os guards `IF NOT EXISTS` reportaram `skipping`, sem erro. Também apliquei as duas em sequência num banco vazio e conferi as 5 colunas em `information_schema.columns`.\n- `node --check scripts/goal019-activation-test-migration-rehearsal.mjs` → OK. `node --test scripts/tests/goal019-...test.mjs` **não roda neste worktree**: `apps/bff/node_modules` não existe aqui, então `require('pg')` falha. A mesma falha acontecia antes da minha edição.\n- `git status` / `git rev-parse --abbrev-ref HEAD` → tudo no worktree, branch `ai-loop/goal-019`, sem commit, push, merge ou PR.\n\n## O que não fecha, e por quê\n\nO critério 3 pede que, depois da limpeza, agendamento e pessoa de teste **não apareçam** na agenda nem na lista de clientes. Com as operações que existem hoje isso é inalcançável a partir de `apps/ai-orchestrator`:\n\n1. `apps/scheduling-service/src/modules/integrations/atendly/provider.ts` — `listAppointments` filtra por tenant, janela e cliente, e **não filtra `status`**. Atendimento cancelado continua saindo de `GET /internal/appointments`, que é o que alimenta `GET /v1/appointments` (`apps/bff/src/modules/calendar/routes.ts:208`) e os `findFutureAppointmentsFor*` do client da IA. `cancelAppointment` é o mais forte que existe — não há `DELETE /internal/appointments/:id`.\n2. Não existe remoção de cliente em lugar nenhum: `apps/scheduling-service/src/modules/customers/atendly-customer-service.ts` tem `create`/`update`/`get`/`list` e deletes só de nota, tag e relação; `internal-api/routes.ts` não tem `DELETE /internal/customers/:id`; `apps/bff/src/modules/customers/routes.ts` não tem `DELETE /v1/customers/:id`. E `createAppointment` com `customerName`/`customerPhone` **cria** a pessoa (provider.ts L644-655).\n\nFechar o critério 3 exige endpoints novos de remoção definitiva em `apps/scheduling-service`, que não está nos \"Pontos de implementação\" do Goal (L55, que lista só `apps/ai-orchestrator/src/modules/scheduling-service/client.ts`, \"só se faltar operação\") nem nos `expectedFiles` desta unidade. Além do escopo, é decisão de produto: dar à IA um apagar definitivo de atendimento e de cliente contraria o padrão declarado no próprio `SchedulingGateway` (\"o que a IA não consegue expressar ela não consegue fazer por engano\").\n\nO que entreguei no lugar é o comportamento honesto que o objetivo desta unidade e o §6 do Goal preveem: a limpeza **lê** os dois read models e grava o resíduo com o ID gravado e a razão, e a execução nunca fica `CLEAN` com sobra. Há teste para os dois mundos — um em que o cancelamento tira o atendimento da agenda (`CLEAN`) e um em que ele continua listado, que é o comportamento de hoje (`RESIDUAL`) —, então quando a operação existir o teste já diz qual dos dois está valendo.\n\n## Decisão que cabe ao Tech Lead\n\nEstender o escopo do Goal para `apps/scheduling-service` com remoção definitiva restrita (e decidir se ela é alcançável pela IA ou só por um caminho interno de limpeza), ou aceitar o resíduo declarado e ajustar os critérios 3/15 para \"cancelado e relatado como resíduo\".",
+      "changedFiles": [
+        "apps/ai-orchestrator/prisma/schema.prisma",
+        "apps/ai-orchestrator/prisma/migrations/20260914130000_goal019_activation_test_cleanup/migration.sql",
+        "apps/ai-orchestrator/src/modules/activation-test/activation-test-cleanup.ts",
+        "apps/ai-orchestrator/src/modules/activation-test/ActivationTestCleanupService.ts",
+        "apps/ai-orchestrator/src/modules/activation-test/ActivationTestRunStore.ts",
+        "apps/ai-orchestrator/src/modules/activation-test/ActivationTestService.ts",
+        "apps/ai-orchestrator/tests/activation-test/activation-test-cleanup.test.ts",
+        "apps/ai-orchestrator/tests/activation-test/activation-test-service.test.ts",
+        "apps/ai-orchestrator/tests/activation-test/support/in-memory-activation-test-runs.ts",
+        "apps/ai-orchestrator/tests/integration/activation-test-cleanup.test.ts",
+        "scripts/goal019-activation-test-migration-rehearsal.mjs"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A limpeza remove somente linhas cujos IDs a execução gravou; teste falha se a remoção passar a buscar por telefone, nome, data ou padrão",
+          "met": true,
+          "detail": "O repositório só expõe removeCreatedMessages/Conversation/Contact com (tenantId, id). Unit test confere que cada remoção recebeu exatamente createdMessageIds/createdConversationId/createdContactId. Postgres: 'conversa que a execucao apenas encontrou nao e apagada' cai se virar busca pelo número da plataforma; 'nao apaga mensagem da propria conversa de teste que a execucao nao criou' cai se virar busca por conversa, data ou texto."
+        },
+        {
+          "criterion": "Linha preexistente parecida com dado de teste não é tocada, provado por teste",
+          "met": true,
+          "detail": "Postgres 'apaga so o que a execucao criou e nao encosta na linha parecida': contato/conversa/mensagem plantados com displayName 'Atendly (teste)', mesmo corpo e mesmo dia sobrevivem. Também descoberto e corrigido: Message.conversation é onDelete Cascade, então apagar a conversa arrastaria mensagem de terceiro — a limpeza agora confere dependentes antes e recusa, registrando WOULD_TOUCH_OTHER_ROWS. 10 testes de integração passaram."
+        },
+        {
+          "criterion": "Depois da limpeza o agendamento e a pessoa de teste não aparecem na agenda nem na lista de clientes do negócio, provado por leitura dos read models",
+          "met": false,
+          "detail": "A leitura dos read models está implementada e testada, mas nenhuma operação existente remove os dois. listAppointments (scheduling-service/integrations/atendly/provider.ts) não filtra status, então o cancelado segue em GET /internal/appointments e /v1/appointments; não há delete de cliente em atendly-customer-service.ts, internal-api/routes.ts nem bff/customers/routes.ts. Hoje a limpeza registra os dois como resíduo OPERATION_UNAVAILABLE. Fechar exige endpoints novos em apps/scheduling-service."
+        },
+        {
+          "criterion": "Limpeza parcial é registrada como resíduo na execução e nunca relatada como sucesso completo",
+          "met": true,
+          "detail": "activationTestCleanupState só devolve CLEAN com resíduo vazio (teste '`CLEAN` e inalcancavel com sobra'). O resíduo é gravado em ActivationTestRun.cleanupResidue com cleanupState=RESIDUAL — testes 'grava estado e residuo na propria execucao' e 'limpeza parcial nunca e relatada como sucesso completo'. Falha de cancelamento e falha de leitura da agenda também viram resíduo em vez de silêncio."
+        },
+        {
+          "criterion": "Repetir a limpeza é idempotente: não apaga mais nada e não falha",
+          "met": true,
+          "detail": "Unit 'repetir nao apaga mais nada e nao falha': segunda passada devolve removed {MESSAGE:0, CONVERSATION:0, CONTACT:0}, mesmo estado, mesma chave de idempotência no cancelamento. Unit 'repetir sobre limpeza parcial mantem o mesmo residuo'. Postgres 'repetir a limpeza nao apaga mais nada e nao falha' confirma contra o banco. Execução inexistente devolve null em vez de erro."
+        }
+      ],
+      "escalation": {
+        "reason": "CROSS_MODULE_IMPACT_DISCOVERED",
+        "confidence": "HIGH",
+        "detail": "O critério 3 exige remoção definitiva de agendamento e cliente, que não existe em nenhum lugar do produto. Fechá-lo exige endpoints novos em apps/scheduling-service — fora dos expectedFiles desta WU e fora dos Pontos de implementação do Goal (L55) — e é decisão de produto, porque daria à IA um apagar definitivo de atendimento e de pessoa, contra o padrão declarado no SchedulingGateway. Tudo o mais da unidade está entregue e verificado; a limpeza lê os dois read models e relata resíduo honesto.",
+        "evidence": [
+          "apps/scheduling-service/src/modules/integrations/atendly/provider.ts — listAppointments filtra tenant, janela e customerId, sem nenhuma condição sobre status: atendimento CANCELLED continua sendo devolvido por GET /internal/appointments",
+          "apps/scheduling-service/src/modules/calendar/routes.ts — há POST /internal/appointments/:id/cancel, reschedule, complete, no-show; não existe DELETE /internal/appointments/:id",
+          "apps/scheduling-service/src/modules/customers/atendly-customer-service.ts — métodos list/get/create/update e deletes apenas de note, tag e relation; não há delete de Customer",
+          "apps/scheduling-service/src/modules/internal-api/routes.ts — rotas de customers: GET, POST, PATCH, PUT e DELETE só de primary-guardian/notes/tags; não há DELETE /internal/customers/:id",
+          "apps/bff/src/modules/customers/routes.ts — GET/POST/PATCH em /v1/customers e deletes só de sub-recursos; não há DELETE /v1/customers/:id",
+          "apps/scheduling-service/src/modules/integrations/atendly/provider.ts:644-655 — resolveCustomerForAppointment cria a pessoa quando recebe customerName/customerPhone, que é exatamente o caminho do teste real",
+          "docs/migration/goals/019-demonstracao-teste-real-autoativacao.md L55 — os Pontos de implementação listam apps/ai-orchestrator/src/modules/scheduling-service/client.ts 'só se faltar operação' e não listam apps/scheduling-service/",
+          "apps/ai-orchestrator/src/modules/scheduling-service/client.ts:135-219 — comentário do SchedulingGateway: 'Não há createManualAppointment nem parâmetro de sobreposição em lugar nenhum desta interface, de propósito: o que a IA não consegue expressar ela não consegue fazer por engano'"
+        ]
+      }
+    },
+    "attemptId": "019-r1-unit-wu-004-a1"
+  }
+}

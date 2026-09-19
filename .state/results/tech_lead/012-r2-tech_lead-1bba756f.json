@@ -1,0 +1,23 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T21:12:39.318Z",
+  "attemptId": "012-r2-tech_lead-1bba756f-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r2-tech_lead-1bba756f",
+      "goal": "012",
+      "round": 2,
+      "decision": "CHANGES_REQUIRED",
+      "blockers": [
+        "B1 (residual) — A segunda parte do B1 não foi feita nem justificada: `apps/bff/PUBLIC_API_V1.md` (seção \"Sugestões de resposta no atendimento humano\", parágrafo do binding somente leitura) continua declarando a recusa \"ou mensagem do cliente não textual\", e `AssistantService.generateSuggestions` (`assistant.service.ts:835-857`) não tem essa recusa — sem texto de entrada o prompt segue com `groupedMessages` indefinido (`[nao informado]`). O Goal §4 exige \"sem sugestão de resposta quando a mensagem do cliente não é textual\", e um consumidor do contrato (Goal017) trataria um erro que não existe. Ação: implementar a recusa própria em `generateSuggestions` (ex.: `LAST_MESSAGE_NOT_TEXTUAL`, 409, quando a última `Message` INBOUND da conversa não tem corpo textual — `kind`/`body` vazio ou placeholder de mídia), acrescentá-la a `SuggestionRefusalReason`, cobrir em `tests/tools/suggestion-out-of-reach.test.ts` e `tests/internal/suggestions.routes.test.ts` (recusa antes de criar `AiRun` e sem alcançar o modelo) e listar o código em `PUBLIC_API_V1.md` junto das outras quatro recusas; ou, se a opção for não implementar, remover a afirmação do documento e registrar no relatório que a recusa fica para o Goal013 (mídia). Nenhuma outra mudança."
+      ],
+      "summary": "Review DEEP dirigido do Goal 012, rodada 2 (correção FIX-001 sobre a worktree `goal-012`, base 4116149, baseline aceita a87dd5b). Reproduzi os gates em cluster PostgreSQL descartável próprio (porta 55453, já parado): `git diff --check` limpo; `npm run validate:core` PASSOU (14 passed / 3 skips explícitos do Goal002); `npm run validate:integration` PASSOU 22/22, incluindo `rehearse:goal012-knowledge-memory-migration`, `test:bff-integration` (70 testes) e `test:ai-orchestrator-transport-durability` (52 testes, com `customer-memory.test.ts` contra PostgreSQL). Blockers da rodada 1: B1 FECHADO na parte do contrato — a rota interna devolve `{ conversationId, suggestions, aiRunId, promptVersion }`, BFF e frontend exigem os quatro campos com `aiRunId` não nulo, o dublê do teste do BFF passou a ser o DTO real e a recusa dublada usa `HUMAN_HANDLING_REQUIRED` (código que a IA emite de fato); PUBLIC_API descreve os quatro campos. B2 FECHADO — a inferência deixou de ler `appointmentDraftPatch` e passou a exigir evidência verificável do ledger de auditoria (`AiToolCall` SUCCEEDED do `AiRun` do turno: `create_appointment` com `action = confirm` ou `confirm_recurring_appointments`), com o motivo nomeado `no_confirmed_appointment`; `RECURRING_SERVICE` só nasce de série recorrente confirmada e um atendimento avulso apenas reforça (`reinforceOnly`), nunca cria linha; provado por unit tests, integração contra PostgreSQL e eval em dois turnos (proposta não grava; confirmação grava período e dia, sem serviço recorrente), com RED por mutação relatado. A decisão de escopo do desenvolvedor (não existe porta que liste atendimentos passados; sub-inferir em vez de chamar uma menção de recorrente) é correta. B3 FECHADO — `startSummaryRun` recusa `SUMMARY_NOT_AUDITABLE` (409) antes de qualquer chamada do modelo quando não há conversa para ancorar o `AiRun`, `aiRunId` virou obrigatório na IA, no BFF e no frontend, e PUBLIC_API documenta as duas recusas; testes provam que sem `AiRun` não há resumo. Resta um residual pequeno: a documentação promete uma recusa para mensagem não textual que o código não tem, pedida na rodada 1 com duas opções e não tratada. Observações não bloqueantes para o fechamento: a primeira confirmação já cria `PREFERRED_DAY`/`PREFERRED_PERIOD` inferidos e permitidos, e a confirmação seguinte em outro dia substitui — a memória se comporta como \\\"último dia marcado\\\" rotulado de preferência; recomendo, no próximo Goal que tocar memória (015 mostra a lista), só levar `AI_INFERRED` ao prompt depois de reforço por conversa diferente; o modo sugestão recupera conhecimento sem `focusServiceIds`; FAQ por serviço só é recuperável depois de o serviço entrar no rascunho ou na ação pendente, limite do próprio Goal. Nenhum arquivo editado por mim; nenhum cluster meu permanece ativo.",
+      "nextAction": "RETURN_TO_DEVELOPER",
+      "nextDeveloperProfile": "SONNET_MEDIUM",
+      "nextDeveloperProfileReason": "Resta uma recusa localizada com teste e uma linha de documentação, arquitetura já definida."
+    },
+    "attemptId": "012-r2-tech_lead-1bba756f-a1"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-19T22:19:45.913Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "026-r1-unit-wu-04-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "026-r1-unit-wu-04",
+    "role": "work_unit",
+    "goal": "026",
+    "round": 1,
+    "workUnitId": "WU-04",
+    "unitType": "STANDARD",
+    "complexity": "LOW",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-026",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\026-retirada-do-protocolo-legado-e-do-writer-remoto.md",
+    "parentJobId": "026-r1-developer-0e6c9fca",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "LOW",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-19T22:29:09.986Z"
+}

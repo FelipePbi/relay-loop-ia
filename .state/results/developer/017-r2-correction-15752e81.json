@@ -1,0 +1,84 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:40:38.326Z",
+  "attemptId": "017-r2-correction-15752e81-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r2-correction-15752e81",
+      "goal": "017",
+      "round": 2,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 0 em Sonnet, 1 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 017, rodada 2\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one COMPLEX unit scoped to them — behaviourally the legacy correction round. O Tech Lead havia escolhido OPUS_MEDIUM para esta rodada; a unidade é declarada COMPLEX para preservar esse julgamento sem que o plano nomeie um modelo.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 4 blocker(s) registrados pelo Tech Lead na revisão da rodada 1, preservando o que já foi aceito.\nexecutor: opus (high), tier COMPLEX · 1 tentativa(s)\nArquivos alterados (16): apps/bff/PUBLIC_API_V1.md, apps/bff/src/clients/ai-orchestrator/index.ts, apps/bff/src/clients/internal-http-client.ts, apps/bff/src/modules/conversations/routes.ts, apps/bff/tests/goal017-send-status.integration.test.ts, apps/bff/tests/internal-http-client.test.ts, apps/frontend/src/data/services/BffConversationService.ts, apps/frontend/src/features/conversations/ConversationContextPanel.tsx, apps/frontend/src/features/conversations/ConversationThread.tsx, apps/frontend/src/features/conversations/MessageAttachment.tsx, apps/frontend/src/shared/styles/atendly-conversations.css, apps/frontend/tests/goal017-chat-media.test.tsx, apps/frontend/tests/goal017-contact-profile.test.tsx, apps/frontend/tests/goal017-delivery-state.test.tsx, docs/migration/GAP_ANALYSIS.md\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: marcar e desmarcar ignorados existem na tela e setIgnored ganha consumidor — ConversationContextPanel.tsx ganhou a seção \"Ignorar na IA\" com botão que alterna marcar/desmarcar; ConversationThread.tsx:191 chama conversations.setIgnored(id, !ignored) após confirmação em Dialog que explica o efeito. Provado por goal017-contact-profile.test.tsx (setIgnored com true e com false pela tela real, e cancelar sem efeito).\n- OK: Blocker 2 resolvido: player de áudio consultando getMedia — AudioAttachment usa o novo hook useAttachmentMedia e renderiza <audio controls> sobre o blob de getMedia quando mediaAvailable; sem bytes na origem explica em vez de oferecer o player. Provado por goal017-chat-media.test.tsx (\"áudio: ouvir o original, não só ler a transcrição\").\n- OK: Blocker 3 resolvido: 202 alcançável pelo stack real e copy de 201 alinhada ao contrato — InternalHttpClient.requestWithStatus carrega o status; AiOrchestratorClient.sendMessage devolve {message,status}; routes.ts responde 202 quando a IA respondeu 202. Copy de 201 agora diz registro+despacho, não \"confirmada\". PUBLIC_API_V1.md documenta os dois sucessos. Unit tests do cliente rodaram (5 passaram); o teste de rota goal017-send-status.integration.test.ts roda em validate:integration e não pôde ser executado aqui por falta de PostgreSQL descartável.\n- OK: Blocker 4 resolvido: GAP_ANALYSIS.md e REUSE_ANALYSIS.md atualizados — REUSE_ANALYSIS.md: linha do ProductConversationsScreen passou a REFACTOR (feito) com as âncoras obsoletas removidas. GAP_ANALYSIS.md: G-22 (inbox/ignorados na interface), G-23 (player e visualizador entregues, envio de mídia ainda fora) e G-31 (Conversas redesenhada; resíduo de browser inclui Conversas).\n\nVer campo report acima.\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 0 · opus: 1\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "COMPLEX",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "opus",
+            "effort": "high",
+            "tier": "COMPLEX",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/src/clients/internal-http-client.ts",
+              "apps/bff/src/modules/conversations/routes.ts",
+              "apps/bff/tests/goal017-send-status.integration.test.ts",
+              "apps/bff/tests/internal-http-client.test.ts",
+              "apps/frontend/src/data/services/BffConversationService.ts",
+              "apps/frontend/src/features/conversations/ConversationContextPanel.tsx",
+              "apps/frontend/src/features/conversations/ConversationThread.tsx",
+              "apps/frontend/src/features/conversations/MessageAttachment.tsx",
+              "apps/frontend/src/shared/styles/atendly-conversations.css",
+              "apps/frontend/tests/goal017-chat-media.test.tsx",
+              "apps/frontend/tests/goal017-contact-profile.test.tsx",
+              "apps/frontend/tests/goal017-delivery-state.test.tsx",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "COMPLEX": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 0,
+            "opus": 1,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 9675,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "017-r2-correction-15752e81-a1"
+  }
+}

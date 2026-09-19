@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T02:49:09.849Z",
+  "attemptId": "024-r1-unit-wu-15-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r1-unit-wu-15",
+      "goal": "024",
+      "round": 1,
+      "workUnitId": "WU-15",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "git-diff-check",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 44,
+      "summary": "git diff --check passou (exit 0, 44ms).",
+      "report": "(sem saída)",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "024-r1-unit-wu-15-a1"
+  }
+}

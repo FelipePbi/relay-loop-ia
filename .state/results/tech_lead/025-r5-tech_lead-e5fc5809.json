@@ -1,0 +1,434 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T16:56:54.127Z",
+  "attemptId": "025-r5-tech_lead-e5fc5809-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r5-tech_lead-e5fc5809",
+      "goal": "025",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "026",
+      "nextGoalTitle": "Retirada do protocolo legado e do writer remoto",
+      "nextGoalPath": "docs/migration/goals/026-retirada-do-protocolo-legado-e-do-writer-remoto.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Subtração multi-serviço com remoção de rota pública e risco de apagar prova junto com o código, mas sem superfície de segurança, isolamento de tenant ou dado crítico novo.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/goals/026-retirada-do-protocolo-legado-e-do-writer-remoto.md"
+      ],
+      "summary": "Goal025 registrado como ACCEPTED com a baseline bd5990ab (origem 5e36832c) e o fechamento administrativo sanado — a documentação de fechamento não tocou MIGRATION_STATUS.md, que seguia com 025 em READY e baseline em d24d6814, quarta ocorrência da mesma classe de omissão (021, 023, 024). Roadmap reavaliado: a linha 026, que somava retirada do legado e ensaio de release, foi dividida em 026 (código e contrato) e 027 (fonte externa e ensaio), com a auditoria final passando de 027 para 028; motivo registrado na v47 do MASTER_PLAN, IDs e histórico preservados. Referências de dado legado (\"até o Goal026\") remapeadas por significado para o 027 em DATA_MIGRATION e CURRENT_STATE, porque o 026 não cria migration. Goal026 escrito e marcado READY, único READY, perfil OPUS_MEDIUM. Nenhuma decisão nova registrada — D-042 prevista para o fechamento do 026.",
+      "executionPlan": {
+        "goalSummary": "Tornar verdadeira na árvore a regra que o contrato já enuncia: nenhum código pode escrever numa agenda remota nem executar migração bidirecional. Sai o protocolo pré-Goal010 inteiro (3 rotas públicas do BFF, 3 internas do Scheduling, as 939 linhas de CalendarMigrationService, os 3 métodos e schemas do frontend); MinhaAgendaCalendarProvider (1010 linhas) deixa de implementar CalendarProvider, perde escrita/hold/disponibilidade e vira origem de leitura da importação, com renome; saem packages/contracts (119 linhas, zero importadores, ainda em build:all e como skip declarado) e apps/frontend/src/mocks com o ramo preview de AuthScreen. Os DADOS ficam: MigrationJob/MigrationJobItem e LegacyMigrationJobClass permanecem no schema por D-026 e pela cobertura de purga derivada do schema do Goal025 — morre a capacidade de escrever, não o que está gravado. Nenhuma migration nova. Regra estática no final-production-audit impede o retorno, com caso negativo obrigatório. A retirada do valor EXTERNAL/MINHA_AGENDA do dado e do contrato NÃO está aqui: é o 027.",
+        "executionStrategy": "Remoção de dentro para fora: primeiro o dono do protocolo (Scheduling), depois a borda pública (BFF e frontend), depois o writer, para que cada unidade encontre a anterior já sem consumidor e o typecheck acuse o que sobrou. WU-01 é a de maior risco porque é onde a prova pode ser apagada junto com o código: as duas suítes que hoje fabricam o job legado via CalendarMigrationService precisam ser reescritas semeando a linha pelo Prisma, não deletadas. WU-05 fecha o Goal contra regressão e só vale com caso negativo. Verificação dirigida por pacote antes das globais; validate-ui depois de validate-core porque as seis rotas públicas de autenticação são tocadas por WU-02 e é ele que produz o build servido.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "Retirar o protocolo legado de migração no Scheduling, preservando a prova",
+            "objective": "Remover as três rotas /internal/calendar/migrations*, a instanciação do serviço e CalendarMigrationService por inteiro, com o export de modules/migrations/index.ts. Preservar MigrationJob, MigrationJobItem, LegacyMigrationJobClass e legacy-job-reconciliation.ts como único leitor. Reescrever import-completion-service.test.ts e import-lease.test.ts para semear o job legado direto pelo Prisma, mantendo exercitada a invariante de que job legado, mesmo COMPLETED, não consome o direito de importação única.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/scheduling-service",
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+              "apps/scheduling-service/src/modules/migrations/index.ts",
+              "apps/scheduling-service/src/modules/migrations/legacy-job-reconciliation.ts",
+              "apps/scheduling-service/tests/unit/import-completion-service.test.ts",
+              "apps/scheduling-service/tests/unit/import-lease.test.ts",
+              "apps/scheduling-service/prisma/schema.prisma"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/migrations/index.ts",
+              "apps/scheduling-service/tests/unit/import-completion-service.test.ts",
+              "apps/scheduling-service/tests/unit/import-lease.test.ts"
+            ],
+            "implementationHints": "As rotas estão em internal-api/routes.ts:1423,1433,1445 e a instanciação em :509. O serviço tem um único chamador de getMigrationSnapshot (calendar-migration-service.ts:358), que sai junto. As duas suítes usam createDatabaseDouble(), sem PostgreSQL: semear MigrationJob pelo client do dublê preserva o cenário sem precisar de banco real. Nenhuma migration.",
+            "acceptanceCriteria": [
+              "As três rotas /internal/calendar/migrations* não estão mais registradas",
+              "calendar-migration-service.ts não existe mais e nenhum arquivo o importa ou exporta",
+              "MigrationJob, MigrationJobItem e LegacyMigrationJobClass continuam idênticos em schema.prisma e nenhuma migration foi criada",
+              "legacy-job-reconciliation.ts continua inventariando e classificando jobs legados já gravados",
+              "As duas suítes continuam provando que job legado COMPLETED não consome o direito de importação única, agora semeando a linha pelo Prisma, e falham se a regra sair"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-02",
+            "title": "Retirar o protocolo legado da borda pública e o código morto do frontend",
+            "objective": "Remover no BFF as três rotas /v1/calendar/migrations*, o mapper publicMigration e os três métodos do cliente do Scheduling; no frontend, os métodos diagnose/create/get de BffMigrationService e os schemas de migração legada de publicApiSchemas.ts. Remover também apps/frontend/src/mocks por inteiro e o ramo preview de AuthScreen (prop, import, desvio de submit e as condições que dependem dela). Símbolo que perder o último consumidor sai junto; o restante de BffMigrationService, que é a importação única, fica intacto.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/migrations/routes.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/features/auth/AuthScreen.tsx",
+              "apps/frontend/src/mocks/index.ts",
+              "apps/frontend/src/mocks/services/MockAuthService.ts",
+              "apps/frontend/tests/goal014-auth.test.tsx"
+            ],
+            "expectedFiles": [
+              "apps/bff/src/modules/migrations/routes.ts",
+              "apps/bff/src/clients/scheduling/index.ts",
+              "apps/frontend/src/data/services/BffMigrationService.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/features/auth/AuthScreen.tsx"
+            ],
+            "implementationHints": "Rotas públicas em bff/src/modules/migrations/routes.ts:104,120,135 e cliente em bff/src/clients/scheduling/index.ts:1280,1290,1299. previewServices tem um único leitor, AuthScreen.tsx:187-188, e nenhuma das seis páginas de app/ passa preview. Conferir se internalSource/idSchema/migrationSchema perdem o último consumidor antes de removê-los.",
+            "acceptanceCriteria": [
+              "As três rotas públicas não estão mais registradas e requisição a qualquer uma responde 404",
+              "Os três métodos do cliente interno e o mapper publicMigration não existem mais",
+              "BffMigrationService não expõe diagnose, create nem get, e o ciclo de importação única continua igual",
+              "apps/frontend/src/mocks não existe e AuthScreen não tem mais a prop preview nem ramo que dependa dela",
+              "As seis rotas públicas de autenticação continuam renderizando e submetendo como antes, provado por teste"
+            ],
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-03",
+            "title": "Matar o writer remoto: a origem Minha Agenda vira leitura de importação",
+            "objective": "Fazer MinhaAgendaCalendarProvider deixar de implementar CalendarProvider e perder createAppointment, rescheduleAppointment, cancelAppointment, createHold, listHolds, getHold, releaseHold, getAvailability, getAppointment, listAppointments e getMigrationSnapshot, preservando listServices() (prova de credencial na conexão e reconexão) e getImportSnapshot (preview e execução da importação). Renomear classe e arquivo para nome de origem de leitura da importação, sem alias do nome antigo, atualizando o export de modules/integrations/index.ts e as suítes. Ajustar o comentário de CalendarProviderFactory sem mudar seu comportamento.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/scheduling-service",
+            "relevantFiles": [
+              "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+              "apps/scheduling-service/src/modules/integrations/minha-agenda/availability.ts",
+              "apps/scheduling-service/src/modules/integrations/index.ts",
+              "apps/scheduling-service/src/modules/calendar/provider-factory.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/src/modules/migrations/import-preview-service.ts",
+              "apps/scheduling-service/src/modules/migrations/import-execution-service.ts",
+              "apps/scheduling-service/tests/unit/calendar-provider-factory.test.ts",
+              "apps/scheduling-service/tests/unit/minha-agenda-import-snapshot.test.ts",
+              "apps/scheduling-service/tests/unit/import-origin-connection.test.ts"
+            ],
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/integrations/minha-agenda/",
+              "apps/scheduling-service/src/modules/integrations/index.ts",
+              "apps/scheduling-service/src/modules/calendar/provider-factory.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts"
+            ],
+            "implementationHints": "Os únicos chamadores vivos são listServices() em internal-api/routes.ts:1329,1372 e getImportSnapshot em import-preview-service.ts:179 e import-execution-service.ts:376. Em availability.ts, migrationAvailabilityRules é consumido por import-execution-service.ts:23 e fica; só sai o que perder o último consumidor. CalendarProviderFactory continua recusando MINHA_AGENDA com 409 MINHA_AGENDA_OPERATIONAL_SOURCE_DISABLED porque Calendar.source ainda pode valer MINHA_AGENDA em linha gravada.",
+            "acceptanceCriteria": [
+              "A origem Minha Agenda não expõe nenhum método de escrita de agenda, hold ou disponibilidade",
+              "A classe não implementa mais CalendarProvider, foi renomeada e o nome antigo não sobrevive como alias",
+              "getMigrationSnapshot não existe mais",
+              "listServices() e getImportSnapshot continuam funcionando na conexão/reconexão e no preview/execução, provado por teste",
+              "CalendarProviderFactory continua recusando MINHA_AGENDA com o mesmo código e status, provado por teste, e o comentário descreve a árvore real"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-04",
+            "title": "Retirar o pacote de contratos vazio e sanear comentários defasados",
+            "objective": "Remover packages/contracts com o script build:contracts do package.json raiz, o trecho correspondente de scripts/build-all.sh e o skip declarado test:contracts de scripts/validate-core.mjs, sem tocar packages/legal-contract. Remover os três comentários que prometem remoção 'no Goal024' e corrigir os {@link} de tenantPurge.ts na IA e no Scheduling para os arquivos de teste que existem.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01",
+              "WU-02",
+              "WU-03"
+            ],
+            "relevantFiles": [
+              "packages/contracts/",
+              "package.json",
+              "scripts/build-all.sh",
+              "scripts/validate-core.mjs",
+              "apps/ai-orchestrator/src/modules/internal/tenantPurge.ts",
+              "apps/scheduling-service/src/modules/internal-api/tenantPurge.ts"
+            ],
+            "expectedFiles": [
+              "package.json",
+              "scripts/build-all.sh",
+              "scripts/validate-core.mjs",
+              "apps/ai-orchestrator/src/modules/internal/tenantPurge.ts",
+              "apps/scheduling-service/src/modules/internal-api/tenantPurge.ts"
+            ],
+            "implementationHints": "packages/contracts tem 119 linhas em 20 arquivos e zero importadores em apps/. As duas únicas amarras de build são package.json:12 e scripts/build-all.sh:6. packages/legal-contract é outra coisa, tem consumidores reais no BFF e no frontend e não é tocado. Os arquivos de teste corretos são tests/internal/tenant-purge.schema.test.ts (IA) e tests/unit/tenant-purge-schema.test.ts (Scheduling).",
+            "acceptanceCriteria": [
+              "packages/contracts não existe mais e build:contracts, o trecho de build-all.sh e o skip test:contracts saíram junto",
+              "packages/legal-contract não foi tocado e continua consumido por BFF e frontend",
+              "Nenhum comentário na árvore promete remoção 'no Goal024'",
+              "Os {@link} de tenantPurge.ts apontam arquivos que existem",
+              "O número novo de skips declarados de validate:core está registrado para o relatório"
+            ],
+            "verification": [
+              "build",
+              "gate-tests"
+            ]
+          },
+          {
+            "id": "WU-05",
+            "title": "Regra estática que reprova o retorno do legado",
+            "objective": "Acrescentar a scripts/final-production-audit.mjs, no formato check(name, ok, details) já usado, regras que falhem se o legado voltar: nenhuma fonte de apps/ referenciando /v1/calendar/migrations ou /internal/calendar/migrations, nenhuma referência a CalendarMigrationService, nenhum método de escrita de agenda na origem Minha Agenda e apps/frontend/src/mocks inexistente. Cobrir cada regra em scripts/tests/ com caso positivo e caso negativo.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-04"
+            ],
+            "relevantFiles": [
+              "scripts/final-production-audit.mjs",
+              "scripts/tests/"
+            ],
+            "expectedFiles": [
+              "scripts/final-production-audit.mjs",
+              "scripts/tests/"
+            ],
+            "implementationHints": "O script já lê a árvore por sourceFiles() e agrega por check(); a suíte de scripts/tests roda em validate:core como test:gate-scripts. O caso negativo é o que dá valor à regra: provar que ela reprova uma árvore que contenha o padrão, e não apenas que aprova a árvore atual.",
+            "acceptanceCriteria": [
+              "As regras novas aparecem no resultado de audit:static",
+              "Cada regra nova tem caso negativo em scripts/tests/ provando que ela reprova uma árvore com o padrão de volta",
+              "A suíte de scripts de gate continua verde"
+            ],
+            "verification": [
+              "gate-tests"
+            ]
+          },
+          {
+            "id": "WU-06",
+            "title": "Contrato público, documentação de migração e D-042",
+            "objective": "Retirar as três rotas legadas da tabela de conceitos legados de apps/bff/PUBLIC_API_V1.md, registrando explicitamente que esta é a primeira remoção subtrativa de rota pública da migração, com data e motivo, e mantendo intacto o parágrafo de ATENDLY | EXTERNAL. Atualizar em docs/migration as linhas de G-10, G-19/G-20 e G-32 em GAP_ANALYSIS (G-32 reescrita com honestidade e NÃO declarada fechada), CURRENT_STATE nas partes de Scheduling/BFF/frontend, DATA_MIGRATION em M5/M6 e no arquivo legado inerte, REUSE_ANALYSIS nos módulos que perderam consumidor e VALIDATION_GATE nos passos de gate que mudaram. Registrar D-042 em DECISIONS no formato das anteriores.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05"
+            ],
+            "relevantFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/DATA_MIGRATION.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/VALIDATION_GATE.md",
+              "docs/migration/DECISIONS.md"
+            ],
+            "expectedFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/DATA_MIGRATION.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/VALIDATION_GATE.md",
+              "docs/migration/DECISIONS.md"
+            ],
+            "implementationHints": "D-042 cobre quatro pontos: retirada do protocolo com preservação das linhas gravadas (D-026), morte do writer remoto com sobrevivência da leitura de importação, retirada do pacote de contratos vazio sem declarar G-32 fechado, e a regra estática como forma de impedir o retorno. Não criar documento novo.",
+            "acceptanceCriteria": [
+              "PUBLIC_API_V1.md mudou exatamente na retirada das três rotas e no registro dessa retirada, e em nenhum outro ponto",
+              "O parágrafo de ATENDLY | EXTERNAL continua como está",
+              "A linha de G-32 foi reescrita e não declara o gap fechado",
+              "GAP_ANALYSIS reflete o estado real de G-10 e G-19/G-20 depois do diff",
+              "DECISIONS tem D-042 no formato das anteriores, sem quebrar o bloco de nenhuma decisão anterior"
+            ],
+            "verification": [
+              "git-diff-check"
+            ]
+          },
+          {
+            "id": "WU-07",
+            "action": "typecheck",
+            "scope": "apps/scheduling-service",
+            "objective": "Typecheck do Scheduling depois da remoção do protocolo legado e do writer remoto.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-08",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "objective": "Typecheck do BFF depois da remoção das rotas públicas e dos métodos do cliente interno.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "objective": "Typecheck do frontend depois da remoção dos métodos, dos schemas e do código morto de mocks.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-10",
+            "action": "lint",
+            "scope": "apps/scheduling-service",
+            "objective": "Lint do Scheduling, que é onde a remoção deixa mais import e símbolo órfão.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-11",
+            "action": "lint",
+            "scope": "apps/bff",
+            "objective": "Lint do BFF depois da retirada das rotas e do mapper.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "action": "lint",
+            "scope": "apps/frontend",
+            "objective": "Lint do frontend depois da retirada de mocks e do ramo preview.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-06"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "action": "targeted-tests",
+            "scope": "apps/scheduling-service",
+            "pattern": "tests/unit",
+            "objective": "Suítes de unidade do Scheduling: invariante do job legado, lease da importação, factory de provider e snapshot da origem.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07",
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-14",
+            "action": "targeted-tests",
+            "scope": "apps/frontend",
+            "pattern": "tests",
+            "objective": "Suítes do frontend, incluindo as rotas públicas de autenticação tocadas pela remoção do ramo preview.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-09",
+              "WU-12"
+            ]
+          },
+          {
+            "id": "WU-15",
+            "action": "gate-tests",
+            "objective": "Suíte dos scripts de gate, incluindo os casos positivo e negativo das regras estáticas novas.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-05"
+            ]
+          },
+          {
+            "id": "WU-16",
+            "action": "validate-core",
+            "objective": "Gate core sobre a árvore final, com o número novo de skips declarados depois da saída de test:contracts.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-08",
+              "WU-11",
+              "WU-13",
+              "WU-14",
+              "WU-15"
+            ]
+          },
+          {
+            "id": "WU-17",
+            "action": "validate-integration",
+            "objective": "Gate de integração contra PostgreSQL descartável: importação única e purga por negócio do Goal025 continuam verdes.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-18",
+            "action": "build",
+            "objective": "Build de todos os workspaces depois da retirada de packages/contracts do encadeamento.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-19",
+            "action": "validate-ui",
+            "objective": "Gate renderizado nas larguras 360, 390, 768, 1024 e 1440 sobre as rotas públicas de autenticação tocadas pela remoção do ramo preview.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-20",
+            "action": "git-diff-check",
+            "objective": "Conferência final do diff.",
+            "type": "DETERMINISTIC",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-17",
+              "WU-18",
+              "WU-19"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "025-r5-tech_lead-e5fc5809-a1"
+  }
+}

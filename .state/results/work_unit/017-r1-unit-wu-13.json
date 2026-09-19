@@ -1,0 +1,37 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:20:28.112Z",
+  "attemptId": "017-r1-unit-wu-13-a1",
+  "result": {
+    "ok": false,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r1-unit-wu-13",
+      "goal": "017",
+      "round": 1,
+      "workUnitId": "WU-13",
+      "status": "BLOCKED",
+      "executor": "native",
+      "action": "validate-core",
+      "argv": [
+        "npm",
+        "run",
+        "validate:core"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "durationMs": 476,
+      "summary": "Core validation gate falhou (exit 1).",
+      "report": "> atendly-ia@0.1.0 validate:core\n> node scripts/validate-core.mjs\n\n\n[validate:core] build:contracts: npm run build (packages/contracts)\n\n> @atendly-ia/contracts@0.1.0 build\n> tsc -p tsconfig.json\n\n\n=== validate:core summary ===\nfailed   build:contracts — exit code 1\nnot_run  build:scheduling-service — not executed after a previous failure\nnot_run  build:ai-orchestrator — not executed after a previous failure\nnot_run  build:bff — not executed after a previous failure\nnot_run  build:frontend — not executed after a previous failure\nnot_run  check:health-worker — not executed after a previous failure\nnot_run  test:ai-orchestrator — not executed after a previous failure\nnot_run  test:scheduling-service — not executed after a previous failure\nnot_run  test:frontend — not executed after a previous failure\nnot_run  build:evolution-go — not executed after a previous failure\nnot_run  vet:evolution-go — not executed after a previous failure\nnot_run  test:evolution-go — not executed after a previous failure\nnot_run  test:gate-scripts — not executed after a previous failure\nnot_run  audit:static — not executed after a previous failure\nnot_run  test:bff — not executed after a previous failure\nnot_run  test:contracts — not executed after a previous failure\nnot_run  test:health-worker — not executed after a previous failure\n{\n  \"gate\": \"validate:core\",\n  \"total\": 17,\n  \"passed\": 0,\n  \"failed\": 1,\n  \"skipped\": 0,\n  \"notRun\": 16,\n  \"failedSteps\": [\n    \"build:contracts\"\n  ],\n  \"skippedSteps\": [],\n  \"notRunSteps\": [\n    \"build:scheduling-service\",\n    \"build:ai-orchestrator\",\n    \"build:bff\",\n    \"build:frontend\",\n    \"check:health-worker\",\n    \"test:ai-orchestrator\",\n    \"test:scheduling-service\",\n    \"test:frontend\",\n    \"build:evolution-go\",\n    \"vet:evolution-go\",\n    \"test:evolution-go\",\n    \"test:gate-scripts\",\n    \"audit:static\",\n    \"test:bff\",\n    \"test:contracts\",\n    \"test:health-worker\"\n  ]\n}\n\n'tsc' n�o � reconhecido como um comando interno\r\nou externo, um programa oper�vel ou um arquivo em lotes.\r\n\nvalidate:core FAILED — see the failed steps above. Nothing here proves database persistence; run validate:integration for that.",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": "exit 1",
+      "failurePaths": [
+        "scripts/validate-core.mjs"
+      ]
+    },
+    "attemptId": "017-r1-unit-wu-13-a1"
+  }
+}

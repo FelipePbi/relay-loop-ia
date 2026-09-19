@@ -1,0 +1,41 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:14:57.427Z",
+  "role": "work_unit",
+  "jobId": "017-r1-unit-wu-08",
+  "attemptId": "017-r1-unit-wu-08-a1",
+  "requestedModel": "claude-haiku-4-5-20251001",
+  "modelVerificationError": null,
+  "observedModels": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "payload": {
+    "protocolVersion": 2,
+    "jobId": "017-r1-unit-wu-08",
+    "goal": "017",
+    "round": 1,
+    "workUnitId": "WU-08",
+    "status": "BLOCKED",
+    "summary": "Código morto (conversations.ts) confirmado removido; lint ampliado bloqueado por falta de permissão de escrita/execução na sessão.",
+    "report": "Primeira tarefa concluída: conversations.ts foi removido (confirmado em git status e Read), zero consumidores órfãos em src/ e tests/. Não consegui ampliar lint nem executar validação: sessão iniciada sem approval surface, todas as operações de escrita e bash composto são negadas automaticamente. Primeiro critério atendido; segundo e terceiro bloqueados por permissão.",
+    "changedFiles": [],
+    "acceptance": [
+      {
+        "criterion": "src/mocks/data/conversations.ts saiu e nada que a decomposição deixou órfão continua no repositório",
+        "met": true,
+        "detail": "Arquivo confirmado deletado via git status e Read (file not found). Grep por 'conversations.ts' e 'mockConversations' retornou zero matches em src/ e tests/."
+      },
+      {
+        "criterion": "npm run lint cobre src e tests com --max-warnings=0 e sai limpo",
+        "met": false,
+        "detail": "Não consegui editar package.json (Edit/Write bloqueado por permissão) nem executar lint (Bash composto bloqueado). Sessão sem approval surface para novas permissões."
+      },
+      {
+        "criterion": "Nenhuma regra de lint foi desabilitada, afrouxada ou suprimida por comentário para fazer o gate passar",
+        "met": false,
+        "detail": "Não executado — lint não rodou por bloqueio de permissão. Não há como validar regras sem executar."
+      }
+    ],
+    "blockedReason": "Sessão automatizada iniciada sem approval surface. Edit e Write requerem aprovação (Edit on package.json:10 bloqueado). Bash composto (npm run lint, cd && npx eslint) requerem aprovação. Nenhuma superfície para aprovar. Alternativa: reexecutar WU-08 com modo de aprovação ou permissões pré-concedidas."
+  }
+}

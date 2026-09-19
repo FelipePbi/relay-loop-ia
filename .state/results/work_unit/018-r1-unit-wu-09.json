@@ -1,0 +1,55 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T20:58:39.850Z",
+  "attemptId": "018-r1-unit-wu-09-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "A orientação sobre número pessoal aparece antes da conexão, com os quatro pontos do vault",
+          "met": true,
+          "detail": "scenario 'whatsapp' (blocks/whatsapp.tsx) renders the 4 vault points from docs/product-vault/02-Fluxos/02-Ativacao-e-Teste-do-WhatsApp.md §'Orientação sobre número pessoal' as a list, shown before the connection step ('whatsapp-conectar', which hosts WhatsAppConnectionPanel unchanged). Covered by test 'whatsapp mostra a orientação sobre número pessoal e avança para whatsapp-conectar'."
+        },
+        {
+          "criterion": "As duas ações existem e pular conclui o onboarding",
+          "met": true,
+          "detail": "OnboardingScreen.tsx renders 'Conectar meu WhatsApp' (submit -> go to whatsapp-conectar) and 'Fazer isso depois' (button -> skipWhatsappStep, which calls onboarding.complete()+refreshSession() then navigates to whatsapp-concluido). Covered by test 'whatsapp: Fazer isso depois conclui o onboarding e leva a whatsapp-concluido'."
+        },
+        {
+          "criterion": "A conclusão sem WhatsApp usa a copy do vault com Ir para o início como ação principal e Conectar agora como secundária",
+          "met": true,
+          "detail": "scenario 'whatsapp-concluido' uses the exact vault copy from docs/product-vault/02-Fluxos/01-Onboarding.md §10 ('Sua Atendly está configurada.' / 'Conecte seu WhatsApp quando quiser colocar a IA para atender seus clientes.'), with 'Ir para o início' as btn-primary (href=/inicio) and 'Conectar agora' as btn-secondary (href=/configuracoes/whatsapp). Covered by test 'whatsapp-concluido mostra a copy do vault com as duas ações'."
+        },
+        {
+          "criterion": "Nenhuma tela afirma que a IA foi ativada",
+          "met": true,
+          "detail": "Reviewed all new/changed copy in scenarios.ts and blocks/whatsapp.tsx: no screen states the AI is active or was activated (the WU-09 scope explicitly excludes the test/auto-activation flow, per implementationHint, which belongs to Goal018B)."
+        },
+        {
+          "criterion": "O cenário validacao com resumo de texto fixo não existe mais, e toda afirmação da conclusão vem de leitura real",
+          "met": true,
+          "detail": "'validacao' scenario/key removed from scenarios.ts, blocks.ts and onboardingFlow; the hard-coded Summary rows ('Negócio: Configurado' etc.) were deleted from blocks/whatsapp.tsx. Connecting via 'whatsapp-conectar' now completes onboarding directly from a real getProductServices().whatsapp.get() status check, with no fixed-text confirmation screen. Verified via `grep validacao` returning no matches in apps/frontend."
+        }
+      ],
+      "changedFiles": [
+        "apps/frontend/src/features/onboarding/scenarios.ts",
+        "apps/frontend/src/features/onboarding/blocks.ts",
+        "apps/frontend/src/features/onboarding/blocks/whatsapp.tsx",
+        "apps/frontend/src/features/onboarding/OnboardingScreen.tsx",
+        "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+        "apps/frontend/src/shared/styles/atendly.css",
+        "apps/frontend/tests/goal018-onboarding-reachability.test.tsx"
+      ],
+      "goal": "018",
+      "jobId": "018-r1-unit-wu-09",
+      "protocolVersion": 2,
+      "report": "Split the WhatsApp block into three scenarios to match the vault flow and remove the fixed-text 'validacao' screen.\n\nscenarios.ts: replaced the single 'whatsapp' entry + 'validacao' with three entries: 'whatsapp' (intro/orientation, eyebrow \"Antes de conectar\" to avoid duplicating the \"WhatsApp\" block-progress label), 'whatsapp-conectar' (the connection panel, same copy the old 'whatsapp' scenario had), and 'whatsapp-concluido' (the no-WhatsApp completion screen, using the exact vault copy from docs/product-vault/02-Fluxos/01-Onboarding.md §9-10).\n\nblocks.ts: blockScenarios.whatsapp now lists all three scenarios; onboardingFlow keeps 'whatsapp' → 'whatsapp-conectar' as the sequential path and excludes 'whatsapp-concluido' as a branch reached only via skip (same treatment as 'minha-agenda-conectar'). progressPercent returns 100 for 'whatsapp-concluido'.\n\nblocks/whatsapp.tsx: whatsappStepBody now renders the 4 vault points (docs/product-vault/02-Fluxos/02-Ativacao-e-Teste-do-WhatsApp.md §\"Orientação sobre número pessoal\") as a list for 'whatsapp', the untouched WhatsAppConnectionPanel for 'whatsapp-conectar', and nothing for 'whatsapp-concluido' (title/description alone carry the vault copy). persistWhatsappStep: 'whatsapp' just navigates to 'whatsapp-conectar'; 'whatsapp-conectar' checks the real connection status and, if connected, completes onboarding and replaces the route with /inicio directly (no more intermediate 'validacao' screen with hard-coded \"Configurado\" strings). New exported skipWhatsappStep completes onboarding via getProductServices().onboarding.complete() + refreshSession(), then navigates to 'whatsapp-concluido'.\n\nOnboardingScreen.tsx: added scenario-specific action branches — 'whatsapp' renders \"Fazer isso depois\" (calls the new local skip() → skipWhatsappStep) and \"Conectar meu WhatsApp\" (submit); 'whatsapp-concluido' renders the two vault links (\"Conectar agora\" → /configuracoes/whatsapp, \"Ir para o início\" → /inicio) instead of the generic Continuar/Voltar pair; the generic submit label shows \"Concluir configuração\" for 'whatsapp-conectar' (was for 'validacao').\n\nOnboardingRuntime.tsx: nextRequiredStep's fallback (WhatsApp already connected) now points to 'whatsapp-conectar' instead of the removed 'validacao'.\n\natendly.css: added `.onboarding-points` (and child rules) for the 4-point orientation list, reusing existing tokens (--border, --accent).\n\ntests/goal018-onboarding-reachability.test.tsx (owned by WU-07, necessarily updated since it exercised the exact scenarios being restructured): bumped onboardingOrder length 14→15; replaced the 'whatsapp conectado avança para validacao' / 'whatsapp sem conexão...' / 'validacao conclui...' tests with equivalents on the new scenario split, and added coverage for the intro's 4 points, the skip path, the whatsapp-concluido copy/links, and nextRequiredStep's new fallback.\n\nConfirmed no other reference to 'validacao' remains in apps/frontend (Grep, zero matches).\n\nCommands run: `npx vitest run tests/goal018-onboarding-reachability.test.tsx` (43/43 passed, twice — before and after Prettier fix), `npx vitest run` full suite (396/396 passed), `npx tsc --noEmit -p tsconfig.json` (clean), `npx eslint src/features/onboarding tests/goal018-onboarding-reachability.test.tsx` (clean), `npx prettier --write` on the 7 changed files (whitespace-only reflow, re-verified tests still pass after).",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Split the WhatsApp onboarding block into orientation, connect, and no-WhatsApp-completion scenarios per the vault, removing the fixed-text 'validacao' screen; 396/396 frontend tests and typecheck pass.",
+      "workUnitId": "WU-09"
+    },
+    "attemptId": "018-r1-unit-wu-09-a1"
+  }
+}

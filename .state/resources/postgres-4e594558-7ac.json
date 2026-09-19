@@ -1,0 +1,53 @@
+{
+  "resourceId": "postgres-4e594558-7ac",
+  "resourceType": "postgres",
+  "goalId": "016",
+  "round": 1,
+  "stage": "work_unit",
+  "role": "developer",
+  "jobId": "016-r1-unit-wu-17-g3",
+  "attemptId": "016-r1-unit-wu-17-g3-a1",
+  "createdAt": "2026-09-14T15:18:15.018Z",
+  "ownerWorkerId": "Borges",
+  "ownerProcessId": 19600,
+  "ownerProcessStartTime": "2026-09-14T13:00:36.999Z",
+  "status": "CLEANED",
+  "statusAt": "2026-09-14T15:18:50.857Z",
+  "lastVerifiedAt": "2026-09-14T15:18:50.857Z",
+  "metadata": {
+    "dataDirectory": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.tmp\\postgres\\postgres-4e594558-7ac\\data",
+    "logFile": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.tmp\\postgres\\postgres-4e594558-7ac\\server.log",
+    "postgresExecutable": "C:\\Users\\felip\\AppData\\Local\\Programs\\PostgreSQL\\18\\pgsql\\bin\\postgres.exe",
+    "pgCtlExecutable": "C:\\Users\\felip\\AppData\\Local\\Programs\\PostgreSQL\\18\\pgsql\\bin\\pg_ctl.exe",
+    "createdByCommand": "temporary-postgres.mjs#startTemporaryPostgres",
+    "port": 55500,
+    "user": "iapgtest",
+    "database": "ia_loop_temp",
+    "postgresPid": 21620,
+    "postgresProcessStartTime": "2026-09-14T15:18:17.698Z",
+    "connectionString": "postgresql://iapgtest@127.0.0.1:55500/ia_loop_temp"
+  },
+  "cleanupPolicy": "STOP_THEN_REMOVE_DIRECTORY",
+  "history": [
+    {
+      "status": "CREATING",
+      "at": "2026-09-14T15:18:15.018Z",
+      "detail": null
+    },
+    {
+      "status": "ACTIVE",
+      "at": "2026-09-14T15:18:47.947Z",
+      "detail": "Listening on 127.0.0.1:55500"
+    },
+    {
+      "status": "STOPPING",
+      "at": "2026-09-14T15:18:48.732Z",
+      "detail": null
+    },
+    {
+      "status": "CLEANED",
+      "at": "2026-09-14T15:18:50.857Z",
+      "detail": "Process 21620 (started 2026-09-14T15:18:17.698Z) matches the registered PostgreSQL server exactly."
+    }
+  ]
+}

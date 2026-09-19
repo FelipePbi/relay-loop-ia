@@ -1,0 +1,24 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T13:06:30.606Z",
+  "attemptId": "025-r4-tech_lead-e272cce0-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r4-tech_lead-e272cce0",
+      "goal": "025",
+      "round": 4,
+      "decision": "CHANGES_REQUIRED",
+      "blockers": [
+        "validate:integration FAILED na rodada 1 no passo test:ai-orchestrator-content-purge (4/4 testes de purga por tenant quebrados por tabela KnowledgeChunk inexistente) e nunca foi reexecutado depois da correção escrita em rodada posterior; o item 35 do Goal exige resultado real deste gate.",
+        "Gates de lint, validate:core e validate:ui só rodaram sobre a árvore da rodada 1, mas settings/routes.ts, AppShell.tsx, AccountSettings.tsx, systemStatus.tsx e o script de ensaio do Goal012 mudaram depois disso."
+      ],
+      "nextAction": "RETURN_TO_DEVELOPER",
+      "nextDeveloperProfile": "OPUS_MEDIUM",
+      "nextDeveloperProfileReason": "Correção exige rodar gate de integração contra PostgreSQL real e consertar fixture/purga multi-serviço, não edição localizada.",
+      "summary": "O blocker da rodada 3 está RESOLVIDO e verificado: `docs/migration/DECISIONS.md` mudou (+16/-0, só o bloco D-041, nenhum outro bloco tocado, status segue `PROPOSED`). O item (5) agora descreve as duas guardas — `reconcileAiActivation` em `apps/bff/src/lib/ai-activation.ts:104` (força o desejado a `false` com exclusão `SCHEDULED`, inclusive contra execução `SUCCEEDED`) e `assertAiActivationNotBlockedByDeletion` em `apps/bff/src/modules/account/service.ts:377`, chamada só por `apps/bff/src/modules/settings/routes.ts:152` dentro de `if (body.enabled)`, antes da checagem de serviço operacional, recusando com `409 CONFLICT` sem `details`. Conferi chamador por chamador (`grep` confirma um único uso) e o texto bate com o código. A linha de Alternativas deixou de rejeitar essa guarda e passou a rejeitar só a guarda em rotas que leem/projetam o já gravado, com a exceção de `PATCH /v1/settings/ai` nomeada.\\n\\nMesmo assim o Goal não pode ser aceito nesta rodada, por prova, não por desenho. `validate:integration` — o único lugar onde a purga destrutiva roda contra PostgreSQL real — falhou na rodada 1 com exit 1, e a falha é do próprio Goal: `apps/ai-orchestrator/tests/retention/tenant-purge.test.ts` quebrou 4/4 em `The table public.KnowledgeChunk does not exist`, abortando antes de exercitar regra alguma de purga, incluindo o teste de isolamento entre dois negócios que o item 25 exige. Uma rodada posterior escreveu a correção (fixture de `KnowledgeChunk` no ensaio do Goal012), mas o gate nunca foi reexecutado — rodadas 2, 3 e 4 não rodaram gate nenhum. Não é a falha ambiental conhecida de goals antigos: o mesmo gate saiu exit 0 nos Goals 020 a 024. O item 35 do Goal exige resultado real de cada gate, incluindo este.\\n\\nSegundo ponto: os gates verdes são da árvore da rodada 1, e `settings/routes.ts`, `AppShell.tsx`, `AccountSettings.tsx`, `systemStatus.tsx` e o script de ensaio mudaram depois. Cobri parte disso nesta revisão e está verde (typecheck de bff e frontend exit 0; 55 testes de frontend e 38 do BFF passando), mas lint, `validate:core` e `validate:ui` continuam sem execução sobre a árvore atual."
+    },
+    "attemptId": "025-r4-tech_lead-e272cce0-a1"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T23:19:01.805Z",
+  "attemptId": "006-r1-tech_lead-6389eed2-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "006-r1-tech_lead-6389eed2",
+      "goal": "006",
+      "summary": "Fechamento documental do Goal006 (ACCEPTED na rodada 1, base 8acd4c6, snapshot de 40 arquivos hash 0fdd8834…). Criado docs/migration/reviews/006-review.md com decisão, identidade do diff, verificações (identidade por ID, criação só na confirmação após lock e slot, resolução de candidatos na IA, responsável/notas/tags com autorização, contratos, migrations expand/cut, resíduos do 005, gates), evidência reproduzida (validate:integration 16/16, validate:core 14 passed/3 skipped, lint/tsc, git diff --check, migrate diff do Scheduling com drift só de forma, sondagem Prisma real do índice parcial devolvendo P2002/23505), seis observações não bloqueantes, limites e encaminhamento. DECISIONS: D-005 → ACCEPTED e D-022 registrada com os contratos adotados. GAP_ANALYSIS: G-14 fechado, G-15 fechado na parte de cadastro, G-11 avançado na identidade, parágrafo de atualização. CURRENT_STATE: fato de cliente por telefone marcado como superado, resíduo de handoffs OPEN marcado resolvido, delta006 apendado. DATA_MIGRATION: atualização do Developer reclassificada de IMPLEMENTED para ACCEPTED com link ao review, linhas §1, Customer, DATA-02, DATA-13, §5.2, §5.4 (IA → Scheduling) e gate Identidade anotadas. REUSE_ANALYSIS (linha cliente/serviço), TARGET_ARCHITECTURE (parágrafo de identidade com D-022) e MASTER_PLAN (histórico v11) alinhados. Não criado próximo Goal, nenhum Goal marcado READY, MIGRATION_STATUS e baseline intocados, nenhum arquivo fora de docs/migration alterado; git diff --check limpo; todos os docs mantidos em CRLF.",
+      "documentsUpdated": [
+        "docs/migration/reviews/006-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "O Goal 006 (goals/006-clientes-como-pessoas.md) permanece com cabeçalho READY: a virada para ACCEPTED e o registro do SHA de fechamento em MIGRATION_STATUS ficam para a etapa de planejamento, como nos Goals anteriores. Observações não bloqueantes do review (drift de updatedAt/FK no migrate diff do Scheduling, actor de proveniência vindo do cliente do BFF, findCustomerAppointments por telefone na IA, addTag reescrevendo aiAuthorized) estão registradas em D-022 e no histórico v11 como melhorias, sem Goal novo."
+    },
+    "attemptId": "006-r1-tech_lead-6389eed2-a1"
+  }
+}

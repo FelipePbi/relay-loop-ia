@@ -1,0 +1,70 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T02:50:41.156Z",
+  "attemptId": "019-r4-correction-e932266d-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "019-r4-correction-e932266d",
+      "goal": "019",
+      "round": 4,
+      "status": "REVIEW_REQUIRED",
+      "summary": "1 work unit(s) concluída(s): 0 determinística(s), 0 em Haiku, 0 em Sonnet, 1 em Opus.",
+      "implementationReport": "# Execução por Work Units — Goal 019, rodada 4\n\nPlano: 1 unidade(s) declarada(s), 1 executada(s). Fonte: CORRECTION_ROUND_SINGLE_UNIT.\nEstratégia: Correction round: the blockers from the previous review are the authority, so this round is one COMPLEX unit scoped to them — behaviourally the legacy correction round. O Tech Lead havia escolhido OPUS_MEDIUM para esta rodada; a unidade é declarada COMPLEX para preservar esse julgamento sem que o plano nomeie um modelo.\n\n## Unidades\n\n### FIX-001 — COMPLETED\n\nObjetivo: Corrigir exclusivamente os 1 blocker(s) registrados pelo Tech Lead na revisão da rodada 3, preservando o que já foi aceito.\nexecutor: opus (high), tier COMPLEX · 1 tentativa(s)\nArquivos alterados (2): apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts, apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts\n\nCritérios de aceite:\n- OK: Blocker 1 resolvido: §6 e critério 14 — a execução não grava o ID das mensagens que ela cria pela IA, então a limpeza nunca as remove em produção. `ActivationTestAiDriver.deliver` devolve `clientMessageId: input.externalMessageId`, que é o `correlationId` do envio. — `deliver` agora executa `recordInboundText` + `handleBufferedText` (o par que `handleIncomingText` encadeia) e devolve `clientMessageId: recorded.messageRecordId` — id da linha em `Message`, chave usada por `removeCreatedMessages`. `aiMessageId` já era `assistantMessage.id`. Provado por 3 testes novos em activation-test-ai-driver.test.ts:174-207; revertendo a linha, o teste falha com Expected \"message-client-1\" / Received \"external-1\". tsc limpo; suíte do ai-orchestrator 656 passed.\n\n## Causa raiz\n\n`ActivationTestAiDriver.deliver` chamava `AssistantService.handleIncomingText`, que executa `recordInboundText` (grava a fala do cliente) seguido de `handleBufferedText` (roda o turno), mas **descarta** o id da linha do cliente e devolve apenas o id da linha da IA. O driver compensava isso devolvendo `clientMessageId: input.externalMessageId`.\n\nEsse `externalMessageId` é `sent.messageId ?? correlationId` (ActivationTestService.ts:856), ou seja o id da mensagem no provedor ou `activation-test-<runId>-<step>-<attempt>`. Ele entra em `run.createdMessageIds` via `patchRun({ appendMessageIds })` (ActivationTestService.ts:879-886), e a limpeza remove com `ActivationTestRunStore.removeCreatedMessages` → `prisma.message.deleteMany({ where: { tenantId, id: { in: [...messageIds] } } })` (ActivationTestRunStore.ts:623-627), isto é, **por chave primária**. Em produção nenhum desses ids casa com linha alguma: a fala do cliente simulado nunca era removida, e ainda ficava fora da contagem de resíduo porque `findSurvivingMessageIds` faz a mesma busca por `id`. `aiMessageId` já estava correto — `completeGraphTurn` devolve `assistantMessage.id`, id de linha real (assistant.service.ts:686-712).\n\n## Mudança\n\n**apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts**\n- `ActivationTestAiDriverDeps.assistant` passou de `Pick<AssistantService, \"handleIncomingText\">` para `Pick<AssistantService, \"recordInboundText\" | \"handleBufferedText\">`, com comentário explicando por que o teste precisa dos dois passos separados.\n- `deliver` monta o payload `incoming` uma vez e executa `recordInboundText(incoming)` e depois `handleBufferedText({ ...incoming, messageRecordIds: [recorded.messageRecordId] })` — exatamente o encadeamento que `handleIncomingText` faz internamente (assistant.service.ts:303-311). Nenhum atalho novo: mesma porta de entrada, mesmo grafo, mesmo `AiRun` apontando para a mensagem gravada.\n- `clientMessageId` passa a ser `recorded.messageRecordId` (id da linha em `Message`). Comentários que descreviam `handleIncomingText` foram ajustados para `handleBufferedText`/\"porta de entrada\".\n- Wiring em `apps/ai-orchestrator/src/modules/internal/routes.ts:307` não precisou mudar: ele injeta a instância completa de `AssistantService`, que satisfaz o novo `Pick`.\n\n**apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts**\n- `AssistantDouble` agora dubla `recordInboundText` e `handleBufferedText` separadamente, com três ids distintos de propósito (`message-client-1`, `message-ai-1`, `external-1`) para que um teste consiga distingui-los.\n- Novo bloco `describe(\"o turno devolve o id das linhas gravadas\")` com três testes: `clientMessageId` é a linha gravada e não o id externo (e o id externo continua viajando como `channelMessage.messageId`); `aiMessageId` continua sendo a linha da IA e difere da do cliente; o turno roda sobre o id recém-gravado (`messageRecordIds`).\n\nO dublê de IA do `activation-test-service.test.ts` já devolvia ids de linha reais (`client.id`/`aiMessage.id`), por isso a suíte de serviço passava enquanto a produção estava errada — o buraco era exatamente o driver real, que o teste de driver não cobria. Agora cobre.\n\n## Comandos executados\n\n- `npx tsc --noEmit -p tsconfig.json` (apps/ai-orchestrator) → `TypeScript: No errors found`\n- `npx vitest run` (suíte completa do ai-orchestrator) → `Test Files 70 passed | 9 skipped (79)`, `Tests 656 passed | 69 skipped (725)`\n- `npx vitest run tests/activation-test` → `4 passed (4)`, `73 passed (73)`\n- Prova da regressão: revertendo temporariamente só a linha para `clientMessageId: input.externalMessageId` e rodando `npx vitest run tests/activation-test/activation-test-ai-driver.test.ts` → `1 failed | 8 passed`, com `Expected: \"message-client-1\" / Received: \"external-1\"` em `activation-test-ai-driver.test.ts:181`. A linha foi restaurada em seguida e a suíte voltou a passar.\n- `npm run lint` (eslint src --max-warnings=0) → sem saída de erro\n- `npx\n\n\n## Verificação determinística\n\n(o plano não declarou nenhuma verificação determinística)\n\n## Roteamento\n\n- native (sem modelo): 0\n- haiku: 0 · sonnet: 0 · opus: 1\n- escalations: 0 · context expansions: 0\n- tentativas totais: 1 · resultados reaproveitados de disco: 0",
+      "validations": [],
+      "workUnitExecution": {
+        "source": "CORRECTION_ROUND_SINGLE_UNIT",
+        "units": [
+          {
+            "id": "FIX-001",
+            "type": "COMPLEX",
+            "state": "COMPLETED",
+            "executor": "model",
+            "model": "opus",
+            "effort": "high",
+            "tier": "COMPLEX",
+            "attempts": 1,
+            "escalations": 0,
+            "contextExpansions": 0,
+            "changedFiles": [
+              "apps/ai-orchestrator/src/modules/activation-test/ActivationTestAiDriver.ts",
+              "apps/ai-orchestrator/tests/activation-test/activation-test-ai-driver.test.ts"
+            ]
+          }
+        ],
+        "levels": [
+          [
+            "FIX-001"
+          ]
+        ],
+        "telemetry": {
+          "workUnitsTotal": 1,
+          "workUnitsByType": {
+            "COMPLEX": 1
+          },
+          "workUnitsByState": {
+            "COMPLETED": 1
+          },
+          "modelCalls": {
+            "native": 0,
+            "haiku": 0,
+            "sonnet": 0,
+            "opus": 1,
+            "fable": 0
+          },
+          "escalations": 0,
+          "contextExpansions": 0,
+          "attempts": 1,
+          "reusedResults": 0,
+          "averageContextChars": 3697,
+          "dynamicUnits": [
+            "FIX-001"
+          ]
+        }
+      },
+      "escalation": null
+    },
+    "attemptId": "019-r4-correction-e932266d-a1"
+  }
+}

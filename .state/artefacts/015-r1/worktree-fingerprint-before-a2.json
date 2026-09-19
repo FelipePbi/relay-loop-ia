@@ -1,0 +1,71 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-14T11:31:30.704Z",
+  "base": "908c4a1d0ae956831b5c7b604d47d68a999f7dea",
+  "worktreeInitialHead": "908c4a1d0ae956831b5c7b604d47d68a999f7dea",
+  "head": "908c4a1d0ae956831b5c7b604d47d68a999f7dea",
+  "branch": "ai-loop/goal-015",
+  "trackedDiffHash": "b6275019f6dd04fb0f7c6ee3dd04b9c7701e1c04bc98e0cf3a1f819e549cfd72",
+  "trackedFileCount": 12,
+  "trackedFiles": [
+    "apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx",
+    "apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx",
+    "apps/frontend/src/app/(platform)/clientes/novo/page.tsx",
+    "apps/frontend/src/app/(platform)/clientes/page.tsx",
+    "apps/frontend/src/app/(platform)/servicos/editar/page.tsx",
+    "apps/frontend/src/app/(platform)/servicos/novo/page.tsx",
+    "apps/frontend/src/app/(platform)/servicos/page.tsx",
+    "apps/frontend/src/app/globals.css",
+    "apps/frontend/src/data/services/BffCalendarService.ts",
+    "apps/frontend/src/features/customers/types.ts",
+    "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+    "apps/frontend/src/mocks/data/directory.ts"
+  ],
+  "untrackedHash": "fc644a1ac70e7bf88a176dd8e71292f998f4721ff439908e1c606c52142f1db5",
+  "untrackedFileCount": 8,
+  "untracked": [
+    {
+      "path": "apps/frontend/src/features/customers/CustomerForm.tsx",
+      "sha256": "1bcb0d6e6a1101eed13f6490434ffe46cf98dfe7b0d82c247a6618ea9633181d",
+      "bytes": 8189
+    },
+    {
+      "path": "apps/frontend/src/features/customers/CustomerList.tsx",
+      "sha256": "be3bfd4fdd7e8caba2306ca65329f42b5c3dfd5328b3b63a6b4d5c64aa806c12",
+      "bytes": 6127
+    },
+    {
+      "path": "apps/frontend/src/features/customers/ProductCustomersScreen.tsx",
+      "sha256": "50751858f36b2c48057c445a158339f5ec6a441e680cb92e173cf908065b1fd1",
+      "bytes": 11379
+    },
+    {
+      "path": "apps/frontend/src/features/services/ProductServicesScreen.tsx",
+      "sha256": "c7ddb3f7d8fbddb3fb1a7cc0fa37121d323916bb45e7fe734888ea55c3c62cc1",
+      "bytes": 494
+    },
+    {
+      "path": "apps/frontend/src/features/services/ServiceForm.tsx",
+      "sha256": "0fc49d853989b99aeec93d5abf0ab5a5b39734170cf5b2da022219023b50e0d7",
+      "bytes": 15763
+    },
+    {
+      "path": "apps/frontend/src/features/services/ServiceList.tsx",
+      "sha256": "63993a31f60d7541401a6a2ea559a15f8e3796a7110ebaf986f79c6955f41248",
+      "bytes": 15928
+    },
+    {
+      "path": "apps/frontend/src/shared/styles/atendly-customers.css",
+      "sha256": "872f1a8cd106df3883793f42719496e22fd16ec889811e3859a4ab2f3fd0d606",
+      "bytes": 1405
+    },
+    {
+      "path": "apps/frontend/src/shared/styles/atendly-services.css",
+      "sha256": "399f6d0b5adb281d1efbbe36026a6a6f19cb56bac2ca508a58bdd662188ac2b4",
+      "bytes": 1513
+    }
+  ],
+  "contentHash": "2375c046d491535447d0ff4df208acd18f4f58ac174d688fd95125d49b4cdba2",
+  "attempt": 2,
+  "jobId": "015-r1-developer-314bf39b"
+}

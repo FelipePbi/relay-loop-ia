@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T15:13:53.002Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "021-r1-unit-wu-011-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "021-r1-unit-wu-011",
+    "role": "work_unit",
+    "goal": "021",
+    "round": 1,
+    "workUnitId": "WU-011",
+    "unitType": "STANDARD",
+    "complexity": "MEDIUM",
+    "risk": "MEDIUM",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-021",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\021-lembretes-confirmacao-e-notificacao-de-alteracao.md",
+    "parentJobId": "021-r1-developer-1ed08aa2",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "sonnet",
+      "model": "claude-sonnet-5",
+      "family": "sonnet",
+      "effort": "high",
+      "complexity": "MEDIUM",
+      "riskScore": null,
+      "signals": [
+        "STANDARD",
+        "RISK_MEDIUM"
+      ],
+      "reason": "STANDARD_WORK_UNIT",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-15T15:30:31.734Z"
+}

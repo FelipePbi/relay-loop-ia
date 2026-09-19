@@ -1,0 +1,242 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T03:12:05.891Z",
+  "attemptId": "024-r2-tech_lead-17b239e4-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r2-tech_lead-17b239e4",
+      "goal": "024",
+      "summary": "Dos 45 itens, 42 COVERED, 3 UNCLEAR (§5-critério 5, 33 dependem do relatório do Developer, que não está no diff). Nada ficou NOT_COVERED. O diff colado está truncado (13 de 32 arquivos), então verifiquei a worktree E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-024 diretamente: os oito módulos de seção, features/knowledge/ (3 arquivos), as quatro suítes goal024-* do frontend e o teste de integração do BFF existem no disco. Três pontos que o revisor deve olhar mesmo com verdict COVERED: (a) §4/critério 16 — OtherInfoSection é de escrita só, não lê o BUSINESS_INFO vigente (o Goal pedia \"Lê o BUSINESS_INFO vigente\"); o componente declara na tela e no docblock que o DTO não devolve o conteúdo indexado; (b) critério 26 — a suíte de invariante monta 14 dos 16 cenários; `loading` e `error` não são montados por cenário (eles só são alcançados pelo estado interno de ProductSettingsScreen); (c) critério 34 — G-29 continua declarado aberto, mas a última coluna da linha 59 do GAP_ANALYSIS ainda diz \"suspender conta/WA e restore com novo teste seguem no **Goal024**\" enquanto o cabeçalho da mesma linha já diz Goal024B; o diff não tocou essa coluna.",
+      "items": [
+        {
+          "id": "§1",
+          "verdict": "COVERED",
+          "evidence": "ProductSettingsScreen.tsx passou de 942 para 105 linhas e só despacha (linhas 92-104) para AccountSettings, AiSettings, AvailabilitySettings, BusinessSettings, CalendarSettings, ConversationsSettings, SettingsHub e WhatsAppSettings; primitivas em features/settings/shared/fields.tsx, labels.ts e SettingsPage.tsx."
+        },
+        {
+          "id": "§2",
+          "verdict": "COVERED",
+          "evidence": "SettingsHub.tsx:48-79 tem cartão próprio 'Importação' -> /importacao; CalendarSettings.tsx não monta mais ImportSettingsSection (só ReminderSettingsSection, linha 38); features/imports/ImportSettingsSection.tsx foi removido."
+        },
+        {
+          "id": "§3",
+          "verdict": "COVERED",
+          "evidence": "features/knowledge/KnowledgeSection.tsx + KnowledgeDocumentForm.tsx montados dentro de AiSettings.tsx:82 (Configurações → IA): listar, criar, editar, desativar, com BUSINESS_INFO filtrado e 502/KNOWLEDGE_INDEX_UNAVAILABLE tratado."
+        },
+        {
+          "id": "§4",
+          "verdict": "COVERED",
+          "evidence": "features/knowledge/OtherInfoSection.tsx grava só por knowledge.saveOtherInfo (PUT /v1/knowledge/other-info), sem criar segundo nem desativar. Desvio a conferir: o campo é de escrita só — não lê o BUSINESS_INFO vigente (o §4 pedia 'Lê o BUSINESS_INFO vigente'); a tela declara isso ('O conteúdo salvo não é reexibido aqui', linhas 55-59)."
+        },
+        {
+          "id": "§5",
+          "verdict": "COVERED",
+          "evidence": "apps/bff/src/modules/auth/routes.ts:262-273 (POST /v1/auth/logout-all sob requireTenantContext, revokeAllUserSessions + clearSessionCookie), BffAuthService.logoutAllDevices com resetCsrfToken, AccountSettings.tsx:47-63 e 119-158 (confirmação + router.replace('/login')), copy de 'Excluir conta' reescrita (linhas 108-111)."
+        },
+        {
+          "id": "§6",
+          "verdict": "COVERED",
+          "evidence": "PUBLIC_API_V1.md: linha da tabela de Autenticação ganha POST /v1/auth/logout-all e seção nova 'Sair de todos os dispositivos (Goal024/WU-05)'; nenhum outro contrato aparece no diff do arquivo."
+        },
+        {
+          "id": "§7",
+          "verdict": "COVERED",
+          "evidence": "DashboardScreen.tsx não está entre os 32 arquivos alterados; CURRENT_STATE.md registra 'FATO atual (Home, conferência)' declarando que nenhuma divergência real foi encontrada contra GET /v1/status e GET /v1/dashboard. O relatório do Developer em si está fora do diff."
+        },
+        {
+          "id": "§8",
+          "verdict": "COVERED",
+          "evidence": "As 8 rotas de app/(platform)/configuracoes/ continuam finas via SettingsScreen; formulários movidos verbatim para os módulos; único useShellConfig em ProductSettingsScreen.tsx:46; ConversationsSettings.tsx só remonta RetentionSection (não alterada); onboarding não tocado."
+        },
+        {
+          "id": "§9",
+          "verdict": "COVERED",
+          "evidence": "goal024-settings-shell-invariant.test.tsx, goal024-settings-hub.test.tsx, goal024-knowledge-section.test.tsx, goal024-account-sessions.test.tsx e apps/bff/tests/goal024-session-revocation.integration.test.ts. Resultado real da execução dos gates é matéria do relatório, fora do diff."
+        },
+        {
+          "id": "§10",
+          "verdict": "COVERED",
+          "evidence": "PUBLIC_API_V1.md, GAP_ANALYSIS.md (G-19/G-24/G-31), CURRENT_STATE.md (delta Goal024), REUSE_ANALYSIS.md (ProductSettingsScreen, features/knowledge, ProductMigrationScreen) e DECISIONS.md (D-040). VALIDATION_GATE.md não mudou — condicional no Goal."
+        },
+        {
+          "id": "critério 1",
+          "verdict": "COVERED",
+          "evidence": "ProductSettingsScreen.tsx tem 105 linhas e nenhuma seção; cada arquivo de features/settings/ contém exatamente uma seção (AccountSettings, AiSettings, AvailabilitySettings, BusinessSettings, CalendarSettings, ConversationsSettings, SettingsHub, WhatsAppSettings)."
+        },
+        {
+          "id": "critério 2",
+          "verdict": "COVERED",
+          "evidence": "Oito módulos por seção existem em features/settings/. A ressalva a julgar: nenhum módulo chama useShellConfig — o único call site continua em ProductSettingsScreen.tsx:46, o que D-040 registra explicitamente como achado e diferença em relação à aplicação anterior de D-031."
+        },
+        {
+          "id": "critério 3",
+          "verdict": "COVERED",
+          "evidence": "features/settings/types.ts não está entre os arquivos alterados e mantém os 16 cenários; ProductSettingsScreen.tsx:92-104 despacha todos (whatsapp por prefixo, hub-external e calendar-external por alias). `loading`/`error` continuam alcançáveis pelo estado interno da tela (linhas 54-70), como na baseline, não por rota."
+        },
+        {
+          "id": "critério 4",
+          "verdict": "COVERED",
+          "evidence": "app/(platform)/configuracoes/ mantém os 8 page.tsx (hub, negocio, ia, whatsapp, agenda, disponibilidade, conversas, conta), cada um com 3 linhas montando SettingsScreen com o scenario; nenhum deles está no diff."
+        },
+        {
+          "id": "critério 5",
+          "verdict": "UNCLEAR",
+          "evidence": "No diff os formulários foram movidos verbatim (BusinessSettings, AiSettings, AvailabilitySettings, AccountSettings mantêm campos, validações, chamadas e mensagens). Há ao menos uma exceção de copy — 'Excluir conta' passou a dizer 'faz parte de uma etapa futura do produto', permitida por §5 —, mas a metade do critério que exige o relatório nomear cada exceção não é verificável: o relatório não faz parte do diff."
+        },
+        {
+          "id": "critério 6",
+          "verdict": "COVERED",
+          "evidence": "RetentionSection.tsx, features/reminders/ReminderSettingsSection.tsx e features/whatsapp/ não aparecem na lista de arquivos alterados; ConversationsSettings.tsx e CalendarSettings.tsx apenas os remontam. ImportSettingsSection não foi reescrita — foi removida por perder o consumidor (a julgar contra §2)."
+        },
+        {
+          "id": "critério 7",
+          "verdict": "COVERED",
+          "evidence": "SettingsHub.tsx:61-66 (cartão Importação -> /importacao); CalendarSettings.tsx não importa ImportSettingsSection; goal024-settings-hub.test.tsx assere o href e goal020-reachability.test.tsx passou a provar a entrada pela rota real do hub."
+        },
+        {
+          "id": "critério 8",
+          "verdict": "COVERED",
+          "evidence": "SettingsHub.tsx:41-47 só empurra o cartão de Disponibilidade quando calendar.source === 'ATENDLY'; goal024-settings-hub.test.tsx:112-139 prova ausência do link com fonte EXTERNAL (7 cartões em vez de 8)."
+        },
+        {
+          "id": "critério 9",
+          "verdict": "COVERED",
+          "evidence": "AiSettings.tsx:82 monta KnowledgeSection dentro da página 'Atendente virtual'; KnowledgeSection.tsx:41 lista por knowledge.list({}) e filtra BUSINESS_INFO."
+        },
+        {
+          "id": "critério 10",
+          "verdict": "COVERED",
+          "evidence": "KnowledgeSection.tsx:60-63 e 150-158 imprimem 'tipo · nome do serviço' ou 'Geral' quando serviceId é nulo; goal024-knowledge-section.test.tsx:133-138 assere o 'Geral' e :129 o nome do serviço."
+        },
+        {
+          "id": "critério 11",
+          "verdict": "COVERED",
+          "evidence": "KnowledgeDocumentForm.tsx:30-36 (CREATABLE_KNOWLEDGE_TYPES com os cinco tipos) e :125-139 (select de serviço por id vindo de serviceCatalog.list); teste de criação assere knowledge.create com type TEXT_POLICY e serviceId 's1'."
+        },
+        {
+          "id": "critério 12",
+          "verdict": "COVERED",
+          "evidence": "CREATABLE_KNOWLEDGE_TYPES exclui BUSINESS_INFO; no modo edit o tipo é texto, não seletor (KnowledgeDocumentForm.tsx:117-124); goal024-knowledge-section.test.tsx:153-175 assere a lista exata de opções."
+        },
+        {
+          "id": "critério 13",
+          "verdict": "COVERED",
+          "evidence": "KnowledgeDocumentForm.tsx:160-166 ('Publicar aqui cria uma versão nova deste documento; a versão vigente não é apagada') e KnowledgeSection.tsx:200-203 ('Nova versão publicada. A versão anterior não foi apagada.')."
+        },
+        {
+          "id": "critério 14",
+          "verdict": "COVERED",
+          "evidence": "KnowledgeSection.tsx:212-215 (diálogo: 'O documento sai do contexto que a IA usa para responder. Nada é apagado') e :86-88 (mensagem após desativar); teste 'só desativa após confirmação e avisa que nada foi apagado'."
+        },
+        {
+          "id": "critério 15",
+          "verdict": "COVERED",
+          "evidence": "KnowledgeDocumentForm.tsx:194-209 e OtherInfoSection.tsx:87-105 derivam upstreamCode de details e devolvem 'Não foi possível indexar o conteúdo agora. Nada foi salvo.'; três testes cobrem criar, editar e campo livre com BffHttpError 502."
+        },
+        {
+          "id": "critério 16",
+          "verdict": "COVERED",
+          "evidence": "OtherInfoSection.tsx usa só knowledge.saveOtherInfo e não expõe criar/desativar; KnowledgeSection.tsx:45 tira BUSINESS_INFO da lista. Ressalva a julgar: a tela não lê o conteúdo vigente (é write-only, declarado nas linhas 55-59 e no docblock) — o §4 pedia 'Lê o BUSINESS_INFO vigente'."
+        },
+        {
+          "id": "critério 17",
+          "verdict": "COVERED",
+          "evidence": "Nenhum arquivo de apps/bff/src/modules/knowledge/ e nenhum data/mappers/publicApiSchemas.ts na lista de 32 arquivos alterados; a tela consome BffKnowledgeService como ele já era (deactivate/saveOtherInfo já existiam, linhas 81 e 91)."
+        },
+        {
+          "id": "critério 18",
+          "verdict": "COVERED",
+          "evidence": "apps/bff/src/modules/auth/routes.ts:262-273: preHandler requireTenantContext, identidade de currentUser(request), corpo não é lido; integração prova o anônimo com 401 e o spoof de userId/tenantId sem efeito."
+        },
+        {
+          "id": "critério 19",
+          "verdict": "COVERED",
+          "evidence": "A rota chama clearSessionCookie(reply) e não estabelece sessão nova; AccountSettings.tsx:59-62 faz setUnauthenticated() + router.replace('/login'); goal024-account-sessions.test.tsx:100-120 assere isso."
+        },
+        {
+          "id": "critério 20",
+          "verdict": "COVERED",
+          "evidence": "apps/bff/tests/goal024-session-revocation.integration.test.ts:63-102: duas sessões vivas, POST logout-all, ambas com revokedReason LOGOUT_ALL_DEVICES e GET /v1/auth/session respondendo 401 por cookie e por Bearer. Suíte sob describe.skipIf(!RUN_INTEGRATION) — execução real é matéria do gate/relatório."
+        },
+        {
+          "id": "critério 21",
+          "verdict": "COVERED",
+          "evidence": "AccountSettings.tsx:119-136: diálogo 'Encerrar o acesso em todos os aparelhos?' explica que derruba todos, inclusive este, e que será preciso entrar de novo; nenhuma menção a excluir conta. Testado em goal024-account-sessions.test.tsx:68-98."
+        },
+        {
+          "id": "critério 22",
+          "verdict": "COVERED",
+          "evidence": "AccountSettings.tsx:104-117 mantém o botão disabled ('Exclusão indisponível') e a copy passou a dizer 'faz parte de uma etapa futura do produto e ainda não está disponível'; teste em goal024-account-sessions.test.tsx:158-171."
+        },
+        {
+          "id": "critério 23",
+          "verdict": "COVERED",
+          "evidence": "As duas únicas hunks de PUBLIC_API_V1.md são a linha da tabela de Autenticação e a seção nova da rota; nenhum outro trecho do arquivo aparece no diff."
+        },
+        {
+          "id": "critério 24",
+          "verdict": "COVERED",
+          "evidence": "Os 32 arquivos alterados estão em apps/bff (auth/session/PUBLIC_API/teste), apps/frontend e docs/migration; nenhum caminho de apps/scheduling, apps/ia, apps/evolution-go ou Go."
+        },
+        {
+          "id": "critério 25",
+          "verdict": "COVERED",
+          "evidence": "Nenhum arquivo em prisma/migrations/ ou schema.prisma na lista de alterados; D-040 declara 'Sem migration: nenhum schema mudou'."
+        },
+        {
+          "id": "critério 26",
+          "verdict": "COVERED",
+          "evidence": "goal024-settings-shell-invariant.test.tsx monta ProductSettingsScreen por cenário e assere o heading nível 1 do módulo certo: hub, hub-external, business, ai, whatsapp-connected + os 4 aliases de whatsapp, calendar, calendar-external, availability, conversations, account (14). A conferir: `loading` e `error` não são montados como cenário — só existem como estado interno da tela."
+        },
+        {
+          "id": "critério 27",
+          "verdict": "COVERED",
+          "evidence": "goal024-knowledge-section.test.tsx cobre listar, criar, editar, desativar e campo livre com fixtures no formato de knowledgeDocumentSchema (checksum, status, version, source, serviceId), mais três casos de 502."
+        },
+        {
+          "id": "critério 28",
+          "verdict": "COVERED",
+          "evidence": "features/dashboard/DashboardScreen.tsx não está entre os arquivos alterados; CURRENT_STATE.md declara a conferência sem divergência e que a tela não foi tocada."
+        },
+        {
+          "id": "critério 29",
+          "verdict": "COVERED",
+          "evidence": "CURRENT_STATE.md, 'FATO atual (Home, conferência)': 'Nenhuma divergência real foi encontrada' contra dashboardSchema/systemStatusSchema e as rotas correspondentes; D-040(7) repete a decisão. O relatório do Developer em si não faz parte do diff."
+        },
+        {
+          "id": "critério 30",
+          "verdict": "COVERED",
+          "evidence": "RetentionSection.tsx não foi alterada e ConversationsSettings.tsx só a remonta; a copy nova de conhecimento afirma o contrário de exclusão ('Nada é apagado', 'A versão anterior não foi apagada'); nenhuma copy nova menciona Não classificadas."
+        },
+        {
+          "id": "critério 31",
+          "verdict": "COVERED",
+          "evidence": "Busca por eslint-disable em apps/frontend/src devolve só três ocorrências preexistentes (ImportConflictsScreen, ImportPreviewScreen, MessageAttachment); nenhuma em features/settings/ ou features/knowledge/."
+        },
+        {
+          "id": "critério 32",
+          "verdict": "COVERED",
+          "evidence": "Todo arquivo de features/settings/ tem importador: os 8 módulos + shared/SettingsPage por ProductSettingsScreen, shared/fields e labels pelos módulos e por features/knowledge, RetentionSection por ConversationsSettings, SettingsScreen pelas 8 rotas, types.ts pelo despachante. ImportSettingsSection.tsx e seu teste goal020-import-settings-section.test.tsx saíram da árvore ao perder o consumidor; ImportHistoryCard continua importado por ImportsScreen.tsx:11."
+        },
+        {
+          "id": "critério 33",
+          "verdict": "UNCLEAR",
+          "evidence": "Não há no diff resultado de execução de gate: nenhuma mudança em VALIDATION_GATE.md nem artefato de saída, e validate:ui nas cinco larguras é comportamento de execução. Depende do relatório do Developer, que está fora do diff."
+        },
+        {
+          "id": "critério 34",
+          "verdict": "COVERED",
+          "evidence": "GAP_ANALYSIS.md: G-31 passou a 'FECHADO ... Configurações no diff024' e G-24 passou a 'A tela chegou no Goal024'; a linha G-29 não foi alterada e continua declarando a parte de conta aberta. A conferir: a última coluna da linha 59 ainda diz 'suspender conta/WA e restore com novo teste seguem no **Goal024**', enquanto o cabeçalho da mesma linha já diz redirecionada ao Goal024B."
+        },
+        {
+          "id": "critério 35",
+          "verdict": "COVERED",
+          "evidence": "DECISIONS.md ganha 'D-040 — Configurações decomposta ... revogação de sessões como rota aditiva', com Status/Contexto/Decisão/Alternativas/Motivo/Consequências/Revisar se, no formato das anteriores."
+        }
+      ]
+    },
+    "attemptId": "024-r2-tech_lead-17b239e4-a1"
+  }
+}

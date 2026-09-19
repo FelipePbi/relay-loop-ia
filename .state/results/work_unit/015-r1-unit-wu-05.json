@@ -1,0 +1,55 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T11:49:39.134Z",
+  "attemptId": "015-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "015-r1-unit-wu-05",
+      "goal": "015",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Adicionei observações, tags, memória e resumo por IA ao perfil do cliente, todos com autorização de uso pela IA negada por padrão e alternada só por ação explícita.",
+      "report": "Criados quatro componentes em apps/frontend/src/features/customers/: CustomerNotes.tsx (observações: criar sem campo de autorização no formulário, alternar aiAuthorized, remover), CustomerTags.tsx (mesmo padrão para tags), CustomerMemory.tsx (busca própria via listMemory, cria manualmente com kind+value sempre aiAllowed=false, mostra origem/permissão/idade via Intl.RelativeTimeFormat pt-BR, alterna permissão, remove) e CustomerSummary.tsx (gera resumo sob demanda via generateSummary, exibe contagem de fontes e explicita no cabeçalho e após gerar que só cobre material autorizado). Extraí um quinto arquivo pequeno, AuthorizationControl.tsx, compartilhado pelos três controles de autorização (notes/tags/memory) porque o mesmo par badge+botão com texto explícito ('IA não autorizada a usar' / 'Autorizar uso pela IA' / 'IA autorizada a usar' / 'Revogar autorização da IA') é usado nas três superfícies — nenhum estado é comunicado só por cor, sempre há texto e ícone. Os métodos createNote/setNoteAuthorization/createTag/setTagAuthorization/listMemory/createMemory/setMemoryPermission/generateSummary já existiam em BffCustomerService e não foram alterados; nenhum formulário de criação envia aiAuthorized/aiAllowed, então o backend aplica o default negado (confirmado em apps/bff/PUBLIC_API_V1.md linha 113 e 395). Wireei os quatro componentes em CustomerProfile.tsx (que WU-04 já havia criado com Agenda + PrimaryGuardianPanel) porque o objetivo da WU explicitamente pede as superfícies 'no perfil'; notes/tags vêm de CustomerDetail (já incluídos no payload de GET /v1/customers/:id) e são levantados como estado do pai via callbacks onChange, seguindo o mesmo padrão de applyGuardian já existente; memory e summary buscam/agem por conta própria via customerId. Não toquei em PrimaryGuardianPanel.tsx, CustomerAgenda.tsx nem ProductCustomersScreen.tsx (trabalho de WU-04). Adicionei classes CSS novas em atendly-customers.css (.customer-record*, .customer-authorization, .customer-tag-*, .customer-summary-*) reaproveitando tokens e padrões (.directory-section, .badge, .input/.select) já usados pelo restante do app; não criei nenhum sistema de design novo. Comandos executados: `npm run typecheck` (limpo, 2x), `npm run lint` (limpo depois de rodar `npx eslint --fix` para ordenar imports e trocar um div de erro por StatePanel com retry em CustomerMemory para eliminar var não usada), `npx prettier --write` nos arquivos tocados, e `npm test` (vitest: 14 arquivos, 101 testes, todos passando, sem regressão). Não rodei `validate:ui` (Playwright) nem escrevi testes novos: WU-07 consolida as provas conforme o plano, e o e2e cobre só rotas públicas.",
+      "changedFiles": [
+        "apps/frontend/src/features/customers/CustomerNotes.tsx",
+        "apps/frontend/src/features/customers/CustomerTags.tsx",
+        "apps/frontend/src/features/customers/CustomerMemory.tsx",
+        "apps/frontend/src/features/customers/CustomerSummary.tsx",
+        "apps/frontend/src/features/customers/AuthorizationControl.tsx",
+        "apps/frontend/src/features/customers/CustomerProfile.tsx",
+        "apps/frontend/src/shared/styles/atendly-customers.css"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Observação, tag e memória criadas pela profissional saem com aiAuthorized/aiAllowed falso; nenhum controle de autorização nasce marcado, nem por conveniência de formulário",
+          "met": true,
+          "detail": "Os três formulários de criação (CustomerNotes.tsx createNote, CustomerTags.tsx createTag, CustomerMemory.tsx createEntry) enviam apenas body/label/kind+value ao BFF, sem nenhum campo de checkbox ou input de autorização; o BFF aplica o default negado (PUBLIC_API_V1.md L113, L395)."
+        },
+        {
+          "criterion": "Alternar autorização é uma ação explícita e a interface torna legível o que ela significa: a IA pode usar aquele conteúdo com o cliente",
+          "met": true,
+          "detail": "AuthorizationControl.tsx exige clique explícito no botão 'Autorizar uso pela IA'/'Revogar autorização da IA' (sem toggle automático) e sempre mostra um badge textual ('IA não autorizada a usar' / 'IA autorizada a usar') ao lado, usado nas três superfícies."
+        },
+        {
+          "criterion": "Memória exibe origem, permissão e idade; remover e cadastrar manualmente funcionam",
+          "met": true,
+          "detail": "CustomerMemory.tsx renderiza KIND_LABELS/ORIGIN_LABELS + formatAge(observedAt) por item; togglePermission chama setMemoryPermission, removeEntry chama deleteMemory, createEntry chama createMemory com kind+value do formulário."
+        },
+        {
+          "criterion": "Resumo é gerado sob demanda e a tela explicita que ele cobre apenas material autorizado",
+          "met": true,
+          "detail": "CustomerSummary.tsx só chama generateSummary ao clicar em 'Gerar resumo'/'Gerar novamente'; o texto do cabeçalho ('Cobre apenas... autorizadas...') aparece antes de gerar, e após gerar mostra 'Considerou apenas material autorizado' com a contagem de sources."
+        },
+        {
+          "criterion": "Estado de autorização nunca é comunicado só por cor",
+          "met": true,
+          "detail": "AuthorizationControl.tsx usa badge com ícone (check/lock) + texto explícito, e o botão de ação também traz o rótulo textual do efeito; nenhum estado depende de cor isolada."
+        }
+      ]
+    },
+    "attemptId": "015-r1-unit-wu-05-a1"
+  }
+}

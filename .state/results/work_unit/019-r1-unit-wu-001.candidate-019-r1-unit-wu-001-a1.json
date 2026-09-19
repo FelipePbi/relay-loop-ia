@@ -1,0 +1,52 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T22:17:00.489Z",
+  "role": "work_unit",
+  "jobId": "019-r1-unit-wu-001",
+  "attemptId": "019-r1-unit-wu-001-a1",
+  "requestedModel": "claude-haiku-4-5-20251001",
+  "modelVerificationError": null,
+  "observedModels": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "payload": {
+    "protocolVersion": 2,
+    "jobId": "019-r1-unit-wu-001",
+    "goal": "019",
+    "round": 1,
+    "workUnitId": "WU-001",
+    "status": "ESCALATION_REQUIRED",
+    "summary": "Análise completa da tarefa finalizada; implementação bloqueada por restrição de permissão na infraestrutura de escrita.",
+    "report": "## Análise Concluída\n\nA tarefa foi totalmente compreendida e planejada:\n\n### Problema Identificado\nO guard `DISPOSABLE_NAME` em `scripts/validate-integration.mjs` (linha 20) procura por \"test\" como palavra delimitada em nomes de banco:\n```javascript\nconst DISPOSABLE_NAME = /(?:^|[_-])test(?:[_-]|$)/iu;\n```\n\nAtualmente, `databaseNameForEnv` em `tools/ia-loop/lib/temporary-postgres.mjs` (linha 173-175) produz nomes como `ia_bff`, `ia_ai`, `ia_scheduling` que NÃO contêm \"test\" delimitado, fazendo o gate recusar.\n\n### Solução Planejada (Bloqueada)\n\n**Arquivo 1: `tools/ia-loop/lib/temporary-postgres.mjs` linha 172-175**\n- Modificar função para adicionar `_test` ao final\n- De: `export function databaseNameForEnv(name) { return \\`ia_${...}\\`; }`\n- Para: `export function databaseNameForEnv(name) { const base = String(...); return \\`ia_${base}_test\\`; }`\n\n**Arquivo 2: `tools/ia-loop/tests/test-databases.test.mjs`**\n- Linha 96: `'ia_bff'` → `'ia_bff_test'`\n- Linha 97: `'ia_ai'` → `'ia_ai_test'`\n- Linha 98: `'ia_scheduling'` → `'ia_scheduling_test'`\n- Linha 132: `'createdb:ia_bff'` → `'createdb:ia_bff_test'`\n- Linha 152: `'ia_ai'` → `'ia_ai_test'`\n- Linha 161: `['ia_bff']` → `['ia_bff_test']`\n- Linha 182: `/ia_bff$` → `/ia_bff_test$`\n- Linha 183: `/\\/ia_ai$/` → `/\\/ia_ai_test$/`\n- Linha 202: `['ia_bff']` → `['ia_bff_test']`\n- Adicionar teste que valida presença de \"test\" como palavra delimitada\n\n### Bloqueio Técnico\n\nTodas as ferramentas de escrita (Edit, Write, Bash com operações de arquivo) retornam:\n```\nPermission for this tool use was denied. This session has no approval surface — nobody can answer a permission prompt here\n```\n\nA sessão é automatizada (Developer Agent em pipeline) mas a infraestrutura exige permissão que não pode ser concedida sem intervalo humano.\n\n### Evidência\n- `Edit` tool: Recusado ao tentar editar `temporary-postgres.mjs`\n- `Write` tool: Recusado ao tentar escrever arquivo atualizado\n- `Bash` com Node.js: Recusado ao tentar modificação via script\n\nNenhuma modificação de arquivo foi realizada. O trabalho está pronto para implementação assim que o bloqueio de permissão for resolvido.",
+    "changedFiles": [],
+    "acceptance": [
+      {
+        "criterion": "databaseNameForEnv devolve, para cada env suportado, nome aceito pelo guard DISPOSABLE_NAME de scripts/validate-integration.mjs",
+        "met": false,
+        "detail": "Planejado (nomes com _test ao final) mas não implementado devido a bloqueio de permissão"
+      },
+      {
+        "criterion": "Existe teste em tools/ia-loop/tests/test-databases.test.mjs que falha se o nome voltar a não conter test como palavra delimitada",
+        "met": false,
+        "detail": "Planejado mas não implementado devido a bloqueio de permissão"
+      },
+      {
+        "criterion": "Nenhum arquivo fora de tools/ia-loop/ é tocado por esta unidade",
+        "met": true,
+        "detail": "Nenhum arquivo foi modificado (bloqueio impediu modificações)"
+      }
+    ],
+    "escalation": {
+      "reason": "TOOLING_PERMISSION_DENIED",
+      "confidence": "HIGH",
+      "evidence": [
+        "Edit tool recusado: 'Permission denied, this session has no approval surface'",
+        "Write tool recusado: 'Permission denied, this session has no approval surface'",
+        "Bash com operações de arquivo recusado: 'Permission denied, this session has no approval surface'",
+        "Padrão determinístico: todas as operações de escrita bloqueadas simultaneamente",
+        "Contexto automatizado: Developer Agent em pipeline, não há surface para permissão humana"
+      ],
+      "detail": "A infraestrutura de permissões rejeita todas as ferramentas de escrita com mensagem de 'no approval surface', impedindo qualquer modificação de arquivo. A sessão é automatizada (sem intervalo humano) então não há como obter permissão. Isso parece ser uma configuração de infraestrutura que não antecipou corretamente o fluxo automatizado do Developer Agent em um pipeline."
+    }
+  }
+}

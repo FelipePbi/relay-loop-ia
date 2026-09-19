@@ -1,0 +1,56 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T15:54:15.102Z",
+  "attemptId": "008-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "008-r1-unit-wu-04",
+      "goal": "008",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Implementado o ciclo de vida do atendimento (concluir/falta/valor final/presença), histórico de eventos por mutação e a conclusão automática com lease, sobre o núcleo transacional das WUs anteriores.",
+      "report": "Contexto herdado (WU-02/WU-03, já no working tree): política única de escrita (`write-policy.ts`), idempotência com efeito no mesmo commit, holds e schema/migrations do Goal008 já existiam. Faltava o ciclo de vida do produto e o histórico — inclusive eventos `CREATED`/`CANCELLED`/`OVERLAP_OVERRIDE`, que nunca eram gravados apesar de o schema e o enum já existirem.\n\nCriados:\n- `src/modules/appointments/appointment-event-service.ts`: `recordAppointmentEvent` (grava um evento na transação recebida) e `listAppointmentEvents` (leitura cronológica).\n- `src/modules/appointments/appointment-lifecycle-service.ts`: funções `completeAppointmentWithin`, `markNoShowWithin`, `setFinalValueWithin`, `confirmPresenceWithin` (cada uma abre/participa de uma transação, revalida estado via `updateMany` condicional e grava exatamente um evento) e a classe `AtendlyAppointmentLifecycleService` para uso direto/futuras rotas.\n- `src/modules/appointments/auto-complete-loop.ts`: `runAutoCompleteSweep` (uma transação, `pg_try_advisory_xact_lock` não bloqueante como lease, filtro `status = 'CONFIRMED'` e `endAt <= now() - graceMinutes` pelo relógio do banco) e `AutoCompleteLoop` (loop com timer `unref`, mesmo padrão do `InboxWorker` da IA).\n- `tests/unit/appointment-lifecycle.test.ts` (20 casos).\n\nModificados:\n- `integrations/atendly/provider.ts`: adicionado evento `CREATED` em toda confirmação, `CANCELLED` em todo cancelamento efetivo e `OVERLAP_OVERRIDE` quando a sobreposição é forçada (criar e remarcar); `assertCanReschedule` agora recusa remarcar qualquer status que não seja `CONFIRMED` (cobre \"remarcar concluído\", código `APPOINTMENT_RESCHEDULE_INVALID`, preservando `APPOINTMENT_CANCELLED` já existente); método privado `recordEvent` removido em favor do serviço compartilhado.\n- `config/env.ts`: `CALENDAR_AUTO_COMPLETE_ENABLED` (default true), `CALENDAR_AUTO_COMPLETE_GRACE_MINUTES` (default 30), `CALENDAR_AUTO_COMPLETE_POLL_INTERVAL_MS` (default 60000) + helper `boolEnv`.\n- `app/build-app.ts`: instancia e inicia o `AutoCompleteLoop` (desligável pela variável), para no `onClose`. Não existe `src/index.ts` neste app (o entrypoint HTTP é `server.ts`/`build-app.ts`); usei `build-app.ts`, que é o equivalente funcional do `app.ts` do ai-orchestrator onde o `InboxWorker` é ligado.\n- `tests/unit/support/database-double.ts`: defaults `null` para as colunas de ciclo de vida do `Appointment` (sem isso, filtros como `presenceConfirmedAt: null` não casavam com linha nova, pois a chave ficava ausente); `failNext(error)` por tabela para simular falha em `create`/`update`/`updateMany` (usado para provar que uma falha entre efeito e evento propaga em vez de suceder silenciosamente); `$queryRaw` passou a distinguir a consulta de lease (`pg_try_advisory_xact_lock`) do `SELECT now()`, controlável via `setAdvisoryLockAvailable`.\n\nDecisões de escopo: rotas internas (WU-05) não foram tocadas — as operações de ciclo de vida e a varredura automática ficam expostas como funções/classe diretamente invocáveis e testadas, prontas para serem ligadas por rota depois. Cancelar um atendimento já `COMPLETED`/`NO_SHOW` continua permitido como antes (não era uma das três transições inválidas exigidas); só as três nomeadas no critério de aceite foram bloqueadas.\n\nLimitação conhecida: o dublê de banco não desfaz escrita (documentado nele mesmo), então o teste de \"falha entre efeito e evento\" prova propagação do erro, não reversão real — reversão de transação real é da suíte de integração. Da mesma forma, duas instâncias disputando o mesmo lease de verdade é prova de integração; aqui só se prova que o código respeita o resultado do lock.\n\nComandos executados (todos em `apps/scheduling-service`, sem banco):\n- `npx prisma generate` — ok.\n- `npx tsc -p tsconfig.json --noEmit` — sem erros.\n- `npx eslint src --max-warnings=0` — sem erros (após ajuste do handler de erro do loop para não assinalar `any`).\n- `npx vitest run --dir tests/unit` — 97/97 testes passando (6 arquivos), incluindo os 20 novos.\n- `npx prettier --check` nos arquivos tocados — limpo (só `modules/appointments/index.ts`, pré-existente e não tocado por mim, reporta warning).\n- `git status --porcelain` na worktree — só arquivos dentro do escopo esperado (mais os já modificados por WU-02/WU-03).\n\nNão rodei `validate:core`/`validate:integration` globais: são gate de fechamento do Goal (WU-08) e tocam apps de outras Work Units ainda em andamento no mesmo DAG; a verificação dirigida ao app tocado (acima) é a que cabe a esta unidade.",
+      "changedFiles": [
+        "apps/scheduling-service/src/modules/appointments/appointment-event-service.ts",
+        "apps/scheduling-service/src/modules/appointments/appointment-lifecycle-service.ts",
+        "apps/scheduling-service/src/modules/appointments/auto-complete-loop.ts",
+        "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+        "apps/scheduling-service/src/config/env.ts",
+        "apps/scheduling-service/src/app/build-app.ts",
+        "apps/scheduling-service/tests/unit/appointment-lifecycle.test.ts",
+        "apps/scheduling-service/tests/unit/support/database-double.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Ciclo confirmado → concluído (manual e automático) → correção para falta; falta com observação; transições inválidas (concluir cancelado, falta em cancelado, remarcar concluído) recusadas com erro próprio",
+          "met": true,
+          "detail": "appointment-lifecycle-service.ts: completeAppointmentWithin (origin MANUAL/AUTO), markNoShowWithin (direto de CONFIRMED/COMPLETED, com correção limpando dados de conclusão); provider.ts assertCanReschedule estendido. Testes: 'recusa concluir um atendimento cancelado' (APPOINTMENT_COMPLETION_INVALID), 'recusa marcar falta em um atendimento cancelado' (APPOINTMENT_NO_SHOW_INVALID), 'recusa remarcar um atendimento concluído' (APPOINTMENT_RESCHEDULE_INVALID), 'corrige um concluído para falta'."
+        },
+        {
+          "criterion": "Valor final registrado sem alterar snapshots nem total do acordo; presença em campo separado",
+          "met": true,
+          "detail": "setFinalValueWithin só grava Appointment.finalValue*; teste 'registra o valor final sem alterar itens nem o total do acordo' compara AppointmentItem antes/depois e reconfirma totalPrice/totalPriceType via calendar.getAppointment. confirmPresenceWithin só grava presenceConfirmedAt; teste confirma status/completedAt inalterados."
+        },
+        {
+          "criterion": "Cada mutação grava exatamente um evento na mesma transação; falha simulada após o efeito e antes do evento não deixa efeito sem evento; eventos nunca apagados nem reescritos",
+          "met": true,
+          "detail": "CREATED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW/FINAL_VALUE_SET/PRESENCE_CONFIRMED/HOLD_CONSUMED/OVERLAP_OVERRIDE gravados via recordAppointmentEvent na transação do efeito. Testes verificam mesma transação (journal) e o teste 'não deixa efeito sem evento' usa database-double.ts:failNext para provar que a falha entre efeito e evento propaga (não sucede silenciosamente); código nunca faz update/delete em appointmentEvent."
+        },
+        {
+          "criterion": "Conclusão automática pelo relógio do banco não toca cancelados nem faltas, é idempotente e o loop com lease não duplica trabalho entre duas instâncias; desligável por variável",
+          "met": true,
+          "detail": "runAutoCompleteSweep filtra status='CONFIRMED' e usa databaseNow(); lease via pg_try_advisory_xact_lock não bloqueante, testado com setAdvisoryLockAvailable(false); testes 'nunca toca cancelados nem faltas' e 'é idempotente'; CALENDAR_AUTO_COMPLETE_ENABLED controla o start() em build-app.ts. Concorrência real entre duas instâncias reais é prova de integração, não de unidade."
+        },
+        {
+          "criterion": "Sem backfill de concluído por data",
+          "met": true,
+          "detail": "Nenhum caminho de código completa atendimentos por intervalo/data arbitrária; a única conclusão automática é a varredura por endAt real + carência configurável, sobre appointments individuais já persistidos."
+        }
+      ]
+    },
+    "attemptId": "008-r1-unit-wu-04-a1"
+  }
+}

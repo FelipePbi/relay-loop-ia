@@ -1,0 +1,21 @@
+{
+  "jobId": "004-r2-correction-dde6dca4",
+  "attemptId": "004-r2-correction-dde6dca4-a1",
+  "agent": "developer",
+  "goal": "004",
+  "round": 2,
+  "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-004",
+  "kind": "job",
+  "key": "004-r2-correction-dde6dca4",
+  "workerInstanceId": "23628-6c431111",
+  "hostname": "Borges",
+  "bootAt": "2026-09-07T20:33:47.369Z",
+  "pid": 23628,
+  "processStartedAt": "2026-09-07T22:02:42.973Z",
+  "status": "SUPERSEDED",
+  "acquiredAt": "2026-09-07T22:02:50.087Z",
+  "heartbeatAt": "2026-09-07T22:14:20.552Z",
+  "expiresAt": "2026-09-07T22:15:50.552Z",
+  "supersededAt": "2026-09-08T00:50:58.634Z",
+  "supersededProof": "PROCESS_GONE"
+}

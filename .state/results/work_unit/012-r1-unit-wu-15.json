@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:20:51.294Z",
+  "attemptId": "012-r1-unit-wu-15-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r1-unit-wu-15",
+      "goal": "012",
+      "round": 1,
+      "workUnitId": "WU-15",
+      "status": "COMPLETED",
+      "executor": "native",
+      "action": "gate-tests",
+      "argv": [
+        "npm",
+        "run",
+        "test:gate"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 453,
+      "summary": "Validation gate scripts passou (exit 0, 453ms).",
+      "report": "\n> atendly-ia@0.1.0 test:gate\n> node --test scripts/tests/**/*.test.mjs\n\n✔ an unconfigured health check is reported as skipped, not as passed (63.4076ms)\nsynthetic failing step\n\n[synthetic] synthetic-success: node scripts/tests/fixtures/passing-step.mjs (.)\nsynthetic passing step\n\n[synthetic] synthetic-failure: node scripts/tests/fixtures/failing-step.mjs (.)\nsynthetic failing step\n\n[synthetic] synthetic-failure: node scripts/tests/fixtures/failing-step.mjs (.)\nsynthetic failing step\n'atendly-command-that-does-not-exist' n�o � reconhecido como um comando interno\nou externo, um programa oper�vel ou um arquivo em lotes.\n✔ a failing subprocess is reported as failed and never as exit 0 (140.1893ms)\n✔ steps after a failure are not_run instead of passed (41.479ms)\n✔ a command that cannot be executed is a failure (14.1452ms)\n✔ a declared skip never counts as passed (0.1706ms)\n✔ validate:core declares the Scheduling Service build (0.5821ms)\n✔ validate:core does not run the BFF integration suite (0.0653ms)\n✔ the backfill map is the one declared in the migration headers, and CASUAL is untouched (0.726ms)\n✔ derives two distinct disposable databases for the AI and BFF rehearsals (0.2955ms)\n✔ refuses to run without an explicit test database URL (57.5487ms)\n✔ refuses a database that is not recognised as disposable (51.311ms)\n✔ refuses a non-loopback host (52.719ms)\n✔ derives a disposable database dedicated to the Goal012 rehearsal (0.6309ms)\n✔ refuses to run without an explicit test database URL (56.7049ms)\n✔ refuses a database that is not recognised as disposable (52.6533ms)\n✔ refuses a non-loopback host (52.4153ms)\n✔ refuses to run without an explicit test database URL (0.7293ms)\n✔ refuses an inherited DATABASE_URL as a substitute (0.0761ms)\n✔ refuses a database that is not marked as disposable (0.1404ms)\n✔ refuses a non-loopback host (0.1292ms)\n✔ refuses a non-postgres protocol (0.1112ms)\n✔ accepts a disposable loopback database without leaking credentials (2.3468ms)\n✔ points the subprocess at the declared test database with synthetic secrets (0.9387ms)\n✔ derives the Evolution rehearsal database from the validated target (0.3098ms)\n✔ generates the Prisma client before migrating or testing (0.2525ms)\n✔ refuses a URL whose query can redirect the driver: host=outside.invalid&port=6432 (0.253ms)\n✔ refuses a URL whose query can redirect the driver: host=outside.invalid (0.1499ms)\n✔ refuses a URL whose query can redirect the driver: port=6432 (0.1186ms)\n✔ refuses a URL whose query can redirect the driver: hostaddr=203.0.113.7 (0.1032ms)\n✔ refuses a URL whose query can redirect the driver: dbname=another_test (0.076ms)\n✔ refuses a URL whose query can redirect the driver: service=production (0.0694ms)\n✔ refuses a URL whose query can redirect the driver: servicefile=C:/synthetic/pg_service.conf (0.0517ms)\n✔ refuses a URL whose query can redirect the driver: passfile=C:/synthetic/pgpass (0.067ms)\n✔ refuses a URL whose query can redirect the driver: options=-c%20search_path%3Dinjected (0.1096ms)\n✔ the reported bypass really moves the driver, and is now refused (0.236ms)\n✔ the effective destination is compared against the validated one (0.3856ms)\n✔ keeps accepting harmless connection options (0.2412ms)\n✔ the CLI exits non-zero and runs no step when the URL is missing (39.9178ms)\n✔ derives the Goal004 transport rehearsal database from the validated target (0.3913ms)\n✔ derives the Scheduling identity database from the validated target (0.2643ms)\n✔ runs the Goal012 knowledge/memory rehearsal before the AI durability suite (0.1794ms)\nℹ tests 41\nℹ suites 0\nℹ pass 41\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 254.9199\n",
+      "changedFiles": [],
+      "acceptance": [],
+      "escalation": null,
+      "contextRequest": null,
+      "blockedReason": null,
+      "failurePaths": []
+    },
+    "attemptId": "012-r1-unit-wu-15-a1"
+  }
+}

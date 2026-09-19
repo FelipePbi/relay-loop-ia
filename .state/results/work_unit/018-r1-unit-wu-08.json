@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T20:46:36.899Z",
+  "attemptId": "018-r1-unit-wu-08-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Segmento oferece opções frequentes mais Outro com texto livre, e o valor escolhido chega ao BFF como category",
+          "met": true,
+          "detail": "business.tsx e ProductSettingsScreen.tsx renderizam chips com FREQUENT_BUSINESS_SEGMENTS (Cabelo, Barbearia, Unhas, Sobrancelhas e cílios, Estética, Massagem e terapias, Personal trainer) + 'Outro' com input livre; ambos enviam o valor como business.category no PATCH /v1/onboarding e /v1/settings/business. Coberto por teste atualizado em goal018-onboarding-reachability.test.tsx (chip 'Outro' + texto 'Beleza' -> category: 'Beleza')."
+        },
+        {
+          "criterion": "Modalidades são seleção múltipla com ao menos uma exigida antes de avançar",
+          "met": true,
+          "detail": "choice-grid com checkboxes múltiplos (BUSINESS_MODALITY_OPTIONS); persistBusinessStep recusa avançar com ctx.setError se businessModalities.length===0; BusinessSettings.save() bloqueia com setMessage equivalente antes de persistir."
+        },
+        {
+          "criterion": "O campo de endereço aparece e é exigido quando há local próprio, e não é exigido quando não há",
+          "met": true,
+          "detail": "Renderização condicional (requiresAddress = modalidades.includes('ON_SITE')) com input required nos dois lugares; persistBusinessStep e BusinessSettings.save() recusam avançar/salvar sem endereço quando ON_SITE está selecionado, e enviam address:null quando não há ON_SITE."
+        },
+        {
+          "criterion": "Segmento e nome podem dividir a mesma tela, como o vault autoriza",
+          "met": true,
+          "detail": "Único scenario 'dados-do-negocio' já existente (WU-07) mantido; nome, segmento, modalidades e endereço condicional todos no mesmo onboarding-form, sem criar novos scenarios/rotas."
+        },
+        {
+          "criterion": "Os mesmos campos são editáveis em configuracoes/negocio, e ProductSettingsScreen não é redecomposto",
+          "met": true,
+          "detail": "BusinessSettings (mesma função, mesmo arquivo ProductSettingsScreen.tsx) ganhou os campos de segmento/modalidade/endereço; nenhuma função foi extraída para novo arquivo — só um import de constantes (FREQUENT_BUSINESS_SEGMENTS, BUSINESS_MODALITY_OPTIONS) de features/onboarding/blocks/business.tsx para não duplicar a lista."
+        },
+        {
+          "criterion": "O aviso de projeção pendente aparece como aviso, nunca como falha de salvamento",
+          "met": true,
+          "detail": "Bloco '.onboarding-note.is-important' renderizado quando settings.business.contextProjectionStatus === 'PENDING', separado do settings-save-note que continua mostrando 'Dados do negócio salvos.' em caso de sucesso — a gravação nunca é reportada como falha por causa da projeção pendente."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+        "apps/frontend/src/features/onboarding/blocks/business.tsx",
+        "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+        "apps/frontend/tests/goal018-onboarding-reachability.test.tsx"
+      ],
+      "goal": "018",
+      "jobId": "018-r1-unit-wu-08",
+      "protocolVersion": 2,
+      "report": "Implementei o bloco \"Seu negócio\" do onboarding e a mesma edição em configuracoes/negocio.\n\nOnboardingRuntime.tsx: adicionei businessModalities (BusinessModality[]) e businessAddress ao OnboardingDraft, com defaults ([] e \"\") e leitura a partir de state.business?.modalities/address em draftFromState.\n\nblocks/business.tsx: reescrevi o corpo do passo 'dados-do-negocio' como um componente próprio (BusinessStepBody) para poder usar useState local (segmento em modo texto livre) sem violar regras de hooks — a função businessStepBody continua com a mesma assinatura (scenario, draft, setDraft) usada pelo registry. Adicionei:\n- FREQUENT_BUSINESS_SEGMENTS (segmentos do prototype Onboarding-1-Negocio-e-Agenda.dc.html: Cabelo, Barbearia, Unhas, Sobrancelhas e cílios, Estética, Massagem e terapias, Personal trainer) + chip 'Outro' que abre input de texto livre; ambos exportados para reuso em Configurações.\n- BUSINESS_MODALITY_OPTIONS (ON_SITE/AT_HOME/ONLINE, títulos e copy do vault/prototype) renderizado como choice-grid multi-select (checkbox sr-only + choice-card, mesmo padrão de dias-de-atendimento em schedule.tsx).\n- Campo de endereço condicional (aparece e é required só com ON_SITE selecionado).\n- persistBusinessStep agora recusa avançar (ctx.setError) sem ao menos uma modalidade, e sem endereço quando ON_SITE está selecionado; envia modalities e address (null quando não há local próprio) no PATCH /v1/onboarding.\n\nProductSettingsScreen.tsx (BusinessSettings, mesmo arquivo, sem redecompor): troquei o input livre de 'Categoria' pelos mesmos chips+Outro, adicionei o mesmo choice-grid de modalidades, o mesmo campo de endereço condicional, e um aviso `.onboarding-note.is-important` para contextProjectionStatus === 'PENDING' — separado da mensagem de sucesso do save (que continua 'Dados do negócio salvos.', nunca reportando a projeção pendente como falha). save() valida modalidade obrigatória e endereço condicional antes de persistir, igual ao onboarding.\n\nAjustei o teste existente goal018-onboarding-reachability.test.tsx (suite de WU-07) que preenchia o campo 'Categoria' removido: agora seleciona 'Outro' + digita 'Beleza', seleciona modalidade 'Online' e confere o novo payload (category, modalities: ['ONLINE'], address: null) enviado a updateOnboarding.\n\nValidação executada nesta worktree (apps/frontend):\n- `npx tsc --noEmit -p tsconfig.json` → \"TypeScript: No errors found\".\n- `npx vitest run tests/goal018-onboarding-reachability.test.tsx tests/goal014-shell.test.ts` → 2 arquivos, 59 testes, todos passando.\n- `npx vitest run` (suíte completa do frontend) → 40 arquivos, 392 testes, todos passando.\n- `npx eslint src/features/onboarding/blocks/business.tsx src/features/onboarding/OnboardingRuntime.tsx src/features/settings/ProductSettingsScreen.tsx tests/goal018-onboarding-reachability.test.tsx` → sem issues.\n\nNão toquei em blocks.ts, scenarios.ts, registry.ts nem em nenhum arquivo de outra Work Unit; não criei novos scenarios/rotas — segmento, nome, modalidades e endereço convivem no mesmo passo 'dados-do-negocio' já existente, como o vault autoriza para segmento+nome.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Adicionei segmento (chips+Outro), modalidades múltiplas e endereço condicional ao bloco 'Seu negócio' do onboarding e à mesma edição em configuracoes/negocio, sem redecompor ProductSettingsScreen.",
+      "workUnitId": "WU-08"
+    },
+    "attemptId": "018-r1-unit-wu-08-a1"
+  }
+}

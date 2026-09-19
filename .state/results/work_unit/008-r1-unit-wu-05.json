@@ -1,0 +1,38 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T15:56:22.349Z",
+  "attemptId": "008-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "goal": "008",
+      "jobId": "008-r1-unit-wu-05",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "protocolVersion": 2,
+      "status": "BLOCKED",
+      "summary": "Sessão sem permissão de escrita/execução. WU-05 requer modificação de arquivos e execução de comandos, impossível prosseguir sem aprovação de permissões.",
+      "report": "## Análise Realizada\n\nExplorei o estado de WU-05 e identifiquei o que foi implementado em WU-03/WU-04 e o que falta fazer em WU-05:\n\n### ✅ Concluído em WU-03/WU-04:\n- **Hold**: `AtendlyAppointmentHoldService` com `createHold`, `listHolds`, `releaseHold` (em `src/modules/holds/appointment-hold-service.ts`)\n- **Ciclo de vida**: `AtendlyAppointmentLifecycleService` com `complete`, `markNoShow`, `setFinalValue`, `confirmPresence` (em `src/modules/appointments/appointment-lifecycle-service.ts`)\n- **Histórico**: `recordAppointmentEvent`, `listAppointmentEvents` (em `src/modules/appointments/appointment-event-service.ts`)\n- **Bloqueio sob política transacional**: `createTimeBlock`, `removeTimeBlock` (em `src/modules/calendar/time-blocks.ts`) - já exposto nas rotas `/internal/time-blocks`\n- **Política de escrita única**: `runCalendarWrite`, `lockCalendarDays`, tratamento de retry (em `src/modules/calendar/write-policy.ts`)\n\n### ❌ Falta fazer em WU-05:\n\n1. **DTOs: Expandir `CalendarAppointment` interface** (em `src/modules/calendar/calendar-provider.ts`)\n   - ✓ Interface já foi expandida com campos: `rawStatus`, `completedAt`, `completedBy`, `completionOrigin`, `noShowAt`, `noShowNote`, `presenceConfirmedAt`, `finalValue`, `finalValueSetAt`, `finalValueSetBy`\n   - ❌ Falta atualizar métodos `toAppointment()` nos providers (Atendly e MinhaAgenda) para preencher esses campos\n\n2. **Rotas em `src/modules/calendar/routes.ts`**: Expor operações do ciclo de vida\n   - ❌ POST `/internal/appointments/:id/complete` - concluir manualmente\n   - ❌ POST `/internal/appointments/:id/no-show` - marcar falta\n   - ❌ POST `/internal/appointments/:id/final-value` - registrar valor final\n   - ❌ POST `/internal/appointments/:id/confirm-presence` - confirmar presença\n   - ❌ GET `/internal/appointments/:id/history` - listar histórico de eventos\n\n3. **Rotas em `src/modules/calendar/routes.ts`**: Expor operações de hold\n   - ❌ POST `/internal/holds` - criar hold (já existe em `CalendarService.createHold()`)\n   - ❌ GET `/internal/holds` - listar holds vigentes (já existe em `CalendarService.listHolds()`)\n   - ❌ DELETE `/internal/holds/:id` - liberar hold (já existe em `CalendarService.releaseHold()`)\n\n4. **Confirmar e remarcar com holdId**: Modificar DTOs e lógica\n   - `CreateCalendarAppointmentInput` e `RescheduleCalendarAppointmentInput` já têm `HoldConsumptionInput` e `OverlapOverrideInput` como mixins\n   - ❌ Rotas precisam repassar holdId e overlapOverride para o serviço\n\n### Bloqueador:\nA sessão não tem permissão de escrita em arquivos (Edit/Write) nem execução de comandos (Bash) que modificam o estado. Sem essas permissões, não é possível:\n- Editar os providers Atendly e MinhaAgenda para atualizar `toAppointment()`\n- Adicionar as rotas de hold e ciclo de vida em `calendar/routes.ts`\n- Executar testes e validação\n\n### Padrão Observado:\n- Rotas de bloqueio já existem em `/internal/time-blocks` (POST/DELETE) via `createTimeBlock` e `removeTimeBlock` \n- Delegam à `write-policy.ts` conforme esperado\n- Erros mapeados com status 409 para conflito\n\n### Próximas etapas necessárias:\n1. Atualizar `AtendlyCalendarProvider.toAppointment()` e `MinhaAgendaCalendarProvider.toAppointment()` para preencher os 9 novos campos do `CalendarAppointment`\n2. Adicionar rotas de hold em `calendar/routes.ts`: POST, GET (list), DELETE\n3. Adicionar rotas de ciclo de vida em `calendar/routes.ts`: complete, no-show, final-value, confirm-presence, history\n4. Validar com testes unitários e suíte de integração",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "Todas as rotas novas sob requireInternalAuth com tenant do contexto interno; schemas Zod fechados; DTOs aditivos com padrão seguro",
+          "met": false,
+          "detail": "Rotas ainda não foram criadas em calendar/routes.ts. DTOs estão prontos mas precisam ser mapeados em schemas Zod e roteadores."
+        },
+        {
+          "criterion": "Rotas de bloqueio delegam à política transacional (nenhum prisma.timeBlock.create/deleteMany direto na rota)",
+          "met": true,
+          "detail": "Bloqueio já implementado em time-blocks.ts usando runCalendarWrite. Rotas em internal-api/routes.ts (linhas 557-581) delegam corretamente a createTimeBlock e removeTimeBlock."
+        },
+        {
+          "criterion": "Erros de domínio chegam com código e status HTTP próprios (409 para conflito/hold vencido/transição inválida)",
+          "met": true,
+          "detail": "AppError já mapeia códigos (ex: APPOINTMENT_HOLD_EXPIRED, APPOINTMENT_COMPLETION_INVALID) com status 409. Padrão pronto para ser usado nas novas rotas."
+        }
+      ],
+      "blockedReason": "Sessão não tem permissão de escrita (Edit/Write) nem execução (Bash). Impossível prosseguir com implementação, testes e validação de WU-05 sem essas permissões. Solicitação: executar em sessão com aprovação de permissões ou fornecer ambiente com sandbox desabilitado."
+    },
+    "attemptId": "008-r1-unit-wu-05-a1"
+  }
+}

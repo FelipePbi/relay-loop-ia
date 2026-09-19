@@ -1,0 +1,178 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T00:41:12.054Z",
+  "status": "COMPLETED",
+  "attempt": 2,
+  "currentAttemptId": "009-r2-tech_lead-b183a51e-a2",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [
+    {
+      "attempt": 1,
+      "attemptId": "009-r2-tech_lead-b183a51e-a1",
+      "status": "REROUTED",
+      "reason": "MODEL_FALLBACK",
+      "startedAt": "2026-09-10T00:41:12.054Z",
+      "endedAt": "2026-09-10T00:41:15.305Z",
+      "role": "tech_lead",
+      "classification": "USAGE_LIMIT",
+      "code": "NON_ZERO_EXIT",
+      "routedTo": {
+        "modelKey": "opus",
+        "model": "claude-opus-5",
+        "family": "opus",
+        "effort": "high",
+        "reason": "CAPACITY_FALLBACK_USAGE_LIMIT",
+        "fallbackAllowed": false
+      },
+      "fromModel": "fable"
+    }
+  ],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "009-r2-tech_lead-b183a51e",
+    "role": "tech_lead",
+    "goal": "009",
+    "round": 2,
+    "reviewLevel": "DEEP",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "review",
+      "modelKey": "fable",
+      "model": "claude-fable-5-1",
+      "family": "fable",
+      "effort": "high",
+      "complexity": "CRITICAL",
+      "riskScore": 17,
+      "signals": [
+        "CONCURRENCY",
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "DATA_CONSISTENCY",
+        "RECOVERY",
+        "API_CONTRACT",
+        "CROSS_CUTTING",
+        "LARGE_SCOPE",
+        "LARGE_DIFF",
+        "PREVIOUS_ROUND_REJECTED"
+      ],
+      "reason": "HIGH_RISK_SPECIALIST_REVIEW",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    },
+    "migrationAcceptedBaseline": "1dc170eb8b04d6ee8a706dca089cfe4538175125",
+    "executionBase": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktreeInitialHead": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-009",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\009-disponibilidade-pessoal-recorrencia.md",
+    "changedFiles": [
+      "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+      "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+      "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+      "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+      "apps/bff/PUBLIC_API_V1.md",
+      "apps/bff/src/clients/internal-http-client.ts",
+      "apps/bff/src/clients/scheduling/index.ts",
+      "apps/bff/src/modules/calendar/routes.ts",
+      "apps/bff/src/modules/settings/routes.ts",
+      "apps/bff/tests/goal009-calendar-routes.integration.test.ts",
+      "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+      "apps/frontend/src/data/services/BffCalendarService.ts",
+      "apps/frontend/src/data/services/BffSettingsService.ts",
+      "apps/frontend/tests/goal009-schema.test.ts",
+      "apps/scheduling-service/prisma/migrations/20260909190000_goal009_offer_rules_and_series/migration.sql",
+      "apps/scheduling-service/prisma/schema.prisma",
+      "apps/scheduling-service/src/config/env.ts",
+      "apps/scheduling-service/src/modules/appointments/appointment-series-service.ts",
+      "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+      "apps/scheduling-service/src/modules/calendar/availability-exceptions.ts",
+      "apps/scheduling-service/src/modules/calendar/block-series.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+      "apps/scheduling-service/src/modules/calendar/routes.ts",
+      "apps/scheduling-service/src/modules/calendar/time-blocks.ts",
+      "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+      "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+      "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+      "apps/scheduling-service/src/modules/internal-api/routes.ts",
+      "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+      "apps/scheduling-service/src/shared/auth/internal-auth.ts",
+      "apps/scheduling-service/tests/integration/goal009-occupancy.test.ts",
+      "apps/scheduling-service/tests/integration/support/reset-tenant.ts",
+      "apps/scheduling-service/tests/unit/goal009-occupancy.test.ts",
+      "apps/scheduling-service/tests/unit/support/database-double.ts",
+      "docs/migration/DATA_MIGRATION.md",
+      "docs/migration/GAP_ANALYSIS.md",
+      "scripts/goal009-migration-rehearsal.mjs",
+      "scripts/tests/validate-integration.test.mjs",
+      "scripts/validate-integration.mjs"
+    ],
+    "diffStat": ".../src/modules/scheduling-service/client.ts       |  89 ++++-\n .../src/modules/scheduling-service/types.ts        |  39 ++\n .../src/modules/tools/assistant-tools.ts           | 138 +++++++\n .../tests/tools/assistant-tools.test.ts            | 160 ++++++++\n apps/bff/PUBLIC_API_V1.md                          |  57 ++-\n apps/bff/src/clients/internal-http-client.ts       |   7 +\n apps/bff/src/clients/scheduling/index.ts           | 200 +++++++++-\n apps/bff/src/modules/calendar/routes.ts            | 228 ++++++++++-\n apps/bff/src/modules/settings/routes.ts            |   5 +\n apps/frontend/src/data/mappers/publicApiSchemas.ts |  62 +++\n .../src/data/services/BffCalendarService.ts        | 211 ++++++++++\n .../src/data/services/BffSettingsService.ts        |   4 +\n apps/scheduling-service/prisma/schema.prisma       | 121 +++++-\n apps/scheduling-service/src/config/env.ts          |   9 +\n .../modules/availability/atendly-availability.ts   | 177 ++++++++-\n .../src/modules/calendar/calendar-provider.ts      |  30 +-\n .../src/modules/calendar/calendar-service.ts       |   9 +-\n .../src/modules/calendar/routes.ts                 | 152 ++++++--\n .../src/modules/calendar/time-blocks.ts            |  82 ++--\n .../src/modules/holds/appointment-hold-service.ts  |  17 +-\n .../src/modules/integrations/atendly/provider.ts   | 118 ++++--\n .../modules/integrations/minha-agenda/provider.ts  |  10 +-\n .../src/modules/internal-api/routes.ts             | 426 ++++++++++++++++++++-\n .../modules/services/atendly-service-service.ts    |  12 +\n .../src/shared/auth/internal-auth.ts               |  30 ++\n .../tests/integration/support/reset-tenant.ts      |   5 +\n .../tests/unit/support/database-double.ts          | 133 ++++++-\n docs/migration/DATA_MIGRATION.md                   |  20 +-\n docs/migration/GAP_ANALYSIS.md                     |   4 +-\n scripts/tests/validate-integration.test.mjs        |   1 +\n scripts/validate-integration.mjs                   |  11 +\n 31 files changed, 2417 insertions(+), 150 deletions(-)",
+    "implementationReport": "RELATÓRIO R2 — Goal009, correção dos blockers da rodada 1\n\nBase: worktree em E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-009, HEAD 9013f14 (inalterado, nenhum commit criado). A implementação da R1 foi preservada; nada foi revertido nem reimplementado fora dos blockers.\n\n════════════════════════════════════════\nBLOCKER 1 — Gate de integração não executado\n════════════════════════════════════════\nO que mudou:\n- Provisionei o cluster descartável exatamente pela receita de `docs/migration/VALIDATION_GATE.md:100-117`: `initdb.exe -D /c/tmp/atendly-pgtest/data -U pgtest -A trust -E UTF8 --locale=C`, `pg_ctl start -o \"-p 55432 -c listen_addresses=127.0.0.1\"`, `CREATE DATABASE atendly_bff_test`. Sem credencial real. Só `BFF_TEST_DATABASE_URL` precisa ser exportado — o runner deriva `SCHEDULING_TEST_DATABASE_URL` (`schedulingTargetUrl`, validate-integration.mjs:192) e os demais alvos a partir dele.\n- Ao rodar de verdade, o passo `rehearse:goal009-occupancy-migration` FALHOU por um bug real do script escrito na R1, que nunca havia sido executado: `scripts/goal009-migration-rehearsal.mjs` chamava `inventory()` como inventário M0 (ANTES da migration), e essa função consulta `\"minLeadMinutes\"` — coluna que a migration ainda ia criar. Erro `42703: column \"minLeadMinutes\" does not exist`. Corrigido separando `legacyInventory()` (M0, só contagens do esquema do fim do Goal008) de `inventory()` (M1, contagens + defaults). Também serializei as consultas do M0 (uma conexão `pg` não executa queries em paralelo; `Promise.all` só gerava DeprecationWarning).\n- Segundo bug real do mesmo script, exposto pela mudança do blocker 7: o esquema legado do ensaio não criava o enum `CalendarEffectEntityType`, então o `ALTER TYPE ... ADD VALUE` da migration não teria onde aplicar. Acrescentei o enum ao `LEGACY_SCHEMA` (ele existe desde o Goal008 no esquema real).\n- `docs/migration/DATA_MIGRATION.md`: removidas as duas alegações de que não havia banco acessível — a de §2 (ensaio da migration Goal009) e a da linha \"Concorrência PostgreSQL\" de §7. Substituídas pelo que de fato aconteceu, com o nome dos passos do gate e a cobertura acrescentada nesta rodada.\n- Cluster descartado ao final (`pg_ctl stop -m immediate` + `rm -rf`), como manda §Limpeza, para não deixar recurso efêmero sem registro.\n\n════════════════════════════════════════\nBLOCKER 2 — Expectativa errada em goal009-occupancy.test.ts:164\n════════════════════════════════════════\nConfirmado no código: o `createAppointment` intruso não libera o hold da ocorrência (`releaseHoldWithin` só é usado no caminho de remarcação, atendly/provider.ts:401-409). O hold segue vigente, `findHoldForConsumption` o devolve utilizável, e quem recusa é `assertAvailable`.\nContrato de erro decidido (ver blocker 3): o código continua sendo o do motivo real — `SLOT_UNAVAILABLE` para horário tomado, `APPOINTMENT_HOLD_EXPIRED` para hold vencido/consumido/liberado — e o que muda é que agora o erro carrega a ocorrência e as alternativas. A expectativa do teste foi corrigida para `SLOT_UNAVAILABLE` e ampliada: agora afirma `occurrenceIndex === 1`, `holdId`, `occurrenceDate`, `alternatives.length > 0` e que a alternativa oferecida não é o horário recém-tomado. Rodado de verdade contra PostgreSQL: PASSA.\n\n════════════════════════════════════════\nBLOCKER 3 — Falha de ocorrência não identificada, sem alternativas\n════════════════════════════════════════\n`appointment-series-service.ts`: o corpo do laço de `runConfirm` foi envolvido em try/catch e o erro é reemitido por `occurrenceFailure(error, index, holdId, date)`, que preserva código, mensagem e status e acrescenta `occurrenceIndex`, `holdId` e `occurrenceDate` aos `details` (sem sobrescrever os que já vinham). O mesmo vale para o hold ausente na fase de lock. Com isso `suggestAlternatives` — que dependia de `error.details.holdId` — passa a agir também quando a falha vem de `assertAvailable`, que era exatamente o caso principal do critério 6.\nEfeito colateral necessário e deliberado no BFF: `internal-http-client.ts` embrulha todo erro de serviço interno em `UPSTREAM_ERROR` e descartava os `details` do upstream — então a ocorrência que falhou morreria no BFF e o critério 6 não alcançaria quem opera. Acrescentei `upstreamDetails` (aninhado, aditivo, sem colidir com `upstream`/`upstreamCode`/`upstreamRequestId`). Nenhuma chave existente mudou.\nCobertura: unit (\"identifica a ocorrencia que falhou e devolve alternativas\", com o intruso ocupando a 2ª ocorrência e o hold ainda vigente) + integração contra PostgreSQL + teste de BFF que prova que os detalhes chegam ao cliente.\n\n════════════════════════════════════════\nBLOCKER 4 — Ocupação estendida não enxerga vizinho fora da janela crua\n════════════════════════════════════════\n`atendly-availability.ts`: as três consultas de ocupação (blocos, atendimentos, holds) passaram a usar `searchStart`/`searchEnd` em vez de `rangeStart`/`rangeEnd`. A janela é alargada por `input.bufferBefore/After` (que estende o candidato para fora do range) somado ao maior buffer efetivamente gravado no tenant, lido por um novo método `maxNeighborBuffer()` (agregado `_max` sobre `Appointment` não cancelado e `AppointmentHold` vigente). Usei o máximo real porque o catálogo não tem teto de buffer — não existe constante segura. O resultado é um superconjunto; o que entra a mais é descartado pelo teste de sobreposição, que continua comparando os intervalos estendidos exatos de cada linha.\nSuporte de teste: `tests/unit/support/database-double.ts` ganhou `aggregate({ where, _max })` (só `_max` numérico, respeitando os `@default` como `findMany` já fazia) e o `appointmentClient` passou a expô-lo.\nRED/GREEN provado: dois testes de fronteira novos — vizinho que termina às 00:00 do dia seguinte com `bufferAfter` 30 (o caso que `assertAvailable`, com `days: 1`, deixava passar) e vizinho que começa depois do fim do range com `bufferBefore` 60. Revertendo temporariamente só as três cláusulas `WHERE`, os DOIS falham (`2 failed | 27 passed`); com a correção, `29 passed`.\n\n════════════════════════════════════════\nBLOCKER 5 — Faltam testes de integração do BFF (critério 8)\n════════════════════════════════════════\nNovo `apps/bff/tests/goal009-calendar-routes.integration.test.ts`, no padrão de `apps/bff/tests/helpers/integration.ts` (`RUN_INTEGRATION`, skip declarado sem banco, Scheduling como dobro HTTP). Sete casos:\n1. tenant da sessão manda: `POST /v1/availability-exceptions/unavailable` com `x-tenant-id`, `?tenantId=` e `tenantId` no corpo apontando para OUTRO negócio — o upstream recebe o tenant do dono da sessão;\n2. listar e remover exceção sempre no negócio da sessão;\n3. CSRF: as DEZ mutações novas (`availability-exceptions/extra|unavailable|:id`, `block-series` criar/editar/remover, `time-blocks/:id/occurrence` DELETE/PATCH, `appointments/series/preview|confirm`) recusam com 403 `CSRF_TOKEN_REJECTED` e NENHUMA chega ao Scheduling;\n4. decisão humana de conflito (`skipConflicts`, `forceOverlapReason`) atravessa intacta e `source` nunca vem do corpo;\n5. indisponibilidade sobre atendimento confirmado leva `decidedBy`/`decidedReason`;\n6. confirmação de série repassa a `Idempotency-Key` ao Scheduling;\n7. ocorrência que falhou + alternativas chegam ao cliente (via `upstreamDetails`).\nTodos os 7 passam contra o banco descartável.\n\n════════════════════════════════════════\nBLOCKER 6 — Falta isolamento por tenant das entidades novas (critério 1)\n════════════════════════════════════════\nUnit (`tests/unit/goal009-occupancy.test.ts`), novo describe com `tenant-b` semeado ao lado de `tenant-a`, 4 casos:\n- regra de oferta de B (granularidade 15, horizonte 1 dia) não muda a grade de A;\n- bloco, exceção e série de bloqueio de B não ocupam nem aparecem em A — e o inverso vale (B fechado o dia inteiro pela própria exceção);\n- A, com os ids de B em mãos, não remove ocorrência, série nem exceção de B (as três recusam e o estado de B fica intacto);\n- série de atendimento de B não ocupa a agenda de A, e A não confirma a série de B nem tendo os holdIds.\nIntegração (contra PostgreSQL real), um caso equivalente com `goal009-tenant-b` semeado no `beforeEach` e limpo no `afterAll`: série de bloqueio + exceção + série de atendimento confirmada em B, e A não vê, não é ocupado e não muda nada — com as contagens de B reconferidas depois das três tentativas.\n\"Tenant não selecionável por header/body/query\" é provado no BFF (blocker 5, caso 1), que é onde a sessão existe.\n\n════════════════════════════════════════\nBLOCKER 7 — Contrato da série diverge da documentação e do teto\n════════════════════════════════════════\nIdempotência implementada de verdade (a opção \"corrigir o documento\" foi descartada: o BFF já exigia e repassava a chave, quem não a lia era o Scheduling):\n- `ConfirmSeriesInput` ganhou `idempotencyKey`; `confirm()` agora reivindica a chave por `CalendarMutationIdempotency`, e o antigo corpo virou `runConfirm(input, commit)`. O `commit` é chamado DENTRO da transação, junto com o efeito, como as demais mutações do Goal008 — resultado e efeito no mesmo commit.\n- Efeito novo: `CalendarEffectEntityType` ganhou `APPOINTMENT_SERIES` (schema.prisma + `ALTER TYPE ... ADD VALUE IF NOT EXISTS` aditivo e retomável na migration `20260909190000`). `recoverSeries()` relê os atendimentos por `seriesId` em vez de reexecutar.\n- O resultado idempotente é gravado como objeto `{ seriesId, appointments }` porque `responseSchema` do registro é `z.record` (não aceita array); o contrato da rota continua sendo a lista.\n- `parseCalendarAppointment` foi exportado de `calendar-service.ts` para o replay decodificar com as mesmas tolerâncias de resposta antiga.\n- Rota interna `POST /internal/appointments/series/confirm` agora lê `idempotencyKey(request)`.\nTeto: `confirm()` valida `occurrences.length > APPOINTMENT_SERIES_MAX_OCCURRENCES` e recusa com `APPOINTMENT_SERIES_TOO_LONG` (`details.cap`), antes de reivindicar chave ou tocar a agenda — o preview sozinho não bastava, porque quem fala com a rota monta a lista de holds e previews sucessivos poderiam ser reunidos acima do teto.\nDocumentação: `PUBLIC_API_V1.md` deixou de dizer que a falha é sempre `409 APPOINTMENT_HOLD_EXPIRED`; agora descreve os dois códigos por motivo, os detalhes da ocorrência (`upstreamDetails`), o teto validado nos dois lados e o replay da mesma `Idempotency-Key`.\nCobertura: unit (replay devolve os mesmos ids e não cria nada novo; teto recusado na confirmação) + integração contra PostgreSQL (replay real).\n\n════════════════════════════════════════\nCOMANDOS EXECUTADOS E RESULTADOS\n════════════════════════════════════════\n- `npx tsc --noEmit` (apps/scheduling-service) — limpo.\n- `npx tsc --noEmit` (apps/bff) — limpo.\n- `npx vitest run tests/unit/goal009-occupancy.test.ts` — 29 passed (era 20; +9 nesta rodada).\n- RED proof do blocker 4: com as três cláusulas `WHERE` revertidas, `2 failed | 27 passed`; restaurado, `29 passed`.\n- `npx vitest run tests/integration/goal009-occupancy.test.ts --reporter=verbose` com `SCHEDULING_TEST_DATABASE_URL` real — 4 passed, nenhum skip (nomes dos 4 casos confirmados no output).\n- `npx vitest run tests/goal009-calendar-routes.integration.test.ts` (BFF, banco descartável) — 7 passed.\n- `node scripts/goal009-migration-rehearsal.mjs` — PASSED (M0: settings 2, appointments 1, items 1, blocks 1, holds 1).\n- `npm run test:gate` — 31 passed, 0 fail.\n- `npm run validate:integration` (BFF_TEST_DATABASE_URL no cluster descartável) — PASSED: 19/19, 0 failed, 0 skipped, 0 not_run. Inclui `rehearse:goal009-occupancy-migration` e `test:scheduling-integration`.\n- `npm run validate:core` — PASSED: 14 passed, 0 failed, 3 skipped (`test:bff`, `test:contracts`, `test:health-worker` — skips preexistentes e declarados). `audit:static` 15/16, 1 skip (`production_health`, não solicitado). Nenhum segredo no output.\n- `git diff --check` — limpo.\n- `git rev-parse HEAD` — 9013f14, inalterado; branch `ai-loop/goal-009`; nenhum commit, push, merge ou PR.\n\n════════════════════════════════════════\nLIMITAÇÕES E PONTOS PARA O REVIEW\n════════════════════════════════════════\n1. `maxNeighborBuffer()` faz dois agregados por chamada de `findSlots` sobre a tabela inteira do tenant (filtrada por status/vigência, sem recorte de intervalo). É correto e conservador, mas é custo por consulta de disponibilidade. A alternativa seria um teto de buffer no catálogo, que não existe hoje e seria decisão de produto — fora do escopo desta rodada.\n2. `upstreamDetails` no BFF é uma mudança transversal ao contrato de erro de TODAS as rotas que falam com serviço interno, não só as do Goal009. É estritamente aditiva (nenhuma chave existente mudou) e o gate inteiro passou, mas é a única alteração que sai do recorte literal dos blockers — fiz porque sem ela o critério 6 não chega a quem opera, e registro aqui para decisão explícita.\n3. O `[RED]` unit de hold vencido continua com a ocorrência que falha sendo a PRIMEIRA, porque o dublê não desfaz escrita; o rollback completo com falha em ocorrência POSTERIOR é provado na suíte de integração, contra PostgreSQL.\n4. Os dois bugs do `goal009-migration-rehearsal.mjs` (inventário M0 consultando coluna futura; enum de efeito ausente no esquema legado) só apareceram porque o gate rodou. Ambos eram do script, não da migration — a migration em si aplicou limpa na primeira tentativa e provou-se retomável.\n5. O cluster descartável foi destruído ao fim. Para reproduzir: as três linhas de `VALIDATION_GATE.md:100-117` e depois `BFF_TEST_DATABASE_URL=\"postgresql://pgtest@127.0.0.1:55432/atendly_bff_test\" npm run validate:integration`.\n6. Nenhum documento de controle da migração foi tocado (goals/, reviews/, MIGRATION_STATUS.md intactos). `DATA_MIGRATION.md` e `PUBLIC_API_V1.md` foram atualizados porque os blockers 1 e 7 exigiam explicitamente.",
+    "validations": [
+      {
+        "name": "npm run validate:integration",
+        "passed": true,
+        "detail": "19/19 passed, 0 failed, 0 skipped, 0 not_run, contra PostgreSQL descartável em 127.0.0.1:55432/atendly_bff_test. Inclui rehearse:goal009-occupancy-migration e test:scheduling-integration."
+      },
+      {
+        "name": "npm run validate:core",
+        "passed": true,
+        "detail": "14 passed, 0 failed, 3 skipped (test:bff, test:contracts, test:health-worker — skips preexistentes e declarados). audit:static 15/16 com production_health não solicitado."
+      },
+      {
+        "name": "scheduling unit: tests/unit/goal009-occupancy.test.ts",
+        "passed": true,
+        "detail": "29 passed (era 20). +2 fronteira de buffer, +3 série (falha identificada, replay idempotente, teto na confirmação), +4 isolamento por tenant."
+      },
+      {
+        "name": "scheduling integration: tests/integration/goal009-occupancy.test.ts",
+        "passed": true,
+        "detail": "4 passed contra PostgreSQL real, nenhum skip. Corrigida a expectativa para SLOT_UNAVAILABLE com occurrenceIndex/holdId/occurrenceDate/alternatives; +isolamento por tenant; +replay idempotente."
+      },
+      {
+        "name": "bff integration: tests/goal009-calendar-routes.integration.test.ts",
+        "passed": true,
+        "detail": "7 passed. CSRF nas 10 mutações novas, tenant da sessão contra header/body/query, decisão humana de conflito, Idempotency-Key repassada e detalhes da ocorrência propagados."
+      },
+      {
+        "name": "node scripts/goal009-migration-rehearsal.mjs",
+        "passed": true,
+        "detail": "PASSED após corrigir dois bugs do script (inventário M0 consultava coluna criada pela própria migration; enum CalendarEffectEntityType faltava no esquema legado)."
+      },
+      {
+        "name": "RED proof do blocker 4",
+        "passed": true,
+        "detail": "Com as cláusulas WHERE revertidas para rangeStart/rangeEnd: 2 failed | 27 passed. Com searchStart/searchEnd: 29 passed."
+      },
+      {
+        "name": "npx tsc --noEmit (scheduling-service e bff)",
+        "passed": true,
+        "detail": "Sem erros nos dois apps."
+      },
+      {
+        "name": "npm run test:gate",
+        "passed": true,
+        "detail": "31 passed, 0 fail."
+      },
+      {
+        "name": "git diff --check",
+        "passed": true,
+        "detail": "Limpo. HEAD 9013f14 inalterado, nenhum commit/push/merge/PR, documentos de controle da migração intactos."
+      }
+    ],
+    "previousBlockers": [
+      "Gate de integração não executado. `npm run validate:integration` (incluindo `rehearse:goal009-occupancy-migration` e `test:scheduling-integration`) precisa rodar e passar: os critérios 5, 6, 9 e 10 do Goal dependem de locks reais e do ensaio da migration. O ambiente permite: siga `docs/migration/VALIDATION_GATE.md:100-117` (initdb com `-U pgtest -A trust` na porta 55432, sem credencial real — o binário existe em `%LOCALAPPDATA%/Programs/PostgreSQL/18/pgsql/bin/initdb.exe`) e exporte `BFF_TEST_DATABASE_URL` e `SCHEDULING_TEST_DATABASE_URL`. Remover de `DATA_MIGRATION.md` §7 e do relatório a alegação de que não havia banco acessível.",
+      "`apps/scheduling-service/tests/integration/goal009-occupancy.test.ts:164` espera o código errado e vai falhar na primeira execução: o `createAppointment` intruso não libera o hold da ocorrência (`releaseHoldWithin` só é usado no caminho de remarcação, provider.ts:401-409), então `findHoldForConsumption` devolve o hold válido e a falha vem de `assertAvailable` como `SLOT_UNAVAILABLE`, não `APPOINTMENT_HOLD_EXPIRED`. Corrigir a expectativa depois de decidir o contrato de erro (ver blocker seguinte) e rodar o teste de verdade.",
+      "Falha de ocorrência na confirmação da série não identifica a ocorrência nem traz alternativas no caso principal (critério 6: \"nada criado, falha identificada e alternativas\"). `AtendlyAvailability.assertAvailable` lança `SLOT_UNAVAILABLE` sem `details` (atendly-availability.ts:96-102) e `suggestAlternatives` (appointment-series-service.ts:316) só age quando `error.details.holdId` existe — logo, quando o horário é tomado entre preview e confirmação, a resposta não diz qual ocorrência falhou nem oferece alternativa. Anexar holdId/índice da ocorrência ao erro dentro do laço de `confirm` e cobrir com teste.",
+      "Ocupação estendida por buffer não enxerga vizinho cujo intervalo cru cai fora da janela consultada. Em `findSlots` (atendly-availability.ts:192-218) atendimentos e holds são buscados por `startAt < rangeEnd AND endAt > rangeStart` sobre o intervalo **não** estendido; como `assertAvailable` usa `days: 1`, um atendimento que termina às 00:00 do dia seguinte com `bufferAfter` 30 não bloqueia o slot das 00:00, e um que começa logo após o fim do range com `bufferBefore` também não. Alargar a janela de busca pelo maior buffer possível (ou comparar já pelo intervalo estendido) e cobrir com teste de fronteira.",
+      "Faltam os testes de integração do BFF exigidos pelo critério 8 para as rotas novas (`/v1/availability-exceptions/*`, `/v1/block-series/*`, `/v1/time-blocks/:id/occurrence`, `/v1/appointments/series/*`): CSRF por cookie, tenant da sessão e decisão humana de conflito, com skip declarado sem banco. `apps/bff/tests/` não foi tocado; usar o padrão de `apps/bff/tests/helpers/integration.ts` (`RUN_INTEGRATION`).",
+      "Falta a cobertura de isolamento por tenant do critério 1 para as entidades novas: regras de oferta, exceções, blocos, séries de bloqueio e séries de atendimento de um tenant não podem aparecer, ocupar nem mudar em outro, e o tenant não pode ser selecionável por header/body/query. `tests/unit/goal009-occupancy.test.ts` usa só `tenant-a` e `tests/integration/goal009-occupancy.test.ts` semeia só `tenantA`.",
+      "Contrato da série de atendimento diverge da documentação e do teto: `apps/bff/PUBLIC_API_V1.md` afirma que `POST /v1/appointments/series/confirm` \"exige Idempotency-Key\", mas a rota interna (`calendar/routes.ts:397-417`) nunca lê `idempotencyKey(request)` e `AtendlyAppointmentSeriesService.confirm` não grava resultado idempotente como as demais mutações do Goal008 — uma retentativa devolve 409 em vez de replay. Além disso `confirm` não valida `APPOINTMENT_SERIES_MAX_OCCURRENCES` (o schema da rota aceita 365 ocorrências), então o teto do critério 6 só vale no preview. Implementar as duas coisas ou corrigir o documento para não mentir."
+    ],
+    "packetPath": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\artefacts\\009-r2\\review-packet.json"
+  },
+  "statusAt": "2026-09-10T00:47:42.856Z",
+  "attemptStartedAt": "2026-09-10T00:41:15.305Z",
+  "requeuedAt": "2026-09-10T00:41:15.305Z"
+}

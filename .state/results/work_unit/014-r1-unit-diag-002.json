@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T07:56:03.663Z",
+  "attemptId": "014-r1-unit-diag-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r1-unit-diag-002",
+      "goal": "014",
+      "round": 1,
+      "workUnitId": "DIAG-002",
+      "status": "COMPLETED",
+      "summary": "A falha não era um bug: validate:integration recusa (exit 2) por design quando BFF_TEST_DATABASE_URL não está definido; provisionei o PostgreSQL descartável documentado e a verificação passou (exit 0, 23/23 passos).",
+      "report": "Diagnóstico: li scripts/validate-integration.mjs e docs/migration/VALIDATION_GATE.md. `resolveIntegrationTarget()` recusa deliberadamente (IntegrationTargetError, exit 2) rodar sem `BFF_TEST_DATABASE_URL` — o comentário no topo do arquivo e o VALIDATION_GATE.md confirmam que isso é comportamento intencional (guard contra queda para `.env`/DATABASE_URL herdado), e o CI valida explicitamente que esse \"REFUSED — exit 2\" acontece quando a variável some. Não é um bug de código: nesta rodada, nenhum PostgreSQL de teste descartável havia sido provisionado neste workspace/sessão, então a recusa era esperada.\n\nCausa raiz: ausência de infraestrutura (banco de teste descartável) no ambiente local desta execução, não defeito no gate.\n\nCorreção aplicada (sem tocar scripts/validate-integration.mjs): segui o procedimento já documentado em docs/migration/VALIDATION_GATE.md (\"Provisionamento local (Windows, sem Docker)\") para provisionar um cluster PostgreSQL 18 descartável e então rodei o gate com a URL exigida.\n\nComandos executados e resultado:\n1. `\"$LOCALAPPDATA/Programs/PostgreSQL/18/pgsql/bin/initdb.exe\" -D /c/tmp/atendly-pgtest/data -U pgtest -A trust -E UTF8 --locale=C` → sucesso, cluster criado.\n2. `pg_ctl.exe -D /c/tmp/atendly-pgtest/data -l server.log -o \"-p 55432 -c listen_addresses=127.0.0.1\" start` → \"server started\".\n3. `psql.exe -h 127.0.0.1 -p 55432 -U pgtest -d postgres -c \"CREATE DATABASE atendly_bff_test;\"` → \"CREATE DATABASE\".\n4. `BFF_TEST_DATABASE_URL=\"postgresql://pgtest@127.0.0.1:55432/atendly_bff_test\" npm run validate:integration` (na raiz da worktree) → PASSED. Saída final: `{\"gate\":\"validate:integration\",\"total\":23,\"passed\":23,\"failed\":0,\"skipped\":0,\"notRun\":0,\"failedSteps\":[],\"skippedSteps\":[],\"notRunSteps\":[]}` seguido de \"validate:integration PASSED against 127.0.0.1:55432/atendly_bff_test.\"; processo terminou com exit code 0.\n\nNenhum arquivo de scripts/, prisma ou de qualquer app foi alterado por essa correção — confirmado com `git status --porcelain=v1 -- scripts/ apps/bff/prisma apps/scheduling-service/prisma apps/ai-orchestrator/prisma` (sem saída) e `git status --porcelain=v1` geral, que só mostra as alterações preexistentes de outras Work Units (frontend, ai-orchestrator, bff routes etc.), já presentes antes desta unidade — nada foi revertido. O gate em si (scripts/validate-integration.mjs) permanece bit-a-bit idêntico, sem afrouxamento, skip ou desabilitação.\n\nO cluster PostgreSQL descartável (porta 55432, dados em C:\\tmp\\atendly-pgtest) foi deixado em execução para que reruns subsequentes do mesmo comando com a mesma variável de ambiente continuem passando; é infraestrutura local fora do controle de versão, não um artefato do repositório.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-integration\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "npm run validate:integration com BFF_TEST_DATABASE_URL apontando para o PostgreSQL descartável recém-provisionado terminou com exit 0 e 23/23 passos passed; scripts/validate-integration.mjs não foi editado (confirmado via git status)."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "git status --porcelain=v1 mostra apenas as alterações preexistentes de outras Work Units (frontend, ai-orchestrator, bff), inalteradas por esta unidade; nenhum arquivo rastreado foi tocado por esta correção."
+        }
+      ]
+    },
+    "attemptId": "014-r1-unit-diag-002-a1"
+  }
+}

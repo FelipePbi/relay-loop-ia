@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:55:42.790Z",
+  "attemptId": "016-r4-tech_lead-ca1ee0bd-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r4-tech_lead-ca1ee0bd",
+      "goal": "016",
+      "summary": "Fechamento documental do Goal016 (ACCEPTED na rodada 4, 68 arquivos, hash 5ad0f3ed…) registrado em sete documentos de docs/migration/. Criei reviews/016-review.md com o histórico factual das quatro rodadas (5, 2 e 2 blockers fechados; rodada 4 só de prova sensível à mutação), o escopo e a identidade do diff, o que o diff entrega e os limites do aceite — incluindo dois fatos de escopo que o relatório do executor não carregava: o diff tocou infraestrutura de gate fora dos pontos de implementação declarados (tools/ia-loop/lib/temporary-postgres.mjs e allowScripts em apps/ai-orchestrator/package.json) e ISO_YESTERDAY ficou sem uso porque nenhum gate cobre apps/frontend/tests/. CURRENT_STATE.md ganhou o delta do Goal016 (leitura de bloco em todas as camadas, decidedBy derivado da sessão, agenda decomposta em 24 módulos com dois call sites de useShellConfig, nove rotas, três visualizações com ocupação honesta, identidade por customerId, hold com ciclo de vida, séries, ciclo de vida/histórico, exceções, guard por fonte, limpeza do resíduo do 015) e quatro limites novos. GAP_ANALYSIS.md fechou G-13 na parte de interface e avançou G-31 na Agenda, com a cadeia de atualização estendida. DECISIONS.md recebeu D-032 com os contratos adotados e teve duas afirmações superadas corrigidas: o resíduo de decidedBy em D-025 e os resíduos de limpeza em D-031. REUSE_ANALYSIS.md reclassificou ProductAgendaScreen como REFACTOR (feito), atualizou a linha de testes de frontend e corrigiu a afirmação estale de que Field/ListItem/Spinner/Toast ainda não tinham consumidor. TARGET_ARCHITECTURE.md passou a registrar as duas mudanças de contrato público do bloco de interface. MASTER_PLAN.md ganhou a entrada v30 do histórico de planejamento e teve corrigida a linha que dizia que o 016 tocava contrato público num único ponto — são dois. Não criei Goal, não marquei READY, não registrei SHA de baseline, não toquei MIGRATION_STATUS nem qualquer arquivo fora de docs/migration/.",
+      "documentsUpdated": [
+        "docs/migration/reviews/016-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md"
+      ],
+      "notes": "DATA_MIGRATION.md não foi tocado: nenhuma migration, dado ou ensaio de rollback mudou neste Goal. MIGRATION_STATUS.md e o registro de baseline ficaram fora por instrução explícita. O candidato \"docs/migration/reviews/003-review.md\" listado no contexto do fechamento parece substituição errada de template — o review desta execução é reviews/016-review.md, e foi ele que criei; 003-review.md não foi alterado."
+    },
+    "attemptId": "016-r4-tech_lead-ca1ee0bd-a1"
+  }
+}

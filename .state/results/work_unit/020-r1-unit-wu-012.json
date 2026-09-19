@@ -1,0 +1,41 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:17:36.781Z",
+  "attemptId": "020-r1-unit-wu-012-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Os três documentos refletem o que o diff efetivamente mudou",
+          "met": true,
+          "detail": "CURRENT_STATE ganhou delta (Goal020, sem review) sobre GET /v1/calendar/imports, seleção de categoria, features/imports/, remoção de features/migration/, escolha real no onboarding. GAP_ANALYSIS atualizou G-19/G-10/G-31. REUSE_ANALYSIS atualizou ProductMigrationScreen, CSS, onboarding, Minha Agenda, Scheduling core e testes, tudo conferido contra os diffs reais."
+        },
+        {
+          "criterion": "Nenhum documento de fechamento, review, MASTER_PLAN, DECISIONS ou MIGRATION_STATUS é tocado",
+          "met": true,
+          "detail": "git status --short docs/ no worktree mostra só CURRENT_STATE.md, GAP_ANALYSIS.md e REUSE_ANALYSIS.md modificados; goals/, reviews/, MASTER_PLAN, DECISIONS e MIGRATION_STATUS.md não aparecem."
+        },
+        {
+          "criterion": "Nenhuma afirmação documental fica falsa após o diff",
+          "met": true,
+          "detail": "Edições usam linguagem explícita 'rodada 1, pendente de review' em vez de fechamento revisado; cada fato foi conferido contra o diff real antes de escrever; a fotografia histórica foi preservada e só recebeu uma seção de delta ao final, no mesmo padrão já usado no documento."
+        }
+      ],
+      "changedFiles": [
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "goal": "020",
+      "jobId": "020-r1-unit-wu-012",
+      "protocolVersion": 2,
+      "report": "Li os diffs reais do Goal020 (git diff --stat e por arquivo) em apps/bff, apps/scheduling-service e apps/frontend, e o conteúdo integral dos arquivos novos mais relevantes (features/imports/types.ts, ImportsScreen.tsx) e das nove suítes goal020-*.test.tsx/ts para basear as atualizações em fato observado, não em suposição.\n\nAtualizei os três documentos na medida exata do diff:\n\n- docs/migration/CURRENT_STATE.md: acrescentei a seção \"## Delta em execução — Goal020, 2026-09-15 (rodada 1, ainda sem review)\" ao final do arquivo, no mesmo padrão das seções de delta anteriores, mas explicitamente marcada como não revisada (para não declarar o Goal ACCEPTED). Cobre: GET /v1/calendar/imports e o endpoint interno equivalente (leitura de direito/sessão/histórico sem efeito); POST .../categories/:category/selection com os dois erros novos (IMPORT_SESSION_NOT_SELECTABLE, IMPORT_SESSION_CATEGORY_NOT_FOUND); a experiência nova em /importacao (features/imports/) decidida pelo estado lido; a remoção de features/migration/, das rotas /migracao e do CSS atendly-migration.css; a escolha real (SCRATCH/IMPORT) no onboarding; e a atualização de PUBLIC_API_V1.md datando a ausência de consumidor do protocolo pré-Goal010.\n- docs/migration/GAP_ANALYSIS.md: atualizei a linha de rastreio de atualizações (nova frase datando esta execução, sem alegar review), e as linhas G-19 (experiência implementada), G-10 (residual de consumidor de frontend do protocolo legado removido) e G-31 (Importação redesenhada no mesmo padrão dos outros módulos, Configurações seguindo pendente).\n- docs/migration/REUSE_ANALYSIS.md: atualizei as linhas ProductMigrationScreen/features/migration (REPLACE feito), shared/styles/atendly*.css (troca de atendly-migration.css por atendly-imports.css), ProductOnboardingScreen+OnboardingRuntime (escolha real no bloco schedule), Minha Agenda escrita/source switching (consumidor de frontend removido), Scheduling core (leitura de estado e escrita de seleção reusando o mesmo motor/idempotência) e a lista de testes frontend (nove suítes goal020-*).\n\nIncidente e correção durante a execução: nas primeiras edições, usei por engano os caminhos do checkout principal (E:\\Projetos\\atendly-ia\\docs\\migration\\...) em vez da worktree indicada (E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-020\\docs\\migration\\...). Isso alterou GAP_ANALYSIS.md e REUSE_ANALYSIS.md no checkout principal, violando a restrição de não alterar o checkout principal. Detectei o erro ao conferir com `git status`/`git diff`, reverti imediatamente com `git checkout -- docs/migration/GAP_ANALYSIS.md docs/migration/REUSE_ANALYSIS.md` no checkout principal (confirmado limpo por `git status --short`), e refiz todas as edições — desta vez corretamente — nos arquivos da worktree. O checkout principal não tem nenhuma alteração pendente ao final desta execução.\n\nComandos executados com resultado: `git status --short` (inventário do diff), `git diff --stat HEAD -- apps/bff apps/scheduling-service apps/frontend` (830 inserções/1816 remoções em 24 arquivos), diffs por arquivo dos módulos citados acima, `graphify query \"importacao ui historico modulo imports\" --budget 800` (5 nós irrelevantes — grafo não indexa arquivos novos/não commitados, confirmando o graphOrientation vazio do contexto), leitura de todas as nove suítes `apps/frontend/tests/goal020-*` (grep de describe/test), e por fim `git diff --stat` nos três documentos alterados na worktree (49/8/12 linhas, 59 inserções/10 remoções) e `git status --short docs/` confirmando que só os três arquivos esperados foram tocados. Não rodei lint, typecheck ou testes — fora do escopo desta WU documental e não necessários para os critérios de aceitação.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Atualizei CURRENT_STATE, GAP_ANALYSIS e REUSE_ANALYSIS com a experiência de importação, o corte do consumidor legado e a nova entrada de onboarding do diff020, após reverter uma edição acidental no checkout principal.",
+      "workUnitId": "WU-012"
+    },
+    "attemptId": "020-r1-unit-wu-012-a1"
+  }
+}

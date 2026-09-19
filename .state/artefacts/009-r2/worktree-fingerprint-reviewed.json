@@ -1,0 +1,93 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-10T00:41:11.871Z",
+  "base": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "worktreeInitialHead": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "head": "9013f14d28daec714d6ab86a64ba52ace60f0d1e",
+  "branch": "ai-loop/goal-009",
+  "trackedDiffHash": "e0f446445fd1f3933d030b604e8fcbc626c5242562de7e4c76c8a953edaf1203",
+  "trackedFileCount": 31,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+    "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+    "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+    "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/internal-http-client.ts",
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/modules/calendar/routes.ts",
+    "apps/bff/src/modules/settings/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffCalendarService.ts",
+    "apps/frontend/src/data/services/BffSettingsService.ts",
+    "apps/scheduling-service/prisma/schema.prisma",
+    "apps/scheduling-service/src/config/env.ts",
+    "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+    "apps/scheduling-service/src/modules/calendar/routes.ts",
+    "apps/scheduling-service/src/modules/calendar/time-blocks.ts",
+    "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+    "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+    "apps/scheduling-service/src/shared/auth/internal-auth.ts",
+    "apps/scheduling-service/tests/integration/support/reset-tenant.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "docs/migration/DATA_MIGRATION.md",
+    "docs/migration/GAP_ANALYSIS.md",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "7b3d73d02d3e7228a07a28785825e377bab2e9f87d82c0acfeef0bcfc8feaffd",
+  "untrackedFileCount": 9,
+  "untracked": [
+    {
+      "path": "apps/bff/tests/goal009-calendar-routes.integration.test.ts",
+      "sha256": "32cf361eee093d4a5af1c2999d3da0c3d10c57fa65ea4df55b4639e8418217b8",
+      "bytes": 13703
+    },
+    {
+      "path": "apps/frontend/tests/goal009-schema.test.ts",
+      "sha256": "a7258dd270a25f67f78e4200ababbb22a3336755b4d799f216c988de83e1115b",
+      "bytes": 4631
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260909190000_goal009_offer_rules_and_series/migration.sql",
+      "sha256": "0c453085161a0e5865ab863785259975af5b96470ab6ba96870b4e536f40aa90",
+      "bytes": 8293
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/appointments/appointment-series-service.ts",
+      "sha256": "eae7925dc2851c5f163d35e29a3caecd8cfb1cd24e46d6991ed026148db81e30",
+      "bytes": 20509
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/availability-exceptions.ts",
+      "sha256": "94a9da2dff58f8e8e9cc98c2634e9ecc2e1d5a0cfbca56609c8227269b6337f6",
+      "bytes": 5835
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/block-series.ts",
+      "sha256": "aa635011fe2e317953cce5024307fdce1b53354f49eb86686ddb4bca8c2c0057",
+      "bytes": 15743
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/goal009-occupancy.test.ts",
+      "sha256": "42973af75c90edf1cfc9dc1718b5d745e8672ce97444c61f28515b10d84c1825",
+      "bytes": 12466
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/goal009-occupancy.test.ts",
+      "sha256": "cf4bc68dabccf4023f3ba651b3224c21708b6b1e2be4ab75c7d88830a1d18fd0",
+      "bytes": 39253
+    },
+    {
+      "path": "scripts/goal009-migration-rehearsal.mjs",
+      "sha256": "15692c3dac9b9d81ee51eb1de342d517a21129505e698ae713663a3a0f641406",
+      "bytes": 21072
+    }
+  ],
+  "contentHash": "8fa9b2367dd6e65b4a2ae68ef13bc6978417e675ab3475c5dae6dff65ec0dae4"
+}

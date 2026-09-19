@@ -1,0 +1,48 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T05:31:13.655Z",
+  "attemptId": "025-r1-unit-wu-10-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r1-unit-wu-10",
+      "goal": "025",
+      "round": 1,
+      "workUnitId": "WU-10",
+      "status": "COMPLETED",
+      "summary": "Documentação da migração atualizada para refletir o ciclo de vida da conta (WU-01 a WU-09) e D-041 registrada em DECISIONS.md, sem tocar documentos de controle nem criar arquivo novo.",
+      "report": "Li o código real entregue pelas WU-01 a WU-09 (state.ts, service.ts, purge.ts, worker.ts, errors.ts, routes.ts do módulo account no BFF; a guarda em ai-activation.ts; as rotas internas de purga por tenant na IA e no Scheduling; a migration `20260916000000_goal025_account_deletion`; PUBLIC_API_V1.md já atualizado pela WU-03/WU-08) para escrever o estado real, não a intenção do Goal.\n\nAtualizei:\n- **DECISIONS.md**: acrescentei D-041 (máquina de estados, guarda de reativação, purga por negócio derivada do schema, o que sobrevive à purga), no formato das anteriores (Status/Contexto/Decisão/Alternativas/Motivo/Consequências/Revisar se). Status `PROPOSED` — não `ACCEPTED` — porque não existe review025 ainda e o rodapé do arquivo é explícito que nenhuma proposta vira ACCEPTED por menção do Developer; o Tech Lead inspeciona o diff real. Nenhum bloco anterior foi tocado (diff é só adição, confirmado com `git diff | grep '^-'` sem resultado).\n- **GAP_ANALYSIS.md**: linha G-29 passou a descrever as duas partes — conteúdo (Goal023, já fechado) e conta (Goal025, implementada e descrita em detalhe), com nota explícita de que o fechamento formal depende do aceite do Tech Lead e aponta para D-041 `PROPOSED`.\n- **CURRENT_STATE.md**: nova seção \"Delta apresentado — Goal025\" (mesmo padrão `FATO atual`/`LIMITE` das seções anteriores) cobrindo BFF (máquina de estados, guarda de reativação, purga com lease), IA e Scheduling (rota interna de purga por tenant, escopo `tenant:purge`, derrubada de canal) e frontend (`AccountSettings.tsx` consumindo os contratos reais).\n- **DATA_MIGRATION.md**: nova §13 documentando a migration do BFF (`20260916000000_goal025_account_deletion`), por que não tem FK para `Tenant`/`User`, os parâmetros do laço de purga e o ensaio de retomada.\n- **REUSE_ANALYSIS.md**: nova linha \"Ciclo de vida da conta (Goal025)\" na matriz backend e correção da linha \"JWT/cookie/membership/registro\", que apontava erroneamente o gate de exclusão para o Goal022 (já superado pelo Goal024/Goal025).\n- **VALIDATION_GATE.md**: não alterado — nenhum passo do gate mudou (`test:bff-integration` descobre os novos testes de integração automaticamente via `vitest run`, e confirmei por contagem que `validate-integration.mjs` continua com 28 passos, sem rehearsal script novo para a migration deste Goal).\n\nErro cometido e corrigido durante a execução: as primeiras cinco edições foram aplicadas por engano no checkout principal (`E:\\Projetos\\atendly-ia`) em vez da worktree. Detectei pelo `git status` vazio na worktree, salvei o diff com `git diff docs/migration/ > wu10-docs.patch`, revertive o checkout principal com `git checkout -- docs/migration/CURRENT_STATE.md docs/migration/DATA_MIGRATION.md docs/migration/DECISIONS.md docs/migration/GAP_ANALYSIS.md docs/migration/REUSE_ANALYSIS.md` (confirmado limpo depois), e apliquei o mesmo patch na worktree com `git apply`. Verifiquei ao final que o checkout principal está limpo (`git status --short docs/migration/` sem saída) e que a worktree tem exatamente as cinco alterações pretendidas (`git diff --stat`).\n\nNenhum documento de controle (goals/, reviews/, MIGRATION_STATUS.md) foi tocado. Nenhum arquivo novo foi criado.",
+      "changedFiles": [
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DATA_MIGRATION.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "GAP_ANALYSIS reflete o estado real de G-29 depois do diff",
+          "met": true,
+          "detail": "Linha G-29 reescrita para descrever a parte de conta implementada (máquina de estados, guarda de reativação, purga nas três lojas) ao lado da parte de conteúdo já fechada, com nota de que o fechamento formal depende do aceite via D-041 (PROPOSED)."
+        },
+        {
+          "criterion": "DECISIONS tem D-041 registrada no formato das anteriores, sem quebrar o bloco de nenhuma decisão anterior",
+          "met": true,
+          "detail": "D-041 acrescentada com Status/Contexto/Decisão/Alternativas/Motivo/Consequências/Revisar se; `git diff docs/migration/DECISIONS.md | grep '^-'` não retornou nenhuma linha removida, confirmando que nenhum bloco anterior foi alterado."
+        },
+        {
+          "criterion": "CURRENT_STATE descreve BFF, IA, Scheduling e frontend como ficaram",
+          "met": true,
+          "detail": "Nova seção 'Delta apresentado — Goal025' com FATOs separados para BFF (state machine, guarda, purge worker), IA (tenantPurge + derrubada de canal), Scheduling (tenantPurge) e frontend (AccountSettings.tsx)."
+        },
+        {
+          "criterion": "Nenhum documento novo foi criado",
+          "met": true,
+          "detail": "Só os cinco arquivos já existentes em expectedFiles foram alterados (git status --short docs/migration/ na worktree lista só M, nenhum ??); VALIDATION_GATE.md foi deliberadamente deixado intocado por não haver passo de gate alterado."
+        }
+      ]
+    },
+    "attemptId": "025-r1-unit-wu-10-a1"
+  }
+}

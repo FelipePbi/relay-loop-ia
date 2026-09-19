@@ -1,0 +1,139 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-09T04:37:45.185Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "007-r2-tech_lead-be8887fc-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "007-r2-tech_lead-be8887fc",
+    "role": "tech_lead",
+    "goal": "007",
+    "round": 2,
+    "reviewLevel": "DEEP",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "review",
+      "modelKey": "fable",
+      "model": "claude-fable-5-1",
+      "family": "fable",
+      "effort": "high",
+      "complexity": "CRITICAL",
+      "riskScore": 10,
+      "signals": [
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "RECOVERY",
+        "API_CONTRACT",
+        "LARGE_REFACTOR",
+        "CROSS_CUTTING",
+        "LARGE_SCOPE",
+        "LARGE_DIFF"
+      ],
+      "reason": "HIGH_RISK_SPECIALIST_REVIEW",
+      "fallbackAllowed": true,
+      "mode": "AUTO"
+    },
+    "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+    "executionBase": "9494eb643bd85199a876d6a91ba1461ada101099",
+    "worktreeInitialHead": "9494eb643bd85199a876d6a91ba1461ada101099",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-007",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\007-catalogo-e-acordo-comercial.md",
+    "changedFiles": [
+      "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+      "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+      "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+      "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+      "apps/bff/PUBLIC_API_V1.md",
+      "apps/bff/src/clients/scheduling/index.ts",
+      "apps/bff/src/modules/customers/routes.ts",
+      "apps/bff/src/modules/services/routes.ts",
+      "apps/bff/src/modules/settings/routes.ts",
+      "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+      "apps/frontend/src/data/services/BffServiceCatalogService.ts",
+      "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+      "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+      "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+      "apps/frontend/tests/service-schema.test.ts",
+      "apps/scheduling-service/prisma/migrations/20260908170000_goal007_catalog_expand/migration.sql",
+      "apps/scheduling-service/prisma/migrations/20260908171000_goal007_catalog_constraints/migration.sql",
+      "apps/scheduling-service/prisma/schema.prisma",
+      "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+      "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+      "apps/scheduling-service/src/modules/calendar/routes.ts",
+      "apps/scheduling-service/src/modules/customers/atendly-customer-service.ts",
+      "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+      "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+      "apps/scheduling-service/src/modules/internal-api/routes.ts",
+      "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+      "apps/scheduling-service/src/modules/services/atendly-service-service.ts",
+      "apps/scheduling-service/tests/integration/service-catalog.test.ts",
+      "apps/scheduling-service/tests/unit/agreement-total.test.ts",
+      "apps/scheduling-service/tests/unit/customer-identity.test.ts",
+      "apps/scheduling-service/tests/unit/service-catalog.test.ts",
+      "apps/scheduling-service/tests/unit/support/database-double.ts",
+      "docs/migration/DATA_MIGRATION.md",
+      "docs/migration/GAP_ANALYSIS.md",
+      "scripts/goal007-migration-rehearsal.mjs",
+      "scripts/tests/validate-integration.test.mjs",
+      "scripts/validate-integration.mjs"
+    ],
+    "diffStat": ".../src/modules/scheduling-service/client.ts       |  16 +-\n .../src/modules/scheduling-service/types.ts        |  18 +-\n .../src/modules/tools/assistant-tools.ts           | 140 ++++++++---\n .../tests/tools/assistant-tools.test.ts            | 235 +++++++++++++++++-\n apps/bff/PUBLIC_API_V1.md                          |  12 +\n apps/bff/src/clients/scheduling/index.ts           |  33 ++-\n apps/bff/src/modules/customers/routes.ts           |  74 +++---\n apps/bff/src/modules/services/routes.ts            |  18 +-\n apps/bff/src/modules/settings/routes.ts            |  10 +\n apps/frontend/src/data/mappers/publicApiSchemas.ts |  30 ++-\n .../src/data/services/BffServiceCatalogService.ts  |  18 +-\n .../features/directory/ProductDirectoryScreen.tsx  |  17 +-\n .../src/features/onboarding/OnboardingRuntime.tsx  |  17 +-\n .../onboarding/ProductOnboardingScreen.tsx         |  10 +-\n apps/scheduling-service/prisma/schema.prisma       |  44 +++-\n .../src/modules/calendar/calendar-provider.ts      |  47 +++-\n .../src/modules/calendar/calendar-service.ts       |  27 ++-\n .../src/modules/calendar/routes.ts                 |   4 +-\n .../modules/customers/atendly-customer-service.ts  |  11 +-\n .../src/modules/integrations/atendly/provider.ts   |  50 ++--\n .../modules/integrations/minha-agenda/provider.ts  |  92 ++++---\n .../src/modules/internal-api/routes.ts             |  95 ++++++--\n .../migrations/calendar-migration-service.ts       |  12 +-\n .../modules/services/atendly-service-service.ts    | 266 +++++++++++++++++++--\n .../tests/unit/customer-identity.test.ts           |  14 ++\n .../tests/unit/support/database-double.ts          |   9 +-\n docs/migration/DATA_MIGRATION.md                   |  14 +-\n docs/migration/GAP_ANALYSIS.md                     |   4 +-\n scripts/tests/validate-integration.test.mjs        |   1 +\n scripts/validate-integration.mjs                   |  11 +\n 30 files changed, 1120 insertions(+), 229 deletions(-)",
+    "implementationReport": "## R2 — Correção dos 5 blockers do Goal007\n\n### Blocker 1 — Ativação da IA restrita a ATENDLY\n`internal-api/routes.ts:calendarOverview` calculava `operationalServices` só via `prisma.service.count` (tabela Atendly) e travava `aiActivationReady` em `source === \"ATENDLY\"`. Troquei por `countOperationalServices`, que chama `CalendarService.listOperationalServices(context)` (mesmo método usado por `/internal/services`) para qualquer fonte configurada (ATENDLY ou MINHA_AGENDA) e usa `.length > 0`. Falha ao consultar a fonte externa (sem integração conectada, erro de rede) é capturada e conta como zero, sem derrubar `/internal/calendar`. Isso exigiu propagar `CalendarRequestContext` (tenantId+userId+requestId) em vez de só `tenantId` para os 6 call-sites de `calendarOverview`; removi o helper `tenantId(request)` que ficou sem uso.\n\n### Blocker 2 — `/internal/services` sem filtro operacional na origem externa\nSeparei `CalendarService.listServices` (catálogo completo — usado por `/internal/service-catalog`, preserva serviço em revisão listável, requisito explícito do Goal) de um novo `CalendarService.listOperationalServices` (filtra por `isOperationalService`, o predicado único já definido em `atendly-service-service.ts`, com `needsReview: false` fixo porque a origem externa não tem esse conceito). A rota `/internal/services` (`calendar/routes.ts`) e `countOperationalServices` (blocker 1) passaram a usar o método operacional. Isso evita que um serviço do Minha Agenda sem duração quebre o parse `durationMinutes: z.number()` do client da IA, satisfazendo o critério 3 do Goal para as duas fontes sem afetar a listagem de catálogo nem a migração (`getMigrationSnapshot` chama o provider diretamente, fora do escopo desta mudança).\n\n### Blocker 3 — `totalPrice` sem `totalPriceType` nas tools da IA\n`calculateTotalPrice` foi substituída por uso direto de `calculateAgreementTotal` (já existente, usada no comentário do agendamento) em `resolveServicesFromExplicitIds`/`resolveScheduleServices`. `totalPriceType` agora é propagado em `AvailabilityLookup`, no `PendingAction` do tipo `schedule` e nos resultados de `findAvailableSlots`/`prepareSchedule`, ao lado de `totalPrice`, do mesmo jeito que `SchedulingAppointment.totalPriceType` já fazia.\n\n### Blocker 4 — Testes faltantes\n- IA (`assistant-tools.test.ts`): novo describe \"price semantics\" cobre (a) `list_services` com os quatro `priceType` e preço só quando existe (`toHaveProperty`/`not.toHaveProperty`); (b) `it.each` com os quatro textos de comentário (Total/A partir de/sob consulta/não informado) via `confirmSchedule`; (c) serviço \"em revisão\" (ausente do double) nunca aparece em `list_services` nem é agendável (`SERVICE_NOT_FOUND`, `calls.createAppointment` vazio). Novo describe \"customer appointment lookup\" cobre (d) `list_customer_appointments` por `customerId` quando `contact.findUnique` devolve vínculo, e por telefone quando não devolve — precisei adicionar `contact.findUnique` ao double de Prisma (`createPrismaMock` ganhou parâmetro `linkedCustomerId`) e tracking de chamadas em `createAgendaMock`.\n- Scheduling (`customer-identity.test.ts`): novo teste (e) — `addTag` repetida com o mesmo rótulo não reseta `aiAuthorized`.\n- Frontend (`tests/service-schema.test.ts`, novo arquivo): (f) `serviceSchema`/`serviceListSchema` nunca serializam preço ausente como zero nos quatro tipos, e duração ausente + `needsReview` são aceitas sem default fabricado.\n\n### Blocker 5 — Documentação de migração\nSem editar `goals/`, `reviews/` ou `MIGRATION_STATUS.md` (fora do meu escopo). Segui o precedente do Goal006 (commit 8d77ed9 atualizou `DATA_MIGRATION.md`/`GAP_ANALYSIS.md` no mesmo diff da implementação):\n- `DATA_MIGRATION.md`: linha `Service` (§1), parágrafo de constraints SQL, DATA-09/DATA-12 (§2), ponto 3 de §5.3 e linha \"Frontend → BFF\" de §5.4 atualizados para o modelo de quatro semânticas, todos marcados como \"Goal007 (evidência: diff007, pendente de review)\" — sem declarar fechamento. Acrescentei em §5.6 (Rollback e limites) o registro explícito exigido pelo Goal: binário anterior deixa de ser destino seguro assim que existir `priceType` novo, duração nula ou revisão pendente.\n- `GAP_ANALYSIS.md`: G-16 e G-17 tiveram a coluna \"Estado observado\" atualizada com a evidência do diff007 (pendente de review), sem alterar o prefixo do ID nem marcar \"FECHADO\" (isso só acontece após ACCEPTED do Tech Lead).\n\n## Comandos executados e resultado\n- `apps/ai-orchestrator`: `npx vitest run tests/tools/assistant-tools.test.ts` → 21 passed. `npx tsc --noEmit` → limpo. `npm run lint` → limpo.\n- `apps/scheduling-service`: `npx vitest run --dir tests/unit` (3 arquivos, 40 testes) → todos passed, repetido após o refactor de `listOperationalServices`. `npx tsc --noEmit` → limpo. `npm run lint` → limpo (o erro de parsing ao lintar o `.test.ts` isoladamente é esperado — o script real só cobre `src`).\n- `apps/frontend`: `npx vitest run tests/service-schema.test.ts` → 5 passed; `npx vitest run tests` (suíte completa) → 15 passed. `npm run lint` → limpo.\n- Raiz: `npm run validate:core` → PASSED (builds de contracts/scheduling-service/ai-orchestrator/bff/frontend, testes de ai-orchestrator/scheduling-service/frontend, evolution-go build+vet+test, test:gate-scripts, audit:static — 14 passed, 3 skipped como já era o padrão: `test:bff`/`test:contracts`/`test:health-worker`). `git diff --check` → sem erros de whitespace.\n- `npm run validate:integration` **não executado**: não há `BFF_TEST_DATABASE_URL`/`SCHEDULING_TEST_DATABASE_URL` configurados neste ambiente (gate se recusa a rodar sem banco descartável explícito, comportamento intencional do script). A suíte `tests/integration/service-catalog.test.ts` também se auto-pula sem `SCHEDULING_TEST_DATABASE_URL`, mesmo padrão já existente no repositório.\n\n## Limitações\n- Não executei `validate:integration` nem o ensaio de migração (`goal007-migration-rehearsal.mjs`) por falta de um PostgreSQL descartável neste ambiente; nenhum dos 5 blockers exigia mudança nas migrations em si, então não há evidência nova de risco ali, mas a prova de reconciliação de contagens continua pendente de um ambiente com banco.\n- Não toquei `docs/migration/CURRENT_STATE.md` nem `PUBLIC_API_V1.md` — não foram citados pelos blockers e evitei expandir escopo.\n- Não alterei `ProductDirectoryScreen.tsx`/`OnboardingRuntime.tsx` (formulário legado) — não constavam dos blockers desta rodada.",
+    "validations": [
+      {
+        "name": "ai-orchestrator assistant-tools.test.ts",
+        "passed": true,
+        "detail": "21 testes passaram, incluindo os 5 novos casos (preço, comentário, revisão, list_customer_appointments)"
+      },
+      {
+        "name": "ai-orchestrator tsc --noEmit",
+        "passed": true
+      },
+      {
+        "name": "scheduling-service tests/unit (3 arquivos)",
+        "passed": true,
+        "detail": "40 testes, incluindo o novo caso de addTag idempotente"
+      },
+      {
+        "name": "scheduling-service tsc --noEmit",
+        "passed": true
+      },
+      {
+        "name": "frontend tests/service-schema.test.ts (novo)",
+        "passed": true,
+        "detail": "5 testes"
+      },
+      {
+        "name": "frontend suíte completa de testes",
+        "passed": true,
+        "detail": "15 testes"
+      },
+      {
+        "name": "lint (ai-orchestrator, scheduling-service, frontend)",
+        "passed": true
+      },
+      {
+        "name": "npm run validate:core",
+        "passed": true,
+        "detail": "14 passed, 3 skipped (test:bff/test:contracts/test:health-worker, padrão pré-existente)"
+      },
+      {
+        "name": "git diff --check",
+        "passed": true,
+        "detail": "sem erros de whitespace"
+      },
+      {
+        "name": "npm run validate:integration",
+        "passed": false,
+        "detail": "não executado: ambiente sem BFF_TEST_DATABASE_URL/SCHEDULING_TEST_DATABASE_URL disponível; gate se recusa a rodar sem banco descartável explícito"
+      }
+    ],
+    "previousBlockers": [],
+    "packetPath": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\artefacts\\007-r2\\review-packet.json"
+  },
+  "statusAt": "2026-09-09T04:42:01.584Z"
+}

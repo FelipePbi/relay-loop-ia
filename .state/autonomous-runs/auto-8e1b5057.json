@@ -1,0 +1,37 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-8e1b5057",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-08T19:33:47.116Z",
+  "currentGoal": "007",
+  "completedGoals": [
+    "005",
+    "006"
+  ],
+  "migrationAcceptedBaseline": "8d77ed992f12e1405ae7bfaaeb2d852af5711b5d",
+  "pauseRequested": true,
+  "pauseAfterGoal": true,
+  "attempt": 3,
+  "ownerInstanceId": "15976-53ebddd1",
+  "humanRequired": {
+    "reason": "POLICY_VIOLATION",
+    "detail": "Goal 007 ended as HUMAN_REQUIRED",
+    "at": "2026-09-09T03:50:07.073Z"
+  },
+  "reconciledFrom": {
+    "reason": "STALE_ATTEMPT_RESULT_CONSUMED",
+    "jobId": "006-r1-tech_lead-eabcb3e9",
+    "decision": "ACCEPTED",
+    "at": "2026-09-08T23:10:58.061Z"
+  },
+  "recoveredAt": "2026-09-09T03:27:48.477Z",
+  "recoveryCount": 2,
+  "lastRecovery": {
+    "proof": "PROCESS_GONE",
+    "from": "23824-74c72ebd",
+    "at": "2026-09-09T03:27:48.477Z"
+  },
+  "archivedAt": "2026-09-09T04:13:07.667Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "A POLICY_VIOLATION MAIN_CHECKOUT_MUTATED foi causada exclusivamente pelos commits de tooling 67738bf e 0272d4e em tools/ia-loop/** durante a execução do Developer R2. Nenhum product code foi alterado em main, o worktree do Goal007 permaneceu intacto em 9494eb6, sem commits, e o Developer R2 já publicou REVIEW_REQUIRED. Autorizo a retomada preservando o resultado do Developer R2 e seguindo diretamente para a Review R2."
+}

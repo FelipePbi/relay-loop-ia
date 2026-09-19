@@ -1,0 +1,58 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T01:38:56.230Z",
+  "attemptId": "024-r1-unit-wu-05-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "024-r1-unit-wu-05",
+      "goal": "024",
+      "round": 1,
+      "workUnitId": "WU-05",
+      "status": "COMPLETED",
+      "summary": "Adicionei a rota pública POST /v1/auth/logout-all, o cliente correspondente e a ação \"Sair de todos os dispositivos\" em Conta, e corrigi a copy de \"Excluir conta\".",
+      "report": "O que mudou e por quê:\n\n1. `apps/bff/src/modules/auth/routes.ts`: nova rota `POST /v1/auth/logout-all`, sob `preHandler: requireTenantContext` (mesmo padrão de `PATCH /v1/auth/password`, que já dá sessão + CSRF via `requireAuth`). Ela lê o usuário só de `currentUser(request)` (nunca de body/header), chama `revokeAllUserSessions(sessionUser.id, \"LOGOUT_ALL_DEVICES\")` — reusando a função existente, com razão própria — e limpa o cookie de sessão (não estabelece sessão nova, diferente da troca de senha), porque a sessão que fez a chamada também precisa cair.\n2. `apps/bff/src/lib/session.ts`: adicionei `\"LOGOUT_ALL_DEVICES\"` à union `SessionRevocationReason`. `revokedReason` no schema é `TEXT` livre (confirmado em `prisma/schema.prisma:80` e na migration), então não foi preciso migration nova.\n3. `apps/bff/PUBLIC_API_V1.md`: adicionei a rota na tabela de Autenticação e uma seção nova \"Sair de todos os dispositivos (Goal024/WU-05)\" descrevendo o efeito (revoga tudo, inclusive a própria sessão; não aceita userId/tenantId; não reestabelece sessão como a troca de senha faz). Nenhum outro ponto do arquivo foi tocado — conferi com `git diff` e o único hunk fora do topo é o apêndice no fim do arquivo.\n4. `apps/frontend/src/data/services/BffAuthService.ts`: método `logoutAllDevices()`, no mesmo padrão de `logout()` (chama a rota, e no `finally` reseta o CSRF guardado, já que a sessão morreu).\n5. `apps/frontend/src/features/settings/AccountSettings.tsx`: botão \"Sair de todos os dispositivos\" ao lado de \"Sair da conta\", que abre um `Dialog` (mesmo componente usado em `RetentionSection`/`AiSettings` para confirmação de ação impactante) explicando que a ação derruba o acesso em todos os aparelhos, inclusive o atual, e que será preciso entrar de novo — sem linguagem de exclusão. Confirmando, chama o serviço, `setUnauthenticated()` e `router.replace(\"/login\")`, igual ao logout simples. O bloco \"Excluir conta\" continua desabilitado, sem iniciar nada; troquei a copy de \"A exclusão ainda não possui um fluxo público seguro nesta versão\" (que dava um motivo de segurança falso) para \"A exclusão de conta faz parte de uma etapa futura do produto e ainda não está disponível\" — verdadeiro (ciclo de vida da conta é do 024B) e sem prometer data.\n\nComandos executados com resultado:\n- `npm run typecheck` em `apps/bff` — passou (prisma generate + tsc --noEmit sem erros).\n- `npm run typecheck` em `apps/frontend` — passou (tsc --noEmit sem erros).\n- `npx eslint` nos arquivos alterados do BFF e do frontend — \"No issues found\" nos dois.\n- `npx vitest run tests/goal020-reachability.test.tsx` — 6/6 passaram, sem regressão nos cenários de shell.\n- `npm run build` em `apps/bff` — build TypeScript concluído sem erros.\n- `npm run build` em `apps/frontend` (Next.js) — build de produção concluído, incluindo `/configuracoes/conta` como rota estática, sem erros de tipo.\n\nNão escrevi teste de integração no BFF para a nova rota (critério \"Teste de integração do BFF prova que a sessão anterior deixa de autenticar\" está fora do escopo desta WU — a prova é um bloco próprio no plano, WU separada) nem toquei `docs/migration/DECISIONS.md`/`GAP_ANALYSIS.md` (fechamento de documentação de controle é de outra unidade). Não toquei nenhum arquivo de Scheduling, IA, Evolution ou Go, nem criei migration.",
+      "changedFiles": [
+        "apps/bff/src/modules/auth/routes.ts",
+        "apps/bff/src/lib/session.ts",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/frontend/src/data/services/BffAuthService.ts",
+        "apps/frontend/src/features/settings/AccountSettings.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Existe rota pública nova que revoga todas as sessões do usuário autenticado, sob sessão e CSRF",
+          "met": true,
+          "detail": "POST /v1/auth/logout-all em routes.ts, preHandler requireTenantContext -> requireAuth, que já exige CSRF para cookie em método não-safe; chama revokeAllUserSessions."
+        },
+        {
+          "criterion": "A rota não aceita userId nem tenantId do chamador",
+          "met": true,
+          "detail": "O handler não lê request.body; a identidade vem só de currentUser(request), derivada da sessão."
+        },
+        {
+          "criterion": "A sessão que fez a chamada também é revogada e a tela leva para /login",
+          "met": true,
+          "detail": "revokeAllUserSessions(userId,...) revoga todas as sessões vivas (inclusive a atual); no frontend, logoutAllDevices() chama a rota, faz setUnauthenticated() e router.replace('/login')."
+        },
+        {
+          "criterion": "A ação é explicada antes de executar, sem copy que a confunda com exclusão de conta",
+          "met": true,
+          "detail": "Dialog em AccountSettings.tsx explica 'derruba o acesso em todos os aparelhos... você precisará entrar de novo', sem menção a exclusão."
+        },
+        {
+          "criterion": "O bloco 'Excluir conta' continua desabilitado, não inicia nada, e a copy diz a verdade sobre o motivo",
+          "met": true,
+          "detail": "Botão continua disabled; copy trocada para 'faz parte de uma etapa futura do produto e ainda não está disponível', sem prometer data."
+        },
+        {
+          "criterion": "PUBLIC_API_V1.md mudou exatamente na rota nova e em nenhum outro ponto",
+          "met": true,
+          "detail": "git diff mostra só a linha da tabela de Autenticação e a nova seção apensada ao final do arquivo; nenhuma outra seção foi tocada."
+        }
+      ]
+    },
+    "attemptId": "024-r1-unit-wu-05-a1"
+  }
+}

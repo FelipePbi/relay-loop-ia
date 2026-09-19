@@ -1,0 +1,45 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T05:49:22.160Z",
+  "attemptId": "025-r1-unit-diag-002-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r1-unit-diag-002",
+      "goal": "025",
+      "round": 1,
+      "workUnitId": "DIAG-002",
+      "status": "ESCALATION_REQUIRED",
+      "summary": "A falha não é flake: tenant-purge.test.ts (WU-05/06) exige pgvector real no cluster descartável de validate:integration, que uma decisão documentada do Goal004 garante que nunca tem essa extensão.",
+      "report": "Diagnóstico completo, sem alterar nenhum arquivo.\n\nCausa raiz: `apps/ai-orchestrator/tests/retention/tenant-purge.test.ts` (linhas 200-209, WU-05/06) semeia `KnowledgeChunk` com `INSERT INTO \"KnowledgeChunk\" (...) VALUES (..., ${ZERO_EMBEDDING}::vector, ...)`. O `::vector` só resolve se a extensão `vector` (pgvector) existir no banco. Esse teste roda contra `AI_TEST_DATABASE_URL`, que `scripts/validate-integration.mjs::aiTransportTargetUrl` aponta para `<alvo>_goal004` — o mesmo banco que `scripts/goal004-migration-rehearsal.mjs` monta manualmente.\n\n`goal004-migration-rehearsal.mjs` (comentário nas linhas 216-223) e `docs/migration/VALIDATION_GATE.md` (linha 174-178) documentam, como decisão deliberada e não incidental: \"O banco do passo 6 não roda `prisma migrate deploy` da IA: o schema é reconstruído em SQL porque o cluster descartável não tem pgvector.\" Por isso a migration real `20260829180000_rag_pgvector/migration.sql` (que cria `KnowledgeChunk` com `embedding vector(1536)` e roda `CREATE EXTENSION IF NOT EXISTS vector`) nunca é aplicada nesse banco; em vez disso cada Goal que precisou de uma tabela nova (006, 011, 012, 013, 019, 023) adicionou só as tabelas que sua suíte usa, à mão, sem pgvector — e o próprio `goal012-migration-rehearsal.mjs` registra explicitamente (linhas 22-24) que pula `KnowledgeChunk` por esse motivo (\"pulo nomeado\").\n\nConfirmei que a restrição é real, não só documentada:\n- `.github/workflows/validate.yml` roda o job `integration` com `image: postgres:16-alpine` (linha 81) — imagem sem pgvector.\n- No ambiente local desta worktree, `C:\\Users\\felip\\AppData\\Local\\Programs\\PostgreSQL\\18\\pgsql\\share\\extension\\` não contém `vector.control` — comando `find ... -iname \"vector*\"` não retornou nada.\n\n`TenantPurgeService.deleteBatch`/`hasRows` (`apps/ai-orchestrator/src/modules/internal/tenantPurge.ts:144-179`) não leem nem tocam a coluna `embedding`; a exigência de pgvector vem só do fixture do teste. Ainda assim, sem `CREATE EXTENSION vector` funcionando no cluster, não existe forma de criar a tabela `KnowledgeChunk` com uma coluna que aceite o `::vector` que o teste grava — logo não há correção possível tocando apenas scripts de provisionamento (o padrão que Goal004/006/011/012/013/019/023 seguiram) sem também instalar pgvector nos dois clusters descartáveis (local, via recipe do VALIDATION_GATE.md, e o service container do CI).\n\nDuas saídas existem e nenhuma cabe nesta Work Unit sem violar uma restrição:\n1. Instalar pgvector no cluster descartável (trocar a imagem do CI, o que é infraestrutura compartilhada e difícil de reverter, e mudar a receita de provisionamento local documentada em VALIDATION_GATE.md) — reverteria uma decisão de arquitetura de Goal004, não desta Work Unit, e amplia o escopo de DIAG-002 para além do diagnóstico de uma falha pontual.\n2. Reescrever o fixture de `tenant-purge.test.ts` para não depender de `vector` real — seria reimplementar/alterar trabalho de outra Work Unit (WU-05/06) já concluída, o que a instrução explícita desta unidade proíbe.\n\nNenhum comando de correção foi executado porque a decisão de qual caminho tomar (instalar pgvector no cluster descartável vs. redesenhar o fixture do teste) exige uma escolha de arquitetura que uma Work Unit de diagnóstico não deveria tomar sozinha.",
+      "changedFiles": [],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-integration\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": false,
+          "detail": "Não corrigido: a causa raiz exige uma decisão de arquitetura (instalar pgvector no cluster descartável, compartilhado com CI, ou alterar o fixture de outra Work Unit já concluída) fora do escopo de um diagnóstico pontual."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "Nenhum arquivo foi alterado nesta unidade; nada foi revertido."
+        }
+      ],
+      "escalation": {
+        "reason": "CROSS_MODULE_IMPACT_DISCOVERED",
+        "evidence": [
+          "docs/migration/VALIDATION_GATE.md:174-178 — decisão documentada: o banco `_goal004` de validate:integration nunca roda `prisma migrate deploy` da IA porque \"o cluster descartável não tem pgvector\"",
+          "scripts/goal004-migration-rehearsal.mjs:216-223 — mesmo motivo, no código que constrói esse banco à mão",
+          "scripts/goal012-knowledge-memory-migration-rehearsal.mjs:22-24 — pulo nomeado de `KnowledgeChunk` pelo mesmo motivo, precedente de outro Goal",
+          ".github/workflows/validate.yml:81 — job `integration` do CI usa `postgres:16-alpine`, sem pgvector",
+          "C:\\Users\\felip\\AppData\\Local\\Programs\\PostgreSQL\\18\\pgsql\\share\\extension\\ não contém vector.control (verificado nesta sessão)",
+          "apps/ai-orchestrator/tests/retention/tenant-purge.test.ts:200-209 (WU-05/06) insere `embedding` com `::vector` real em `AI_TEST_DATABASE_URL`, que resolve para o mesmo banco `_goal004`"
+        ],
+        "confidence": "HIGH",
+        "detail": "A correção mecânica dentro do padrão já usado (estender o schema manual de goal004 com mais uma tabela) não fecha o caso porque a tabela nova depende do tipo `vector`, que não existe nesse cluster por decisão deliberada de Goal004. As duas saídas reais — instalar pgvector no cluster descartável (CI + receita local) ou reescrever o fixture do teste de WU-05/06 — colidem com restrições explícitas desta Work Unit (não ampliar escopo; não reimplementar trabalho de outra Work Unit concluída)."
+      }
+    },
+    "attemptId": "025-r1-unit-diag-002-a1"
+  }
+}

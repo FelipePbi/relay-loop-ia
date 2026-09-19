@@ -1,0 +1,1645 @@
+diff --git a/apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx b/apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx
+index cd95798..a565ac2 100644
+--- a/apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx
++++ b/apps/frontend/src/app/(platform)/clientes/detalhes/externo/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductCustomersScreen } from "@/features/customers/ProductCustomersScreen";
+ 
+ export default async function ExternalCustomerDetailPage({
+   searchParams,
+@@ -6,11 +6,5 @@ export default async function ExternalCustomerDetailPage({
+   searchParams: Promise<{ id?: string }>;
+ }) {
+   const { id } = await searchParams;
+-  return (
+-    <ProductDirectoryScreen
+-      area="customers"
+-      customerId={id}
+-      scenario="detail"
+-    />
+-  );
++  return <ProductCustomersScreen customerId={id} scenario="detail" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx b/apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx
+index 639ad32..b4574d3 100644
+--- a/apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx
++++ b/apps/frontend/src/app/(platform)/clientes/detalhes/page.tsx
+@@ -1,15 +1,9 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductCustomersScreen } from "@/features/customers/ProductCustomersScreen";
+ export default async function CustomerDetailPage({
+   searchParams,
+ }: {
+   searchParams: Promise<{ id?: string }>;
+ }) {
+   const { id } = await searchParams;
+-  return (
+-    <ProductDirectoryScreen
+-      area="customers"
+-      customerId={id}
+-      scenario="detail"
+-    />
+-  );
++  return <ProductCustomersScreen customerId={id} scenario="detail" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/clientes/novo/page.tsx b/apps/frontend/src/app/(platform)/clientes/novo/page.tsx
+index f6c5320..cc360aa 100644
+--- a/apps/frontend/src/app/(platform)/clientes/novo/page.tsx
++++ b/apps/frontend/src/app/(platform)/clientes/novo/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductCustomersScreen } from "@/features/customers/ProductCustomersScreen";
+ export default function NewCustomerPage() {
+-  return <ProductDirectoryScreen area="customers" scenario="new" />;
++  return <ProductCustomersScreen scenario="new" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/clientes/page.tsx b/apps/frontend/src/app/(platform)/clientes/page.tsx
+index 6c53afc..c01a342 100644
+--- a/apps/frontend/src/app/(platform)/clientes/page.tsx
++++ b/apps/frontend/src/app/(platform)/clientes/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductCustomersScreen } from "@/features/customers/ProductCustomersScreen";
+ export default function CustomersPage() {
+-  return <ProductDirectoryScreen area="customers" />;
++  return <ProductCustomersScreen />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/servicos/editar/page.tsx b/apps/frontend/src/app/(platform)/servicos/editar/page.tsx
+index 5b8dab2..04443ba 100644
+--- a/apps/frontend/src/app/(platform)/servicos/editar/page.tsx
++++ b/apps/frontend/src/app/(platform)/servicos/editar/page.tsx
+@@ -1,11 +1,9 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductServicesScreen } from "@/features/services/ProductServicesScreen";
+ export default async function EditServicePage({
+   searchParams,
+ }: {
+   searchParams: Promise<{ id?: string }>;
+ }) {
+   const { id } = await searchParams;
+-  return (
+-    <ProductDirectoryScreen area="services" scenario="edit" serviceId={id} />
+-  );
++  return <ProductServicesScreen scenario="edit" serviceId={id} />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/servicos/novo/page.tsx b/apps/frontend/src/app/(platform)/servicos/novo/page.tsx
+index 2e372e9..376edee 100644
+--- a/apps/frontend/src/app/(platform)/servicos/novo/page.tsx
++++ b/apps/frontend/src/app/(platform)/servicos/novo/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductServicesScreen } from "@/features/services/ProductServicesScreen";
+ export default function NewServicePage() {
+-  return <ProductDirectoryScreen area="services" scenario="new" />;
++  return <ProductServicesScreen scenario="new" />;
+ }
+diff --git a/apps/frontend/src/app/(platform)/servicos/page.tsx b/apps/frontend/src/app/(platform)/servicos/page.tsx
+index 8acecd2..dc7335d 100644
+--- a/apps/frontend/src/app/(platform)/servicos/page.tsx
++++ b/apps/frontend/src/app/(platform)/servicos/page.tsx
+@@ -1,4 +1,4 @@
+-import { ProductDirectoryScreen } from "@/features/directory/ProductDirectoryScreen";
++import { ProductServicesScreen } from "@/features/services/ProductServicesScreen";
+ export default function ServicesPage() {
+-  return <ProductDirectoryScreen area="services" />;
++  return <ProductServicesScreen />;
+ }
+diff --git a/apps/frontend/src/app/globals.css b/apps/frontend/src/app/globals.css
+index 451d5e1..81d8e1f 100644
+--- a/apps/frontend/src/app/globals.css
++++ b/apps/frontend/src/app/globals.css
+@@ -3,6 +3,8 @@
+ @import "../shared/styles/atendly-conversations.css";
+ @import "../shared/styles/atendly-agenda.css";
+ @import "../shared/styles/atendly-directory.css";
++@import "../shared/styles/atendly-customers.css";
++@import "../shared/styles/atendly-services.css";
+ @import "../shared/styles/atendly-settings.css";
+ @import "../shared/styles/atendly-migration.css";
+ @import "../shared/styles/atendly-system.css";
+diff --git a/apps/frontend/src/data/services/BffCalendarService.ts b/apps/frontend/src/data/services/BffCalendarService.ts
+index 30b5b80..5f78977 100644
+--- a/apps/frontend/src/data/services/BffCalendarService.ts
++++ b/apps/frontend/src/data/services/BffCalendarService.ts
+@@ -17,6 +17,7 @@ import {
+ } from "../mappers/publicApiSchemas";
+ 
+ export interface ListAppointmentsQuery {
++  customerId?: string;
+   customerPhone?: string;
+   endDate: string;
+   startDate: string;
+@@ -167,6 +168,7 @@ export class BffCalendarService {
+     return this.http.request({
+       path: "/v1/appointments",
+       query: {
++        customerId: query.customerId,
+         customerPhone: query.customerPhone,
+         endDate: query.endDate,
+         startDate: query.startDate,
+diff --git a/apps/frontend/src/features/customers/types.ts b/apps/frontend/src/features/customers/types.ts
+index 363f791..b45adc4 100644
+--- a/apps/frontend/src/features/customers/types.ts
++++ b/apps/frontend/src/features/customers/types.ts
+@@ -1,3 +1,5 @@
++import type { Customer } from "@/data/mappers/publicApiSchemas";
++
+ export type CustomerScenario =
+   | "list"
+   | "external"
+@@ -7,14 +9,7 @@ export type CustomerScenario =
+   | "detail"
+   | "detail-external"
+   | "new";
+-export interface Customer {
+-  id: string;
+-  name: string;
+-  phone: string;
+-  lastContact: string;
+-  nextAppointment?: string;
+-  appointments: number;
+-}
++export type { Customer };
+ export interface CustomerService {
+   list(): Promise<Customer[]>;
+   create(customer: Customer): Promise<Customer>;
+diff --git a/apps/frontend/src/features/directory/ProductDirectoryScreen.tsx b/apps/frontend/src/features/directory/ProductDirectoryScreen.tsx
+deleted file mode 100644
+index 726c99a..0000000
+--- a/apps/frontend/src/features/directory/ProductDirectoryScreen.tsx
++++ /dev/null
+@@ -1,1318 +0,0 @@
+-"use client";
+-
+-import clsx from "clsx";
+-import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import {
+-  type FormEvent,
+-  type ReactNode,
+-  useEffect,
+-  useMemo,
+-  useState,
+-} from "react";
+-
+-import {
+-  type Appointment,
+-  appointmentStatusLabel,
+-  BffHttpError,
+-  type CalendarState,
+-  type Customer,
+-  type CustomerList,
+-  isActiveAppointmentStatus,
+-  type Service,
+-  type ServiceList,
+-} from "@/data";
+-import { Icon } from "@/shared/icons/Icon";
+-import { useShellConfig } from "@/shared/layout/ShellConfig";
+-import { getProductServices } from "@/shared/runtime/ProductRuntime";
+-import { CurrencyInput } from "@/shared/ui/CurrencyInput";
+-import { Dialog } from "@/shared/ui/Dialog";
+-
+-type ProductDirectoryProps =
+-  | {
+-      area: "customers";
+-      customerId?: string;
+-      scenario?: "detail" | "list" | "new";
+-    }
+-  | {
+-      area: "services";
+-      scenario?: "edit" | "list" | "new";
+-      serviceId?: string;
+-    };
+-
+-export function ProductDirectoryScreen(props: ProductDirectoryProps) {
+-  const scenario = props.scenario ?? "list";
+-  if (props.area === "customers" && scenario === "detail") {
+-    return <CustomerDetail customerId={props.customerId} />;
+-  }
+-  if (props.area === "customers" && scenario === "new") {
+-    return <CustomerForm />;
+-  }
+-  if (
+-    props.area === "services" &&
+-    (scenario === "new" || scenario === "edit")
+-  ) {
+-    return (
+-      <ServiceForm edit={scenario === "edit"} serviceId={props.serviceId} />
+-    );
+-  }
+-  return props.area === "customers" ? (
+-    <CustomerListPage />
+-  ) : (
+-    <ServiceListPage />
+-  );
+-}
+-
+-function CustomerListPage() {
+-  const [result, setResult] = useState<CustomerList | null>(null);
+-  const [error, setError] = useState<string | null>(null);
+-  const [query, setQuery] = useState("");
+-  const [filter, setFilter] = useState<"all" | "named" | "unnamed">("all");
+-  const [reload, setReload] = useState(0);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .customers.list(controller.signal)
+-      .then(setResult)
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível carregar os clientes."),
+-          );
+-      });
+-    return () => controller.abort();
+-  }, [reload]);
+-
+-  const customers = useMemo(() => {
+-    const normalized = query.trim().toLocaleLowerCase("pt-BR");
+-    return (result?.items ?? []).filter((customer) => {
+-      const matchesQuery = `${customer.name ?? ""} ${customer.phone ?? ""}`
+-        .toLocaleLowerCase("pt-BR")
+-        .includes(normalized);
+-      const matchesFilter =
+-        filter === "all" ||
+-        (filter === "named" && Boolean(customer.name)) ||
+-        (filter === "unnamed" && !customer.name);
+-      return matchesQuery && matchesFilter;
+-    });
+-  }, [filter, query, result]);
+-
+-  const external = result?.source === "EXTERNAL";
+-  const canCreate = Boolean(result && !result.managedExternally);
+-  useShellConfig({
+-    action: canCreate
+-      ? { href: "/clientes/novo", icon: "plus", label: "Novo cliente" }
+-      : undefined,
+-    active: "clientes",
+-    loading: !result && !error,
+-    module: "directory",
+-    source: external ? "external" : "atendly",
+-    title: "Clientes",
+-  });
+-  return (
+-    <>
+-      <section className="directory-page">
+-        <DirectoryHeader
+-          description="Informações úteis para identificar clientes e acompanhar agendamentos."
+-          title="Clientes"
+-          action={
+-            canCreate ? (
+-              <Link className="btn btn-primary" href="/clientes/novo">
+-                <Icon name="plus" />
+-                <span>Novo cliente</span>
+-              </Link>
+-            ) : null
+-          }
+-        />
+-        <DirectorySourceStrip
+-          area="customers"
+-          external={external}
+-          editable={result ? !result.managedExternally : false}
+-        />
+-        {!result && !error ? (
+-          <DirectoryLoading />
+-        ) : error ? (
+-          <DirectoryState
+-            actionLabel="Carregar novamente"
+-            description={error}
+-            error
+-            onAction={() => setReload((value) => value + 1)}
+-            title="Não foi possível carregar clientes"
+-          />
+-        ) : customers.length === 0 && !query && filter === "all" ? (
+-          <DirectoryState
+-            actionHref={external ? undefined : "/clientes/novo"}
+-            actionLabel={external ? undefined : "Cadastrar cliente"}
+-            description={
+-              external
+-                ? "Clientes externos são usados durante o agendamento quando a integração permite gravações."
+-                : "Depois do primeiro cadastro ou agendamento, os clientes aparecerão aqui."
+-            }
+-            title="Seus clientes aparecerão aqui"
+-          />
+-        ) : (
+-          <>
+-            <DirectoryToolbar
+-              area="customers"
+-              filter={filter}
+-              filters={[
+-                ["all", "Todos"],
+-                ["named", "Com nome"],
+-                ["unnamed", "Sem nome"],
+-              ]}
+-              query={query}
+-              onFilter={(value) => setFilter(value as typeof filter)}
+-              onQuery={setQuery}
+-            />
+-            <section className="directory-list-surface">
+-              <div className="directory-list-meta">
+-                <strong>Clientes cadastrados</strong>
+-                <span>
+-                  {customers.length}{" "}
+-                  {customers.length === 1 ? "cliente" : "clientes"}
+-                </span>
+-              </div>
+-              <div
+-                className="directory-grid-head customer-grid"
+-                aria-hidden="true"
+-              >
+-                <span>Cliente</span>
+-                <span>Cadastro atualizado</span>
+-                <span>Próximo agendamento</span>
+-                <span>Agendamentos</span>
+-                <span />
+-              </div>
+-              <div>
+-                {customers.map((customer) => (
+-                  <Link
+-                    className="directory-row customer-grid"
+-                    href={`/clientes/detalhes?id=${encodeURIComponent(customer.id)}`}
+-                    key={customer.id}
+-                  >
+-                    <span className="directory-row-main">
+-                      <span className="avatar">{initials(customer.name)}</span>
+-                      <span className="directory-row-copy">
+-                        <strong>{customer.name || "Cliente sem nome"}</strong>
+-                        <span>
+-                          {customer.phone || "Telefone não informado"}
+-                        </span>
+-                        {external && (
+-                          <span className="badge">Minha Agenda</span>
+-                        )}
+-                      </span>
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">
+-                        Cadastro atualizado
+-                      </span>
+-                      {formatDateTime(customer.updatedAt)}
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">
+-                        Próximo agendamento
+-                      </span>
+-                      <strong>Abra o cliente</strong>
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">Agendamentos</span>
+-                      —
+-                    </span>
+-                    <span className="directory-row-action">
+-                      <Icon name="chevron-right" />
+-                    </span>
+-                  </Link>
+-                ))}
+-              </div>
+-              {customers.length === 0 && (
+-                <p className="directory-no-results">
+-                  Nenhum cliente corresponde à busca e ao filtro.
+-                </p>
+-              )}
+-            </section>
+-          </>
+-        )}
+-      </section>
+-    </>
+-  );
+-}
+-
+-function ServiceListPage() {
+-  const [result, setResult] = useState<ServiceList | null>(null);
+-  const [error, setError] = useState<string | null>(null);
+-  const [query, setQuery] = useState("");
+-  const [filter, setFilter] = useState<"active" | "all" | "inactive">("all");
+-  const [pending, setPending] = useState<Service | null>(null);
+-  const [busy, setBusy] = useState(false);
+-  const [feedback, setFeedback] = useState<string | null>(null);
+-  const [reload, setReload] = useState(0);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .serviceCatalog.list(controller.signal)
+-      .then(setResult)
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível carregar os serviços."),
+-          );
+-      });
+-    return () => controller.abort();
+-  }, [reload]);
+-
+-  const services = useMemo(() => {
+-    const normalized = query.trim().toLocaleLowerCase("pt-BR");
+-    return (result?.items ?? []).filter(
+-      (service) =>
+-        service.name.toLocaleLowerCase("pt-BR").includes(normalized) &&
+-        (filter === "all" ||
+-          (filter === "active" && service.active) ||
+-          (filter === "inactive" && !service.active)),
+-    );
+-  }, [filter, query, result]);
+-
+-  const external = result?.source === "EXTERNAL";
+-  async function changeStatus() {
+-    if (!pending || !result?.editable) return;
+-    setBusy(true);
+-    setFeedback(null);
+-    try {
+-      const updated = await getProductServices().serviceCatalog.update(
+-        pending.id,
+-        {
+-          active: !pending.active,
+-        },
+-      );
+-      setResult({
+-        ...result,
+-        items: result.items.map((item) =>
+-          item.id === updated.id ? updated : item,
+-        ),
+-      });
+-      setPending(null);
+-      setFeedback(`Serviço ${updated.active ? "ativado" : "desativado"}.`);
+-    } catch (caught: unknown) {
+-      setFeedback(requestError(caught, "Não foi possível alterar o serviço."));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  useShellConfig({
+-    action: result?.editable
+-      ? { href: "/servicos/novo", icon: "plus", label: "Novo serviço" }
+-      : undefined,
+-    active: "servicos",
+-    loading: !result && !error,
+-    module: "directory",
+-    source: external ? "external" : "atendly",
+-    title: "Serviços",
+-  });
+-  return (
+-    <>
+-      <section className="directory-page">
+-        <DirectoryHeader
+-          description="Organize o que pode ser agendado, com duração, preço e estado claros."
+-          title="Serviços"
+-          action={
+-            result?.editable ? (
+-              <Link className="btn btn-primary" href="/servicos/novo">
+-                <Icon name="plus" />
+-                <span>Novo serviço</span>
+-              </Link>
+-            ) : null
+-          }
+-        />
+-        <DirectorySourceStrip
+-          area="services"
+-          external={external}
+-          editable={Boolean(result?.editable)}
+-        />
+-        {feedback && (
+-          <p className="directory-retry-status" role="status">
+-            {feedback}
+-          </p>
+-        )}
+-        {!result && !error ? (
+-          <DirectoryLoading />
+-        ) : error ? (
+-          <DirectoryState
+-            actionLabel="Carregar novamente"
+-            description={error}
+-            error
+-            onAction={() => setReload((value) => value + 1)}
+-            title="Não foi possível carregar serviços"
+-          />
+-        ) : services.length === 0 && !query && filter === "all" ? (
+-          <DirectoryState
+-            actionHref={result?.editable ? "/servicos/novo" : undefined}
+-            actionLabel={
+-              result?.editable ? "Cadastrar primeiro serviço" : undefined
+-            }
+-            description={
+-              external
+-                ? "Nenhum serviço foi recebido da fonte oficial. Verifique a sincronização no Minha Agenda."
+-                : "A IA só oferece serviços ativos com duração e preço ou valor sob consulta."
+-            }
+-            title={
+-              external
+-                ? "Nenhum serviço sincronizado"
+-                : "Cadastre seu primeiro serviço"
+-            }
+-          />
+-        ) : (
+-          <>
+-            <DirectoryToolbar
+-              area="services"
+-              filter={filter}
+-              filters={[
+-                ["all", "Todos"],
+-                ["active", "Ativos"],
+-                ["inactive", "Inativos"],
+-              ]}
+-              query={query}
+-              onFilter={(value) => setFilter(value as typeof filter)}
+-              onQuery={setQuery}
+-            />
+-            <section className="directory-list-surface">
+-              <div className="directory-list-meta">
+-                <strong>Serviços cadastrados</strong>
+-                <span>
+-                  {services.length}{" "}
+-                  {services.length === 1 ? "serviço" : "serviços"}
+-                </span>
+-              </div>
+-              <div
+-                className="directory-grid-head service-grid"
+-                aria-hidden="true"
+-              >
+-                <span>Serviço</span>
+-                <span>Duração</span>
+-                <span>Preço</span>
+-                <span>Status</span>
+-                <span>Ação</span>
+-                <span />
+-              </div>
+-              <div>
+-                {services.map((service) => (
+-                  <div className="directory-row service-grid" key={service.id}>
+-                    <span className="directory-row-main">
+-                      <span className="directory-source-icon">
+-                        <Icon name="briefcase" />
+-                      </span>
+-                      <span className="directory-row-copy">
+-                        <strong>{service.name}</strong>
+-                        <span className="badge">
+-                          {external ? "Minha Agenda" : "Agenda Atendly"}
+-                        </span>
+-                      </span>
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">Duração</span>
+-                      {formatServiceDuration(service)}
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">Preço</span>
+-                      <strong>{formatPrice(service)}</strong>
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">Status</span>
+-                      <span
+-                        className={clsx(
+-                          "badge",
+-                          service.active && "badge-success",
+-                        )}
+-                      >
+-                        <span className="badge-dot" aria-hidden="true" />
+-                        {service.active ? "Ativo" : "Inativo"}
+-                      </span>
+-                    </span>
+-                    <span className="directory-cell">
+-                      <span className="directory-cell-label">Ação</span>
+-                      {result?.editable ? (
+-                        <button
+-                          className="btn btn-tertiary"
+-                          type="button"
+-                          onClick={() => setPending(service)}
+-                        >
+-                          {service.active ? "Desativar" : "Ativar"}
+-                        </button>
+-                      ) : (
+-                        <span className="muted small">Somente leitura</span>
+-                      )}
+-                    </span>
+-                    {result?.editable ? (
+-                      <Link
+-                        className="icon-btn directory-row-action"
+-                        href={`/servicos/editar?id=${encodeURIComponent(service.id)}`}
+-                        aria-label={`Editar ${service.name}`}
+-                      >
+-                        <Icon name="chevron-right" />
+-                      </Link>
+-                    ) : (
+-                      <span className="directory-row-action">
+-                        <Icon name="external" />
+-                      </span>
+-                    )}
+-                  </div>
+-                ))}
+-              </div>
+-              {services.length === 0 && (
+-                <p className="directory-no-results">
+-                  Nenhum serviço corresponde à busca e ao filtro.
+-                </p>
+-              )}
+-            </section>
+-          </>
+-        )}
+-      </section>
+-      <Dialog
+-        eyebrow="Atenção"
+-        onClose={() => !busy && setPending(null)}
+-        open={Boolean(pending)}
+-        title={pending?.active ? "Desativar serviço?" : "Ativar serviço?"}
+-      >
+-        <p className="small muted">
+-          Novos agendamentos respeitarão o estado atualizado. O histórico será
+-          preservado.
+-        </p>
+-        <div className="modal-actions">
+-          <button
+-            className="btn btn-secondary"
+-            disabled={busy}
+-            type="button"
+-            onClick={() => setPending(null)}
+-          >
+-            Manter como está
+-          </button>
+-          <button
+-            className={pending?.active ? "btn btn-danger" : "btn btn-primary"}
+-            disabled={busy}
+-            type="button"
+-            onClick={() => void changeStatus()}
+-          >
+-            {busy
+-              ? "Salvando..."
+-              : pending?.active
+-                ? "Desativar serviço"
+-                : "Ativar serviço"}
+-          </button>
+-        </div>
+-      </Dialog>
+-    </>
+-  );
+-}
+-
+-function CustomerDetail({ customerId }: { customerId?: string }) {
+-  const [customer, setCustomer] = useState<Customer | null>(null);
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+-  const [error, setError] = useState<string | null>(() =>
+-    customerId
+-      ? null
+-      : "Selecione um cliente na lista para consultar os detalhes.",
+-  );
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    if (!customerId) return () => controller.abort();
+-    const services = getProductServices();
+-    Promise.all([
+-      services.customers.get(customerId, controller.signal),
+-      services.calendar.getCalendar(controller.signal),
+-    ])
+-      .then(async ([nextCustomer, nextCalendar]) => {
+-        setCustomer(nextCustomer);
+-        setCalendar(nextCalendar);
+-        if (!nextCustomer.phone) return;
+-        const today = todayIso(nextCalendar.timezone ?? "America/Sao_Paulo");
+-        const items = await services.calendar.listAppointments(
+-          {
+-            customerPhone: nextCustomer.phone,
+-            startDate: addDays(today, -365),
+-            endDate: addDays(today, 365),
+-          },
+-          controller.signal,
+-        );
+-        setAppointments(items);
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível carregar o cliente."),
+-          );
+-      });
+-    return () => controller.abort();
+-  }, [customerId]);
+-
+-  const external = calendar?.source === "EXTERNAL";
+-  useShellConfig({
+-    active: "clientes",
+-    loading: !customer && !error,
+-    module: "directory",
+-    source: external ? "external" : "atendly",
+-    title: "Detalhes do cliente",
+-  });
+-  return (
+-    <>
+-      <section className="directory-page">
+-        <header className="directory-page-header">
+-          <Link className="btn btn-tertiary" href="/clientes">
+-            <Icon name="chevron-left" />
+-            Voltar para clientes
+-          </Link>
+-        </header>
+-        <DirectorySourceStrip
+-          area="customers"
+-          external={external}
+-          editable={Boolean(calendar?.capabilities.manageCustomers)}
+-        />
+-        {!customer && !error ? (
+-          <DirectoryLoading />
+-        ) : error || !customer ? (
+-          <DirectoryState
+-            description={error ?? "Cliente não encontrado."}
+-            error
+-            title="Cliente indisponível"
+-          />
+-        ) : (
+-          <>
+-            <section className="directory-detail-hero">
+-              <div className="directory-detail-identity">
+-                <span className="avatar">{initials(customer.name)}</span>
+-                <div>
+-                  <h1>{customer.name || "Cliente sem nome"}</h1>
+-                  <p className="directory-detail-phone">
+-                    {customer.phone || "Telefone não informado"}
+-                  </p>
+-                  <div className="directory-detail-signals">
+-                    <span className="badge">
+-                      {external ? "Minha Agenda" : "Agenda Atendly"}
+-                    </span>
+-                  </div>
+-                </div>
+-              </div>
+-            </section>
+-            <div className="directory-detail-grid">
+-              <section className="directory-section">
+-                <div className="directory-section-header">
+-                  <div>
+-                    <h2>Agendamentos</h2>
+-                    <p>
+-                      Compromissos encontrados para este telefone no período
+-                      consultado.
+-                    </p>
+-                  </div>
+-                </div>
+-                {appointments.length === 0 ? (
+-                  <p className="muted small">Nenhum agendamento encontrado.</p>
+-                ) : (
+-                  appointments.map((appointment) => (
+-                    <Link
+-                      className="directory-appointment"
+-                      href={`/agenda/agendamento?id=${encodeURIComponent(appointment.id)}`}
+-                      key={appointment.id}
+-                    >
+-                      <time>
+-                        {formatShortDate(appointment.date)}
+-                        <br />
+-                        {appointment.startTime}
+-                      </time>
+-                      <span className="directory-appointment-copy">
+-                        <strong>
+-                          {appointment.services
+-                            .map((item) => item.name)
+-                            .join(", ") || "Serviço não informado"}
+-                        </strong>
+-                        <span>{appointment.durationMinutes} min</span>
+-                      </span>
+-                      <span
+-                        className={clsx(
+-                          "badge",
+-                          isActiveAppointmentStatus(appointment.status) &&
+-                            "badge-success",
+-                        )}
+-                      >
+-                        {statusLabel(appointment.status)}
+-                      </span>
+-                    </Link>
+-                  ))
+-                )}
+-              </section>
+-              <aside>
+-                <section className="directory-section">
+-                  <div className="directory-section-header">
+-                    <div>
+-                      <h2>Origem dos dados</h2>
+-                    </div>
+-                  </div>
+-                  <div className="directory-readonly-field">
+-                    <span>Cadastro</span>
+-                    <strong>
+-                      {external ? "Minha Agenda" : "Agenda Atendly"}
+-                    </strong>
+-                  </div>
+-                  <div className="directory-readonly-field">
+-                    <span>Atualizado em</span>
+-                    <strong>{formatDateTime(customer.updatedAt)}</strong>
+-                  </div>
+-                </section>
+-              </aside>
+-            </div>
+-          </>
+-        )}
+-      </section>
+-    </>
+-  );
+-}
+-
+-function CustomerForm() {
+-  const router = useRouter();
+-  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+-  const [loadingError, setLoadingError] = useState<string | null>(null);
+-  const [busy, setBusy] = useState(false);
+-  const [message, setMessage] = useState<string | null>(null);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .calendar.getCalendar(controller.signal)
+-      .then(setCalendar)
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setLoadingError(
+-            requestError(caught, "Não foi possível verificar a agenda."),
+-          );
+-      });
+-    return () => controller.abort();
+-  }, []);
+-
+-  async function submit(event: FormEvent<HTMLFormElement>) {
+-    event.preventDefault();
+-    const form = event.currentTarget;
+-    const data = new FormData(form);
+-    setBusy(true);
+-    setMessage(null);
+-    try {
+-      const customer = await getProductServices().customers.create({
+-        name: formText(data, "name"),
+-        phone: formText(data, "phone"),
+-      });
+-      router.replace(
+-        `/clientes/detalhes?id=${encodeURIComponent(customer.id)}`,
+-      );
+-    } catch (caught: unknown) {
+-      setMessage(requestError(caught, "Não foi possível criar o cliente."));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  const external = calendar?.source === "EXTERNAL";
+-  useShellConfig({
+-    active: "clientes",
+-    loading: !calendar && !loadingError,
+-    module: "directory",
+-    source: external ? "external" : "atendly",
+-    title: "Novo cliente",
+-  });
+-  return (
+-    <>
+-      <section className="directory-page is-form-page">
+-        <DirectoryHeader
+-          title="Novo cliente"
+-          description="Cadastre apenas os dados necessários para identificar e atender."
+-          back="/clientes"
+-        />
+-        <DirectorySourceStrip
+-          area="customers"
+-          external={external}
+-          editable={Boolean(calendar?.capabilities.manageCustomers)}
+-        />
+-        {loadingError ? (
+-          <DirectoryState
+-            description={loadingError}
+-            error
+-            title="Agenda indisponível"
+-          />
+-        ) : !calendar ? (
+-          <DirectoryLoading />
+-        ) : !calendar.capabilities.manageCustomers ? (
+-          <DirectoryState
+-            actionHref="/clientes"
+-            actionLabel="Voltar para clientes"
+-            description="Cadastros são controlados pela fonte oficial e não podem ser criados nesta tela."
+-            title="Cadastro gerenciado no Minha Agenda"
+-          />
+-        ) : (
+-          <form
+-            className="directory-form-card"
+-            onSubmit={(event) => void submit(event)}
+-          >
+-            <h2>Dados do cliente</h2>
+-            <div className="directory-form-grid">
+-              <label className="field">
+-                <span className="label">Nome</span>
+-                <input
+-                  className="input"
+-                  autoComplete="name"
+-                  maxLength={200}
+-                  name="name"
+-                  required
+-                />
+-                <span className="field-help">
+-                  Use o nome que ajuda você a reconhecer este cliente.
+-                </span>
+-              </label>
+-              <label className="field">
+-                <span className="label">Telefone</span>
+-                <input
+-                  className="input"
+-                  autoComplete="tel"
+-                  inputMode="tel"
+-                  minLength={6}
+-                  maxLength={32}
+-                  name="phone"
+-                  placeholder="(00) 00000-0000"
+-                  required
+-                />
+-                <span className="field-help">
+-                  O telefone identifica o cliente apenas neste negócio.
+-                </span>
+-              </label>
+-            </div>
+-            {message && (
+-              <div className="directory-inline-error" role="alert">
+-                {message}
+-              </div>
+-            )}
+-            <div className="directory-form-footer">
+-              <Link className="btn btn-secondary" href="/clientes">
+-                Cancelar
+-              </Link>
+-              <button className="btn btn-primary" disabled={busy} type="submit">
+-                {busy ? "Criando..." : "Criar cliente"}
+-              </button>
+-            </div>
+-          </form>
+-        )}
+-      </section>
+-    </>
+-  );
+-}
+-
+-function ServiceForm({
+-  edit,
+-  serviceId,
+-}: {
+-  edit: boolean;
+-  serviceId?: string;
+-}) {
+-  const router = useRouter();
+-  const [catalog, setCatalog] = useState<ServiceList | null>(null);
+-  const [service, setService] = useState<Service | null>(null);
+-  const [priceType, setPriceType] = useState<Service["priceType"]>("FIXED");
+-  const [priceCents, setPriceCents] = useState<number | null>(null);
+-  const [error, setError] = useState<string | null>(null);
+-  const [busy, setBusy] = useState(false);
+-  const [message, setMessage] = useState<string | null>(null);
+-
+-  useEffect(() => {
+-    const controller = new AbortController();
+-    getProductServices()
+-      .serviceCatalog.list(controller.signal)
+-      .then((next) => {
+-        setCatalog(next);
+-        if (!edit) return;
+-        const found = next.items.find((item) => item.id === serviceId);
+-        if (!found) {
+-          setError(
+-            serviceId
+-              ? "Serviço não encontrado."
+-              : "Selecione um serviço na lista para editar.",
+-          );
+-          return;
+-        }
+-        setService(found);
+-        setPriceType(found.priceType);
+-        setPriceCents(
+-          found.price === null ? null : Math.round(found.price * 100),
+-        );
+-      })
+-      .catch((caught: unknown) => {
+-        if (!controller.signal.aborted)
+-          setError(
+-            requestError(caught, "Não foi possível carregar o serviço."),
+-          );
+-      });
+-    return () => controller.abort();
+-  }, [edit, serviceId]);
+-
+-  async function submit(event: FormEvent<HTMLFormElement>) {
+-    event.preventDefault();
+-    const data = new FormData(event.currentTarget);
+-    if (priceType === "FIXED" && priceCents === null) {
+-      setMessage("Informe o preço ou selecione valor sob consulta.");
+-      return;
+-    }
+-    setBusy(true);
+-    setMessage(null);
+-    try {
+-      const input = {
+-        active: data.get("active") === "on",
+-        durationMinutes: Number(formText(data, "duration")),
+-        name: formText(data, "name"),
+-        price: priceType === "FIXED" ? (priceCents ?? 0) / 100 : null,
+-        priceType,
+-      } as const;
+-      if (edit && service)
+-        await getProductServices().serviceCatalog.update(service.id, input);
+-      else await getProductServices().serviceCatalog.create(input);
+-      router.replace("/servicos");
+-    } catch (caught: unknown) {
+-      setMessage(requestError(caught, "Não foi possível salvar o serviço."));
+-    } finally {
+-      setBusy(false);
+-    }
+-  }
+-
+-  const external = catalog?.source === "EXTERNAL";
+-  useShellConfig({
+-    active: "servicos",
+-    loading: !catalog && !error,
+-    module: "directory",
+-    source: external ? "external" : "atendly",
+-    title: edit ? "Editar serviço" : "Novo serviço",
+-  });
+-  return (
+-    <>
+-      <section className="directory-page is-form-page">
+-        <DirectoryHeader
+-          title={edit ? "Editar serviço" : "Novo serviço"}
+-          description="Defina o que a IA pode oferecer ao criar novos agendamentos."
+-          back="/servicos"
+-        />
+-        <DirectorySourceStrip
+-          area="services"
+-          external={external}
+-          editable={Boolean(catalog?.editable)}
+-        />
+-        {error ? (
+-          <DirectoryState
+-            actionHref="/servicos"
+-            actionLabel="Voltar para serviços"
+-            description={error}
+-            error
+-            title="Serviço indisponível"
+-          />
+-        ) : !catalog || (edit && !service) ? (
+-          <DirectoryLoading />
+-        ) : !catalog.editable ? (
+-          <DirectoryState
+-            actionHref="/servicos"
+-            actionLabel="Voltar para serviços"
+-            description="Serviços desta fonte ficam somente para consulta na Atendly."
+-            title="Edição gerenciada no Minha Agenda"
+-          />
+-        ) : (
+-          <form
+-            className="directory-form-card"
+-            onSubmit={(event) => void submit(event)}
+-          >
+-            <h2>Informações do serviço</h2>
+-            <div className="directory-form-grid">
+-              <label className="field is-wide">
+-                <span className="label">Nome do serviço</span>
+-                <input
+-                  className="input"
+-                  defaultValue={service?.name}
+-                  maxLength={200}
+-                  name="name"
+-                  required
+-                />
+-              </label>
+-              <label className="field">
+-                <span className="label">Duração</span>
+-                <select
+-                  className="select"
+-                  defaultValue={service?.durationMinutes ?? ""}
+-                  name="duration"
+-                  required
+-                >
+-                  <option value="">Selecione</option>
+-                  {[30, 45, 60, 90, 120].map((duration) => (
+-                    <option value={duration} key={duration}>
+-                      {duration} minutos
+-                    </option>
+-                  ))}
+-                </select>
+-                <span className="field-help">
+-                  Alterações não modificam silenciosamente agendamentos
+-                  existentes.
+-                </span>
+-              </label>
+-              <fieldset className="directory-fieldset">
+-                <legend>Valor</legend>
+-                <div className="directory-segmented">
+-                  <label>
+-                    <input
+-                      checked={priceType === "FIXED"}
+-                      name="price-mode"
+-                      type="radio"
+-                      value="FIXED"
+-                      onChange={() => setPriceType("FIXED")}
+-                    />
+-                    <span>Preço fixo</span>
+-                  </label>
+-                  <label>
+-                    <input
+-                      checked={priceType === "ON_REQUEST"}
+-                      name="price-mode"
+-                      type="radio"
+-                      value="ON_REQUEST"
+-                      onChange={() => setPriceType("ON_REQUEST")}
+-                    />
+-                    <span>Sob consulta</span>
+-                  </label>
+-                </div>
+-              </fieldset>
+-              {priceType === "FIXED" && (
+-                <label className="field">
+-                  <span className="label">Preço</span>
+-                  <CurrencyInput
+-                    className="input"
+-                    defaultValueCents={
+-                      service?.price === null
+-                        ? undefined
+-                        : Math.round((service?.price ?? 0) * 100)
+-                    }
+-                    key={service?.id ?? "new"}
+-                    onValueChange={setPriceCents}
+-                    placeholder="R$ 0,00"
+-                    required
+-                  />
+-                  <span className="field-help">
+-                    Uma alteração vale para novos agendamentos; o histórico é
+-                    preservado.
+-                  </span>
+-                </label>
+-              )}
+-              <label className="check directory-active-control is-wide">
+-                <input
+-                  defaultChecked={service?.active ?? true}
+-                  name="active"
+-                  type="checkbox"
+-                />
+-                <span className="check-box" />
+-                <span className="directory-active-copy">
+-                  <strong>Serviço ativo</strong>
+-                  <span className="field-help">
+-                    Serviços inativos não são oferecidos pela IA para novos
+-                    agendamentos.
+-                  </span>
+-                </span>
+-              </label>
+-              <div className="directory-form-note is-wide">
+-                Antes de alterar duração ou desativar um serviço, revise
+-                eventuais impactos nos agendamentos futuros.
+-              </div>
+-            </div>
+-            {message && (
+-              <div className="directory-inline-error" role="alert">
+-                {message}
+-              </div>
+-            )}
+-            <div className="directory-form-footer">
+-              <Link className="btn btn-secondary" href="/servicos">
+-                Cancelar
+-              </Link>
+-              <button className="btn btn-primary" disabled={busy} type="submit">
+-                {busy
+-                  ? "Salvando..."
+-                  : edit
+-                    ? "Salvar alterações"
+-                    : "Criar serviço"}
+-              </button>
+-            </div>
+-          </form>
+-        )}
+-      </section>
+-    </>
+-  );
+-}
+-
+-function DirectoryHeader({
+-  action,
+-  back,
+-  description,
+-  title,
+-}: {
+-  action?: ReactNode;
+-  back?: string;
+-  description: string;
+-  title: string;
+-}) {
+-  return (
+-    <header className="directory-page-header">
+-      <div>
+-        {back && (
+-          <Link className="btn btn-tertiary" href={back}>
+-            <Icon name="chevron-left" />
+-            Voltar
+-          </Link>
+-        )}
+-        <h1>{title}</h1>
+-        <p>{description}</p>
+-      </div>
+-      {action && <div className="directory-page-actions">{action}</div>}
+-    </header>
+-  );
+-}
+-
+-function DirectorySourceStrip({
+-  area,
+-  editable,
+-  external,
+-}: {
+-  area: "customers" | "services";
+-  editable: boolean;
+-  external: boolean;
+-}) {
+-  return (
+-    <section className="directory-source-strip">
+-      <div className="directory-source-copy">
+-        <span className="directory-source-icon">
+-          <Icon
+-            name={
+-              external ? "link" : area === "services" ? "briefcase" : "users"
+-            }
+-          />
+-        </span>
+-        <div>
+-          <strong>
+-            {external
+-              ? "Dados sincronizados com Minha Agenda"
+-              : "Gerenciado pela Agenda Atendly"}
+-          </strong>
+-          <span>
+-            {external
+-              ? editable
+-                ? "Ações disponíveis respeitam a capacidade confirmada da integração."
+-                : "Dados externos ficam somente para consulta nesta tela."
+-              : area === "services"
+-                ? "Serviços podem ser criados, editados e desativados aqui."
+-                : "Cadastros pertencem somente a este negócio."}
+-          </span>
+-        </div>
+-      </div>
+-      <span className={external ? "badge" : "badge badge-success"}>
+-        {external
+-          ? editable
+-            ? "Operações disponíveis"
+-            : "Somente leitura"
+-          : "Controle completo"}
+-      </span>
+-    </section>
+-  );
+-}
+-
+-function DirectoryToolbar({
+-  area,
+-  filter,
+-  filters,
+-  onFilter,
+-  onQuery,
+-  query,
+-}: {
+-  area: "customers" | "services";
+-  filter: string;
+-  filters: Array<[string, string]>;
+-  onFilter: (value: string) => void;
+-  onQuery: (value: string) => void;
+-  query: string;
+-}) {
+-  return (
+-    <section className="directory-toolbar" aria-label="Busca e filtros">
+-      <label className="directory-search">
+-        <span className="sr-only">Buscar</span>
+-        <Icon name="search" />
+-        <input
+-          className="input"
+-          type="search"
+-          placeholder={
+-            area === "customers"
+-              ? "Buscar por nome ou telefone"
+-              : "Buscar serviço"
+-          }
+-          value={query}
+-          onChange={(event) => onQuery(event.target.value)}
+-        />
+-      </label>
+-      <div className="directory-filters">
+-        {filters.map(([value, label]) => (
+-          <button
+-            className={clsx(
+-              "directory-filter",
+-              filter === value && "is-active",
+-            )}
+-            type="button"
+-            aria-pressed={filter === value}
+-            onClick={() => onFilter(value)}
+-            key={value}
+-          >
+-            {label}
+-          </button>
+-        ))}
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function DirectoryLoading() {
+-  return (
+-    <div
+-      className="directory-loading-shell"
+-      aria-busy="true"
+-      aria-label="Carregando dados"
+-    >
+-      {[0, 1, 2, 3, 4].map((item) => (
+-        <div className="directory-loading-row" key={item}>
+-          <span className="skeleton directory-loading-avatar" />
+-          <span className="directory-loading-copy">
+-            <span className="skeleton skeleton-title" />
+-            <span className="skeleton skeleton-line" />
+-          </span>
+-          <span className="skeleton skeleton-line" />
+-          <span className="skeleton skeleton-line" />
+-        </div>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-function DirectoryState({
+-  actionHref,
+-  actionLabel,
+-  description,
+-  error = false,
+-  onAction,
+-  title,
+-}: {
+-  actionHref?: string;
+-  actionLabel?: string;
+-  description: string;
+-  error?: boolean;
+-  onAction?: () => void;
+-  title: string;
+-}) {
+-  return (
+-    <div className="directory-state-surface">
+-      <div className={error ? "error-state" : "empty-state"}>
+-        <span className="state-icon">
+-          <Icon name={error ? "alert" : "info"} />
+-        </span>
+-        <h2>{title}</h2>
+-        <p>{description}</p>
+-        {actionLabel && actionHref && (
+-          <Link className="btn btn-primary" href={actionHref}>
+-            {actionLabel}
+-          </Link>
+-        )}
+-        {actionLabel && !actionHref && (
+-          <button className="btn btn-primary" type="button" onClick={onAction}>
+-            {actionLabel}
+-          </button>
+-        )}
+-      </div>
+-    </div>
+-  );
+-}
+-
+-function requestError(error: unknown, fallback: string): string {
+-  if (!(error instanceof BffHttpError)) return fallback;
+-  const messages: Record<string, string> = {
+-    CUSTOMER_ALREADY_EXISTS:
+-      "Já existe um cliente com este telefone neste negócio.",
+-    OPERATION_MANAGED_EXTERNALLY:
+-      "Esta ação deve ser realizada na fonte oficial.",
+-    SERVICE_NAME_ALREADY_EXISTS: "Já existe um serviço com este nome.",
+-    NETWORK_ERROR: "Não foi possível acessar a Atendly. Confira sua conexão.",
+-  };
+-  const message = messages[error.code] ?? fallback;
+-  return `${message} Referência: ${error.requestId}`;
+-}
+-
+-function formText(data: FormData, name: string): string {
+-  const value = data.get(name);
+-  return typeof value === "string" ? value.trim() : "";
+-}
+-
+-function initials(name: string | null): string {
+-  if (!name?.trim()) return "?";
+-  return name
+-    .trim()
+-    .split(/\s+/)
+-    .slice(0, 2)
+-    .map((part) => part[0]?.toLocaleUpperCase("pt-BR"))
+-    .join("");
+-}
+-
+-function formatPrice(service: Service): string {
+-  if (service.priceType === "NOT_INFORMED") return "Não informado";
+-  if (service.priceType === "ON_REQUEST" || service.price === null) {
+-    return "Sob consulta";
+-  }
+-  const amount = service.price.toLocaleString("pt-BR", {
+-    currency: "BRL",
+-    style: "currency",
+-  });
+-  return service.priceType === "STARTING_AT" ? `A partir de ${amount}` : amount;
+-}
+-
+-function formatServiceDuration(service: Service): string {
+-  return service.durationMinutes === null
+-    ? "Precisa de revisão"
+-    : `${service.durationMinutes} min`;
+-}
+-
+-function formatDateTime(value?: string): string {
+-  if (!value) return "Não informado";
+-  return new Intl.DateTimeFormat("pt-BR", {
+-    dateStyle: "short",
+-    timeStyle: "short",
+-  }).format(new Date(value));
+-}
+-
+-function formatShortDate(value: string): string {
+-  return new Intl.DateTimeFormat("pt-BR", {
+-    day: "2-digit",
+-    month: "short",
+-    timeZone: "UTC",
+-  })
+-    .format(new Date(`${value}T12:00:00Z`))
+-    .toLocaleUpperCase("pt-BR");
+-}
+-
+-function statusLabel(status: string): string {
+-  return appointmentStatusLabel(status);
+-}
+-
+-function todayIso(timeZone: string): string {
+-  const parts = new Intl.DateTimeFormat("en-CA", {
+-    day: "2-digit",
+-    month: "2-digit",
+-    timeZone,
+-    year: "numeric",
+-  }).formatToParts(new Date());
+-  const values = Object.fromEntries(
+-    parts.map((part) => [part.type, part.value]),
+-  );
+-  return `${values.year}-${values.month}-${values.day}`;
+-}
+-
+-function addDays(value: string, days: number): string {
+-  const date = new Date(`${value}T12:00:00Z`);
+-  date.setUTCDate(date.getUTCDate() + days);
+-  return date.toISOString().slice(0, 10);
+-}
+diff --git a/apps/frontend/src/mocks/data/directory.ts b/apps/frontend/src/mocks/data/directory.ts
+deleted file mode 100644
+index 305baaf..0000000
+--- a/apps/frontend/src/mocks/data/directory.ts
++++ /dev/null
+@@ -1,59 +0,0 @@
+-import type { Customer } from "@/features/customers/types";
+-import type { CatalogService } from "@/features/services/types";
+-export const mockCustomers: Customer[] = [
+-  {
+-    id: "c1",
+-    name: "Cliente demonstrativo 01",
+-    phone: "(11) 99999-1234",
+-    lastContact: "Hoje, 09:18",
+-    nextAppointment: "25 ago · 14:30",
+-    appointments: 6,
+-  },
+-  {
+-    id: "c2",
+-    name: "Contato sem nome",
+-    phone: "(11) 98888-4321",
+-    lastContact: "Hoje, 08:42",
+-    appointments: 1,
+-  },
+-  {
+-    id: "c3",
+-    name: "Cliente demonstrativo 02",
+-    phone: "(11) 97777-6543",
+-    lastContact: "Ontem, 17:05",
+-    nextAppointment: "28 ago · 10:00",
+-    appointments: 3,
+-  },
+-  {
+-    id: "c4",
+-    name: "Cliente demonstrativo 03",
+-    phone: "(11) 96666-7890",
+-    lastContact: "12 ago, 11:20",
+-    appointments: 2,
+-  },
+-];
+-export const mockServices: CatalogService[] = [
+-  {
+-    id: "s1",
+-    name: "Serviço de demonstração",
+-    duration: 60,
+-    price: 120,
+-    active: true,
+-    origin: "atendly",
+-  },
+-  {
+-    id: "s2",
+-    name: "Serviço sob consulta",
+-    duration: 45,
+-    active: true,
+-    origin: "atendly",
+-  },
+-  {
+-    id: "s3",
+-    name: "Serviço inativo de exemplo",
+-    duration: 30,
+-    price: 80,
+-    active: false,
+-    origin: "atendly",
+-  },
+-];
+diff --git a/apps/frontend/src/shared/styles/atendly.css b/apps/frontend/src/shared/styles/atendly.css
+index 1b3691a..b6574d4 100644
+--- a/apps/frontend/src/shared/styles/atendly.css
++++ b/apps/frontend/src/shared/styles/atendly.css
+@@ -805,6 +805,15 @@ p {
+ .list-item:last-child {
+   border-bottom: 0;
+ }
++/* O item interativo mora dentro de `.list-row`, o invólucro que carrega
++   `role="listitem"`: a separação volta a ser calculada pela posição da
++   linha na lista, e não pela posição do item dentro do invólucro. */
++.list-row > .list-item {
++  border-bottom: 1px solid var(--border);
++}
++.list-row:last-child > .list-item {
++  border-bottom: 0;
++}
+ .list-item:hover {
+   background: var(--surface-secondary);
+ }
+diff --git a/apps/frontend/src/shared/ui/ListItem.tsx b/apps/frontend/src/shared/ui/ListItem.tsx
+index 6cfd432..b96ae19 100644
+--- a/apps/frontend/src/shared/ui/ListItem.tsx
++++ b/apps/frontend/src/shared/ui/ListItem.tsx
+@@ -14,6 +14,13 @@ type StaticProps = CommonProps & { href?: never; onClick?: never };
+ type LinkProps = CommonProps & { href: string; onClick?: never };
+ type ButtonProps = CommonProps & { href?: never; onClick: () => void };
+ 
++/**
++ * Dentro de `role="list"` cada item precisa ser um `listitem`, mas o papel
++ * nunca vai no link nem no botão: ali ele apagaria os papéis implícitos de
++ * link e de botão, tirando o item da navegação por links e do anúncio de
++ * ação. O invólucro carrega o papel de lista; o elemento interativo mantém o
++ * seu.
++ */
+ export function ListItem(props: StaticProps | LinkProps | ButtonProps) {
+   const { leading, title, copy, trailing, className } = props;
+   const content = (
+@@ -29,28 +36,36 @@ export function ListItem(props: StaticProps | LinkProps | ButtonProps) {
+ 
+   if (typeof (props as LinkProps).href === "string") {
+     return (
+-      <Link
+-        className={clsx("list-item", className)}
+-        href={(props as LinkProps).href}
+-      >
+-        {content}
+-      </Link>
++      <div className="list-row" role="listitem">
++        <Link
++          className={clsx("list-item", className)}
++          href={(props as LinkProps).href}
++        >
++          {content}
++        </Link>
++      </div>
+     );
+   }
+ 
+   if (typeof (props as ButtonProps).onClick === "function") {
+     const { onClick, disabled } = props as ButtonProps;
+     return (
+-      <button
+-        type="button"
+-        className={clsx("list-item", "list-item-button", className)}
+-        onClick={onClick}
+-        disabled={disabled}
+-      >
+-        {content}
+-      </button>
++      <div className="list-row" role="listitem">
++        <button
++          type="button"
++          className={clsx("list-item", "list-item-button", className)}
++          onClick={onClick}
++          disabled={disabled}
++        >
++          {content}
++        </button>
++      </div>
+     );
+   }
+ 
+-  return <div className={clsx("list-item", className)}>{content}</div>;
++  return (
++    <div className={clsx("list-item", className)} role="listitem">
++      {content}
++    </div>
++  );
+ }

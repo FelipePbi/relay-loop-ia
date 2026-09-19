@@ -1,0 +1,76 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-10T05:49:57.501Z",
+  "attemptId": "010-r1-unit-wu-12-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "010-r1-unit-wu-12",
+      "goal": "010",
+      "round": 1,
+      "workUnitId": "WU-12",
+      "status": "ESCALATION_REQUIRED",
+      "summary": "Suíte de integração da importação escrita e executada contra PostgreSQL real (54 passam, 1 falha): sete critérios verdes, e o oitavo expõe defeito real — importação e confirmação concorrentes gravam dois atendimentos no mesmo horário.",
+      "report": "## O que mudou\n\nUm único arquivo novo: `apps/scheduling-service/tests/integration/goal010-import.test.ts`, com 11 casos organizados nos oito critérios da unidade. Nenhum arquivo de `src/` foi tocado, nenhum trabalho de outra Work Unit foi revertido, nada foi commitado.\n\nO recorte é deliberado: a suíte não repete o que os dublês de `tests/unit/import-*.test.ts` já provam. Ela cobre só o que exige banco de verdade — chaves compostas por `tenantId` com dois tenants vivos ao mesmo tempo, duas/três conexões concorrentes, `now()` do servidor decidindo expiração de lease, índice único parcial da conclusão e a política única de escrita do Goal008 serializando duas escritas de agenda. O caso cru de SQL da conclusão continua sendo o da WU-06 em `goal010-import-completion.test.ts`; aqui a conclusão é disputada **depois de uma importação de verdade**.\n\nDecisões de teste que valem registro:\n\n- **Ordem determinística na corrida de agenda.** `runQueued()` toma antes o `pg_advisory_xact_lock` do dia por uma terceira conexão (`blocker`), solta depois que as duas operações já estão na fila do mesmo lock, e o PostgreSQL as acorda em ordem de chegada. Sem isso a corrida seria decidida pelo escalonador do Node e o vermelho/verde seria sorte. A espera é por `pg_locks ... NOT granted`, nunca por `sleep`.\n- **Expiração de lease por fixture do banco.** `expireLeaseInDatabase()` grava `now() - interval` calculado pelo servidor. Precisou recuar `leaseAcquiredAt` junto: `ImportSession_lease_check` exige `leaseExpiresAt > leaseAcquiredAt` — um lease vencido é um lease tomado no passado, não um lease incoerente. Nenhum `sleep` na suíte.\n- **Contagens sempre relidas do banco** (`tallyItems()`), comparadas com os contadores de `ImportSession` e de `ImportSessionCategory`; o teste nunca acumula em memória o que ele deveria estar conferindo.\n\n## Ambiente: como consegui rodar\n\nNão havia `SCHEDULING_TEST_DATABASE_URL` nem credencial de PostgreSQL local (foi o que bloqueou a WU-06). Docker está sem daemon ativo. Provisionei um cluster descartável com o PostgreSQL 18.4 já instalado na máquina, inteiramente dentro da scratchpad da sessão:\n\n- `initdb -D <scratchpad>/pgdata -U postgres --auth=trust` → Success\n- `pg_ctl -D <scratchpad>/pgdata -o \"-p 55432 -c listen_addresses=127.0.0.1\" start` → `database system is ready to accept connections`\n- `CREATE DATABASE atendly_scheduling_test` → `CREATE DATABASE`\n- `DATABASE_URL=postgresql://postgres@127.0.0.1:55432/atendly_scheduling_test npx prisma migrate deploy` → `All migrations have been successfully applied.`\n\nAo final: `pg_ctl -m fast stop` → `server stopped`, e a porta 55432 volta a recusar conexão. Não deixei processo rodando na máquina.\n\n## Comandos executados e resultados\n\n- `npx vitest run tests/integration/goal010-import-completion.test.ts` (WU-06, para validar o ambiente antes de escrever) → **6 passed**. A suíte da WU-06 estava correta; faltava só o banco.\n- `npx vitest run --dir tests/integration`, quatro execuções → **1 failed | 54 passed (55)**, sempre a mesma falha, sem flutuação. As suítes dos Goals 008 e 009 continuam verdes ao lado da nova.\n- `npx vitest run --dir tests/unit` → **16 files, 238 passed**. Nada quebrou no gate core, que continua sem depender de banco.\n- `npx prettier --check tests/integration/goal010-import.test.ts` → `All files formatted correctly`.\n- `npx tsc -p tsconfig.json --noEmit` → limpo (o `tsconfig` cobre só `src/**`, como já era antes; testes são transpilados pelo vitest, igual às demais suítes).\n\nDuas condições **pré-existentes**, não introduzidas aqui e fora do escopo desta unidade: `npx prettier --check .` acusa 68 arquivos, incluindo `tsconfig.json` e `vitest.config.ts`, que não foram modificados por Goal nenhum; e `npx eslint src --max-warnings=0` tem 2 erros em `src/modules/appointments/appointment-series-service.ts` (Goal009, arquivo intocado nesta branch).\n\nNão rodei `validate:integration` inteiro: ele exige `BFF_TEST_DATABASE_URL` e as dependências do BFF, que este ambiente não tem provisionadas. O que rodei foi o passo `test:scheduling-integration` desse gate, com o alvo descartável descrito acima.\n\n## O critério que não passa, e por quê\n\n`produces a single effect when the confirmation reaches the day lock first` falha, de forma determinística:\n\n```\nAssertionError: expected [ 'USER:CONFIRMED', …(1) ] to deeply equal [ 'USER:CONFIRMED' ]\n  [\n    \"USER:CONFIRMED\",\n+   \"INTEGRATION:CONFIRMED\",\n  ]\n```\n\nDois atendimentos `CONFIRMED` no mesmo `startAt` (2026-10-01 09:00 em America/Sao_Paulo), no mesmo negócio. A causa está em `ImportExecutionService.importAppointment`: ela entra em `runCalendarWrite` com `lockCalendarDays`, mas **não revalida disponibilidade** — por decisão explícita e documentada da WU-04 (\"o que a origem tem é o que o negócio tem\"). O efeito é que a política única serializa as duas transações, mas só um dos dois lados confere o horário:\n\n- importação primeiro → a confirmação chega depois, revalida dentro da transação e é recusada com `SLOT_UNAVAILABLE`. **Um efeito.** Este caso passa e está na suíte.\n- confirmação primeiro → a importação chega depois, não confere nada e grava por cima. **Dois efeitos.**\n\nAntes de fixar a asserção eu medi o comportamento com um probe descartável de 8 rodadas com `Promise.allSettled` livre: 7 rodadas com `appointments=2`. Com o enfileiramento determinístico do `runQueued`, a direção \"confirmação primeiro\" dá 2 em 100% das execuções.\n\nDeixei o teste **vermelho de propósito**, e a asserção compara `origem:estado` em vez de só contar linhas, para que a mensagem de falha já entregue a quem for corrigir qual atendimento sobrou no horário. Não o enfraqueci nem o marquei como skip: isso deixaria o gate verde sobre uma agenda que aceita dupla marcação.\n\n## Por que não corrigi aqui\n\nA correção fica em `import-execution-service.ts` (WU-04) e provavelmente também nas classes de conflito do preview (WU-03) — as duas fora do escopo desta unidade, cujo `expectedFiles` é `tests/integration/`. E não é um ajuste mecânico: é decisão de produto. Recusar toda sobreposição colide com a regra deliberada de não revalidar oferta ao importar histórico e com o critério 5 desta mesma unidade (importar sobre destino já povoado, que hoje passa). O desenho provável — marcar o item como conflito quando o horário já está ocupado por um atendimento **não** importado, em vez de criar — precisa dizer qual estado o item recebe, se vale para as quatro categorias de agendamento ou só para `FUTURE_APPOINTMENT`, e como isso aparece no preview. Escolher isso sozinho seria decidir produto por conta própria.\n\nO que esta unidade entrega é exatamente o que ela existia para entregar: a prova, contra banco, de que o critério 6 do Goal ainda não está satisfeito, com um teste determinístico que vira verde no dia em que a regra for definida e implementada.",
+      "changedFiles": [
+        "apps/scheduling-service/tests/integration/goal010-import.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Dois tenants em fixture real: sessão, itens, decisões, conflitos, mapas de origem e histórico de A não aparecem, não mudam e não são concluíveis por B",
+          "met": true,
+          "detail": "Caso 'keeps session, items, decisions, conflicts, source maps and history ... uncompletable by the other': A importa, gera item NEEDS_REVIEW, decisão, mapa e conclusão. B vê zero decisões, zero conflitos, zero mapas; getHistory(B) null; analyze/execute/complete de B sobre a sessão de A dão IMPORT_SESSION_NOT_FOUND; rawComplete com tenant trocado afeta 0 linhas; updatedAt, status e statuses de item de A idênticos antes e depois."
+        },
+        {
+          "criterion": "Dois starts simultâneos produzem uma só execução; duas instâncias com lease não duplicam trabalho nem reiniciam job vivo",
+          "met": true,
+          "detail": "Dois casos verdes. Dois startSession concorrentes em conexões distintas devolvem o mesmo sessionId, count=1; duas execute concorrentes com donos diferentes dão 1 fulfilled e 1 rejected com IMPORT_SESSION_LEASE_HELD, com 1 serviço, 1 cliente, 1 agendamento e 3 mapas no banco. Com lease vivo, resumeImportSessions de outra instância devolve [], execute recusa com details.heldBy='instance-1', leaseOwner e status intactos e zero escrita de destino."
+        },
+        {
+          "criterion": "Reinício no meio do lote retoma do checkpoint sem duplicar; lease expirado é reivindicável pelo relógio do banco, com fixture de expiração e sem sleep",
+          "met": true,
+          "detail": "Passada com maxItems=2 para no meio, cursor lastExternalId='901', lease devolvido; segunda passada de outra instância fecha READY com 3 serviços, 2 clientes, 2 agendamentos, 7 mapas, 7 itens IMPORTED, attemptCount=1 e nenhum ALREADY_IMPORTED_FROM_SOURCE. Expiração escrita por now() - interval do servidor (leaseAcquiredAt recuado junto por ImportSession_lease_check); instance-2 reivindica e renewImportLease do dono anterior devolve null. Nenhum sleep."
+        },
+        {
+          "criterion": "Segunda conclusão é recusada pelo banco com duas conexões concorrentes",
+          "met": true,
+          "detail": "Depois de uma execução real, ImportCompletionService.complete na conexão 1 corre contra um UPDATE cru de conclusão na conexão 2 sobre outra sessão: exatamente 1 fulfilled e 1 linha com completedAt. A recusa é comprovadamente do banco: em seguida rawComplete da sessão sobrevivente, de outra conexão, rejeita com 23505/one_completed_per_tenant, e startSession rejeita com IMPORT_ALREADY_COMPLETED."
+        },
+        {
+          "criterion": "Importar sobre destino já com clientes, serviços e agendamentos funciona sem exigir destino vazio, e os conflitos são resolvidos por item conforme as regras do preview",
+          "met": true,
+          "detail": "Destino pré-povoado com serviço, cliente e atendimento USER criado pelo AtendlyCalendarProvider. Preview classifica 900 EXACT/PENDING, 901 e 501 SIMILAR/NEEDS_REVIEW; a execução importa 900, 500 e 100, deixa 901 e 501 em revisão sem criar registro, mantém preço 90, nome e source USER do que já existia, e os 3 mapas de origem não apontam para nenhum registro pré-existente. Sessão PARTIAL, contadores iguais ao tally relido do banco."
+        },
+        {
+          "criterion": "Um item inválido no meio do lote marca só aquele item e os demais continuam; as contagens batem com o banco",
+          "met": true,
+          "detail": "Serviço 901 com price fora do contrato vira FAILED com reasonCode IMPORT_SOURCE_RECORD_INVALID e reasonDetail sem o payload cru; 900, 902, o cliente e o agendamento seguem. tally do banco = {pending:0, imported:4, skipped:0, failed:1, needsReview:0}, igual a result.counts, aos contadores de ImportSession e aos de ImportSessionCategory (SERVICE: imported 2, failed 1)."
+        },
+        {
+          "criterion": "Agendamento importado disputando o mesmo horário com uma confirmação concorrente produz um só efeito sob a política única",
+          "met": false,
+          "detail": "Só uma das ordens satisfaz o critério. Importação primeiro: confirmação recusada com SLOT_UNAVAILABLE, um efeito — verde. Confirmação primeiro: importAppointment não revalida disponibilidade e grava por cima, resultando em ['USER:CONFIRMED','INTEGRATION:CONFIRMED'] no mesmo startAt. Determinístico com o enfileiramento no advisory lock do dia; probe livre deu 2 atendimentos em 7 de 8 rodadas. Teste deixado vermelho; correção é na WU-04 e é decisão de produto."
+        },
+        {
+          "criterion": "A suíte usa support/reset-tenant.ts e não deixa resíduo entre casos",
+          "met": true,
+          "detail": "resetTenant(prisma, tenantA/tenantB) roda em beforeEach e afterAll, sem função de limpeza própria. O caso 'leaves nothing of either business behind after support/reset-tenant.ts' importa e conclui em A, analisa em B e, após resetTenant, confere zero em sessions, items, categories, decisions, maps, services, customers, appointments e events nos dois tenants, com getImportRight(A) de volta a available. As suítes dos Goals 008 e 009 seguem verdes no mesmo banco."
+        }
+      ],
+      "escalation": {
+        "reason": "BEHAVIOUR_DECISION_REQUIRED",
+        "confidence": "HIGH",
+        "detail": "A importação de agendamento não revalida ocupação (decisão da WU-04) e, quando uma confirmação concorrente chega primeiro ao lock do dia, grava um segundo atendimento no mesmo horário; o critério 6 do Goal exige um só efeito. A correção fica na WU-04 e talvez no preview (WU-03), fora do escopo desta unidade, e exige decidir que estado o item recebe, se vale para as quatro categorias de agendamento ou só FUTURE_APPOINTMENT, e como conciliar com o critério 5.",
+        "evidence": [
+          "vitest run --dir tests/integration contra PostgreSQL 18.4 descartável: 1 failed | 54 passed (55), mesma falha em 4 execuções consecutivas",
+          "Falha determinística: expected [ 'USER:CONFIRMED', …(1) ] to deeply equal [ 'USER:CONFIRMED' ] — recebido ['USER:CONFIRMED','INTEGRATION:CONFIRMED'], dois Appointment CONFIRMED no mesmo startAt 2026-10-01T12:00:00.000Z do mesmo tenant",
+          "Probe descartável de 8 rodadas com Promise.allSettled livre, antes de escrever a asserção: appointments=2 em 7 rodadas; a única com appointments=1 foi aquela em que a importação chegou primeiro e a confirmação caiu com SLOT_UNAVAILABLE",
+          "importAppointment em src/modules/migrations/import-execution-service.ts entra em runCalendarWrite + lockCalendarDays e cria o Appointment sem chamar AtendlyAvailability.assertAvailable, ao contrário de AtendlyCalendarProvider.createAppointment, que revalida dentro da transação",
+          "O caso na ordem inversa ('produces a single effect when the import reaches the day lock first') passa e confirma que a serialização funciona: o que falta é a revalidação do lado da importação, não o lock"
+        ]
+      }
+    },
+    "attemptId": "010-r1-unit-wu-12-a1"
+  }
+}

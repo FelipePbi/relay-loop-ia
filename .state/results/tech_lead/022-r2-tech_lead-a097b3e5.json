@@ -1,0 +1,501 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T19:24:02.980Z",
+  "attemptId": "022-r2-tech_lead-a097b3e5-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "022-r2-tech_lead-a097b3e5",
+      "goal": "022",
+      "decision": "NEXT_GOAL",
+      "summary": "Goal 022 fechado como ACCEPTED com baseline 0b6dbf2f. Roadmap reavaliado incrementalmente: G-29 dividido — o 023 entrega a metade de conteúdo (prazo configurável, redução confirmada e purga cross-store) e a metade de conta (exclusão recuperável em 7 dias, suspensão, restore) passa para o 024, que já listava \"conta\" no escopo. Motivo: o 023 já atravessava quatro stores e ganhou mais dois resíduos de retenção nos fechamentos 021 e 022; juntar a isso uma máquina de estados de conta poria dois mecanismos irreversíveis independentes num Goal só. U-01 permanece aberta e é honrada por construção (Não classificadas sem prazo, sem opção e sem purga), no mesmo tratamento que U-03 recebeu no 022. Escrito e marcado READY somente o Goal 023.",
+      "nextGoalId": "023",
+      "nextGoalTitle": "Retenção configurável e purga de conteúdo multistore",
+      "nextGoalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\023-retencao-configuravel-e-purga-de-conteudo-multistore.md",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/goals/023-retencao-configuravel-e-purga-de-conteudo-multistore.md"
+      ],
+      "developerProfile": "OPUS_HIGH",
+      "developerProfileReason": "Primeira exclusão irreversível de dado de cliente da migração, com isolamento de tenant em operação destrutiva, quatro stores e um laço novo com lease no processo do BFF.",
+      "executionPlan": {
+        "goalSummary": "Goal 023 fecha G-29 na parte de conteúdo: prazo de retenção configurável (30/90/180/365, defaults Comercial 90 / Pessoal 30) como configuração do BFF, com opções em allowlist do servidor e redução exigindo confirmação no próprio contrato, não só no diálogo da UI. A purga executa em todas as cópias: mensagens, anexos, execuções de IA e inbox técnico na IA; facts/detail das intenções de lembrete no Scheduling; notificações fora da janela de histórico no BFF; e o outbox de webhook no transporte em Go, que guarda payload integral sem retenção desde o Goal004 (resíduo de G-04/G-23). A varredura é um laço batido no processo do BFF, com estado e lease persistidos, porque o registro de negócios só existe lá e apagar não pode depender de alguém abrir o app; a exclusão executa no dono de cada dado, por rota interna tenant-scoped, preservando a direção BFF -> donos. A categoria que governa uma mensagem é a da sessão cuja janela contém o instante dela; UNCLASSIFIED e conteúdo órfão nunca são purgados, por U-01 em aberto. A conversa sobrevive com informação mínima e marca durável de expiração, que a interface lê em vez de inferir. Fora do escopo: exclusão de conta, suspensão e restore (024), exclusão self-service de dado de cliente (fora do MVP), e-mail ou alerta fora de sessão (U-03), retirada de legado (025).",
+        "executionStrategy": "Quatro portas de purga independentes primeiro (BFF settings, IA, Scheduling, central do BFF), cada uma exercitável sozinha contra banco real; depois o orquestrador da varredura, que é onde moram lease, batching, isolamento por fonte e desligamento limpo. O prune do transporte em Go é independente de tudo e roda em paralelo. Frontend depois dos contratos que consome. Ensaio das migrations e documentação consolidados numa unidade, exigindo migrations retomáveis — a divergência que o review022 registrou. Verificação determinística no fim: typechecks e lint dirigidos, testes dirigidos de BFF e frontend, depois validate-core, validate-integration, validate-ui e git-diff-check.",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "Prazo de retenção como configuração do BFF, com allowlist e redução confirmada",
+            "objective": "Criar RetentionSettings no BFF (uma linha por negócio, ausência de linha valendo como Comercial 90 / Pessoal 30) por migration aditiva e retomável, e expor GET/PATCH /v1/settings/retention sob requireTenantContext, com opções fechadas em 30/90/180/365 validadas no servidor e recusa nomeada de qualquer redução sem confirmação explícita.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/prisma/migrations/*_goal023_retention/migration.sql",
+              "apps/bff/src/modules/retention/settings.ts",
+              "apps/bff/src/modules/retention/routes.ts",
+              "apps/bff/src/modules/retention/index.ts",
+              "apps/bff/src/app.ts",
+              "apps/bff/tests/goal023-retention-settings.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/modules/notifications/routes.ts",
+              "apps/scheduling-service/src/modules/reminders",
+              "apps/bff/prisma/schema.prisma"
+            ],
+            "implementationHints": "Seguir o padrão de ReminderSettings do Goal021: ausência de linha é o default do produto, nenhum boot escreve linha para todo mundo. A allowlist e a regra de confirmação são do servidor; a resposta do PATCH recusado diz qual categoria e o de/para. Nenhum campo, parâmetro ou default para UNCLASSIFIED em lugar nenhum. A migration usa as formas retomáveis (IF NOT EXISTS) — a migration do 022 não é reescrita.",
+            "acceptanceCriteria": [
+              "Tabela nasce vazia por migration aditiva, sem UPDATE em linha existente, e reaplicar a migration sobre banco já migrado não falha",
+              "Ausência de linha vale como Comercial 90 / Pessoal 30",
+              "Valores aceitos são exatamente 30, 90, 180 e 365, validados no servidor; fora disso recusa e não grava",
+              "Comercial e Pessoal podem ter prazos diferentes ao mesmo tempo",
+              "PATCH que reduza qualquer prazo sem confirmação explícita é recusado com erro nomeado que diz categoria e de/para; aumentar não exige confirmação",
+              "As duas rotas estão sob requireTenantContext e nenhuma aceita tenantId do chamador",
+              "A resposta deixa claro que a redução só passa a valer na varredura seguinte; nenhuma rota pública apaga dado",
+              "Não existe prazo, coluna, parâmetro ou default para UNCLASSIFIED"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-02",
+            "title": "Purga de conteúdo de conversa na IA, com categoria governante e marca durável de expiração",
+            "objective": "Criar na IA a rota interna tenant-scoped que recebe os cutoffs já calculados e um teto de linhas e apaga Message (com MessageAttachment em cascade) e AiRun (com AiToolCall em cascade) conforme a categoria da sessão que governa cada linha, gravando em Conversation a marca durável de até quando o conteúdo já foi purgado, e expor essa marca de forma aditiva no DTO de conversa do BFF.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [],
+            "scope": "apps/ai-orchestrator",
+            "expectedFiles": [
+              "apps/ai-orchestrator/prisma/schema.prisma",
+              "apps/ai-orchestrator/prisma/migrations/*_goal023_conversation_content_expiry/migration.sql",
+              "apps/ai-orchestrator/src/modules/retention/content-purge-service.ts",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/tests/retention/content-purge.test.ts",
+              "apps/bff/src/clients/ai-orchestrator",
+              "apps/bff/src/modules/conversations/routes.ts"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/prisma/schema.prisma",
+              "apps/ai-orchestrator/src/modules/internal/routes.ts",
+              "apps/ai-orchestrator/src/modules/session",
+              "apps/bff/src/clients/internal-http-client.ts"
+            ],
+            "implementationHints": "A categoria vive em ConversationSession e a mensagem vive na Conversation: a categoria governante é a da sessão cuja janela [startedAt, endedAt ?? agora) contém o instante da linha. UNCLASSIFIED e linha que não cai em nenhuma janela sobrevivem sempre — é onde U-01 é nomeada, uma vez. Usar os índices existentes (tenantId, conversationId, createdAt) e (tenantId, conversationId, startedAt); apagar em lotes com teto e devolver contagens por tabela mais se há resto. A marca em Conversation só avança. Cadastro, sessão, contato, handoff, memória e conhecimento não são tocados.",
+            "acceptanceCriteria": [
+              "Mensagem comercial fora do prazo comercial é apagada; dentro do prazo é preservada",
+              "Mensagem pessoal é governada pelo prazo pessoal, não pelo comercial",
+              "Mensagem governada por sessão UNCLASSIFIED nunca é apagada, por mais antiga que seja",
+              "Mensagem que não cai em nenhuma janela de sessão nunca é apagada",
+              "MessageAttachment, incluindo transcript, desaparece com a mensagem; AiRun e AiToolCall seguem a mesma regra de categoria e cutoff",
+              "Conversation, ConversationSession, Contact, Handoff, CustomerMemory e conhecimento sobrevivem",
+              "A marca de expiração da conversa só avança e nunca retrocede",
+              "A rota respeita o teto de linhas e sinaliza se restou trabalho; rodar duas vezes seguidas não apaga nada na segunda",
+              "A purga do negócio A não apaga nem marca nada do negócio B, com teste próprio",
+              "O DTO de conversa do BFF ganha o campo de expiração de forma aditiva, sem mudar forma, tipo ou significado de campo existente"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-03",
+            "title": "Esvaziamento de facts/detail das intenções de lembrete terminais no Scheduling",
+            "objective": "Criar no Scheduling a rota interna tenant-scoped que esvazia facts e detail de AppointmentNotificationIntent em estado terminal mais antigo que o prazo técnico recebido, preservando a linha, que é identidade de dedupe do Goal021, e nunca tocando intenção PENDING ou CLAIMED.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/scheduling-service",
+            "expectedFiles": [
+              "apps/scheduling-service/src/modules/reminders/notification-retention-service.ts",
+              "apps/scheduling-service/src/modules/internal-api/routes.ts",
+              "apps/scheduling-service/prisma/schema.prisma",
+              "apps/scheduling-service/tests/unit/notification-retention.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/scheduling-service/prisma/schema.prisma",
+              "apps/scheduling-service/src/modules/reminders/notification-read-service.ts",
+              "apps/scheduling-service/tests/unit/support/database-double.ts"
+            ],
+            "implementationHints": "Terminais são SENT, FAILED, DISMISSED e CANCELLED, filtrados por settledAt. Nada é deletado aqui: o que expira é o conteúdo, não a identidade. Acrescentar índice apenas se a varredura precisar dele, e então por migration aditiva e retomável.",
+            "acceptanceCriteria": [
+              "Intenção terminal fora do prazo tem facts e detail esvaziados e a linha permanece",
+              "Intenção PENDING ou CLAIMED não é tocada, nem com lease vencido",
+              "A rota respeita o teto de linhas e sinaliza resto; segunda passada imediata não altera nada",
+              "Isolamento de tenant verificado: o negócio A não esvazia intenção do negócio B",
+              "Qualquer migration nova é aditiva e reaplicável sobre banco já migrado"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-04",
+            "title": "Purga da central de notificações e reconciliação da janela do contador",
+            "objective": "Apagar no BFF TenantNotification do tipo EVENT e CONDITION já resolvida com occurredAt fora da janela de histórico que GET /v1/notifications já aplica, preservando sempre condição aberta, e deixar unreadCount e a lista falando da mesma janela — a divergência declarada no review022 — sem inventar segunda janela.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/notifications/retention.ts",
+              "apps/bff/src/modules/notifications/store.ts",
+              "apps/bff/src/modules/notifications/routes.ts",
+              "apps/bff/tests/goal023-notification-retention.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/notifications/routes.ts",
+              "apps/bff/src/modules/notifications/store.ts",
+              "apps/bff/prisma/schema.prisma"
+            ],
+            "implementationHints": "Reusar a constante HISTORY_WINDOW_DAYS que já existe em modules/notifications/routes.ts em vez de duplicar o número. O índice (tenantId, occurredAt DESC) já existe. NotificationPreference e NotificationSyncState não são tocados.",
+            "acceptanceCriteria": [
+              "Evento e condição resolvida fora da janela são apagados; condição aberta nunca é apagada, por mais antiga que seja",
+              "Depois da purga, unreadCount e a lista aplicam a mesma janela; nenhuma segunda janela ou constante duplicada foi criada",
+              "NotificationPreference e NotificationSyncState permanecem intocados",
+              "Purga em lotes com teto e sinalização de resto; segunda passada imediata não apaga nada",
+              "Isolamento de tenant verificado com teste"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-05",
+            "title": "Varredura de retenção como laço batido no processo do BFF, com lease e isolamento por fonte",
+            "objective": "Implementar RetentionSweepState por negócio (lease em TIMESTAMPTZ com fencing, lastRunAt, lastError e contagens da última passada) e o laço que calcula os cutoffs a partir de RetentionSettings, chama as portas de purga da IA, do Scheduling e da central em lotes, isola falha por fonte, é ligado/desligado e ajustado por variável de ambiente e para limpo no desligamento do servidor.",
+            "type": "COMPLEX",
+            "complexity": "HIGH",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-01",
+              "WU-02",
+              "WU-03",
+              "WU-04"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/prisma/migrations/*_goal023_retention_sweep/migration.sql",
+              "apps/bff/src/modules/retention/sweep.ts",
+              "apps/bff/src/modules/retention/RetentionSweepWorker.ts",
+              "apps/bff/src/config/env.ts",
+              "apps/bff/src/app.ts",
+              "apps/bff/tests/goal023-retention-sweep.test.ts"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/src/modules/reminders/NotificationDeliveryWorker.ts",
+              "apps/bff/src/clients/internal-http-client.ts",
+              "apps/bff/src/config/env.ts",
+              "apps/bff/src/app.ts"
+            ],
+            "implementationHints": "Espelhar o desenho de lease do Goal021: claim condicional, fencing na liquidação, TIMESTAMPTZ. O laço nunca lança para fora, nunca faz rota pública devolver 500 e não sobe em teste — as suítes chamam a função de varredura diretamente. Defaults de ambiente conservadores e declarados; desligado, o resto do produto continua inteiro. Nenhuma rota pública, leitura reconciliada ou tela dispara purga.",
+            "acceptanceCriteria": [
+              "RetentionSweepState existe por negócio com lease em TIMESTAMPTZ e fencing; duas instâncias não varrem o mesmo negócio ao mesmo tempo",
+              "Laço ligado, desligado e ajustado por variável de ambiente, com defaults declarados no diff",
+              "Com o laço desligado, todo o resto do produto continua funcionando",
+              "Toda passada respeita o teto de linhas por store e sinaliza se restou trabalho",
+              "Interromper a passada no meio não deixa estado inconsistente e a seguinte continua",
+              "Store indisponível degrada só ele: o erro é registrado, os outros seguem e nada é lançado para fora",
+              "As suítes não sobem o laço e o desligamento do servidor não fica preso por causa dele",
+              "Nenhuma rota pública, leitura reconciliada ou tela dispara purga",
+              "Log de purga informa quantas linhas, de qual tabela e de qual negócio, nunca o conteúdo"
+            ],
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-06",
+            "title": "Retenção técnica do outbox de webhook no transporte em Go",
+            "objective": "Remover, dentro do próprio processo do transporte, entregas de webhook_deliveries em estado terminal mais velhas que o prazo técnico, em lotes, no boot junto do que já existe e periodicamente, com prazo e intervalo configuráveis por ambiente, sem tocar em pendente ou reagendada e sem criar rota nova ou chamada cross-service.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/evolution-go",
+            "expectedFiles": [
+              "apps/evolution-go/pkg/events/webhook/webhook_outbox.go",
+              "apps/evolution-go/pkg/events/webhook/webhook_producer.go",
+              "apps/evolution-go/pkg/events/webhook/webhook_retention_test.go"
+            ],
+            "relevantFiles": [
+              "apps/evolution-go/pkg/events/webhook/webhook_outbox.go",
+              "apps/evolution-go/pkg/events/webhook/webhook_producer.go",
+              "apps/evolution-go/pkg/events/webhook/webhook_outbox_persistence_test.go"
+            ],
+            "implementationHints": "Hoje o pacote só tem ResumePending no boot, nenhum ticker e nenhuma retenção — é o resíduo de G-04/G-23. O prune é do transporte porque o payload do webhook é dado do transporte; o BFF não manda o Go apagar nada. Lote com teto e prazo default folgado, declarado junto da constante.",
+            "acceptanceCriteria": [
+              "Entrega terminal mais velha que o prazo é removida em lotes",
+              "Entrega pendente ou reagendada é preservada, independentemente da idade",
+              "Prazo e intervalo vêm de ambiente, com defaults declarados no código",
+              "Nenhuma rota nova e nenhuma chamada cross-service foram criadas",
+              "Teste cobre remoção da antiga, preservação da pendente e da recente e respeito ao lote"
+            ],
+            "verification": [
+              "validate-core"
+            ]
+          },
+          {
+            "id": "WU-07",
+            "title": "Seção Conversas em Configurações, com confirmação explícita da redução",
+            "objective": "Adicionar a seção Conversas em ProductSettingsScreen — sem redecompor a tela — com os dois seletores de prazo nas quatro opções, diálogo de confirmação ao reduzir que diz que mensagens antigas poderão ser removidas e que não há volta, explicação de Não classificadas sem promessa de exclusão, e o serviço de dados correspondente.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/settings/RetentionSection.tsx",
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/data/services/BffRetentionService.ts",
+              "apps/frontend/src/data/services/registry.ts",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/tests/goal023-retention-settings.test.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/data/services/BffSettingsService.ts",
+              "apps/frontend/src/features/notifications/NotificationPreferenceSection.tsx"
+            ],
+            "implementationHints": "Seguir o padrão das seções existentes (Negócio, Atendente virtual, WhatsApp, Agenda, Conta, Disponibilidade) e do bloco de preferência do Goal022; a redecomposição da tela é do 024. Só enviar confirmReduction depois da confirmação do diálogo; cancelar restaura o seletor para o valor salvo. Copy em português, no tom do vault, sem jargão.",
+            "acceptanceCriteria": [
+              "A seção Conversas existe, segue o padrão vigente e ProductSettingsScreen não é redecomposto",
+              "Dois seletores com exatamente as quatro opções, com estados de carregamento e erro no padrão do módulo",
+              "Reduzir abre confirmação que diz que mensagens antigas poderão ser removidas e que não há volta; só então o PATCH sai com confirmReduction",
+              "Cancelar não altera nada e não deixa o seletor mostrando valor diferente do salvo",
+              "Não classificadas é explicada sem seletor e sem qualquer promessa, sugestão ou insinuação de exclusão",
+              "Nenhum poller ou provedor de estado novo entrou na árvore"
+            ],
+            "verification": [
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-08",
+            "title": "Conteúdo expirado visível na conversa, lido da marca durável",
+            "objective": "Mostrar na conversa que mensagens antigas expiraram e desde quando, a partir da marca durável exposta no DTO, mantendo a conversa listada com informação mínima e explicando o vazio quando o conteúdo expirou inteiro, sem parecer erro ou falha de carregamento.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-02"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+              "apps/frontend/src/features/conversations/ConversationThread.tsx",
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/tests/goal023-conversation-expired.test.tsx"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+              "apps/frontend/src/features/conversations/ConversationThread.tsx",
+              "apps/frontend/src/features/conversations/ConversationInbox.tsx"
+            ],
+            "implementationHints": "A tela lê a marca; nunca infere expiração pela ausência de mensagem, que também acontece em conversa nova. A conversa continua na lista normalmente.",
+            "acceptanceCriteria": [
+              "Com conteúdo expirado, a timeline diz isso e desde quando, no topo, em vez de começar do meio sem explicação",
+              "Conversa inteiramente expirada continua listada e explica o vazio sem parecer erro",
+              "A expiração vem da marca do DTO e não é inferida pela ausência de mensagem",
+              "Nenhum poller ou provedor de estado novo entrou na árvore"
+            ],
+            "verification": [
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "title": "Ensaio retomável das migrations, passo de gate e documentação afetada",
+            "objective": "Escrever o ensaio das migrations deste Goal em scripts/, registrá-lo como passo de validate-integration.mjs no padrão dos ensaios existentes provando que reaplicar sobre banco já migrado não falha, e atualizar PUBLIC_API_V1.md e os documentos de §11 do Goal.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01",
+              "WU-02",
+              "WU-03",
+              "WU-04",
+              "WU-05",
+              "WU-06"
+            ],
+            "scope": "scripts",
+            "expectedFiles": [
+              "scripts/goal023-retention-migration-rehearsal.mjs",
+              "scripts/validate-integration.mjs",
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/CURRENT_STATE.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/DATA_MIGRATION.md",
+              "docs/migration/VALIDATION_GATE.md"
+            ],
+            "relevantFiles": [
+              "scripts/goal022-notification-center-migration-rehearsal.mjs",
+              "scripts/validate-integration.mjs",
+              "apps/bff/PUBLIC_API_V1.md"
+            ],
+            "implementationHints": "O review022 registrou que a migration do 022 não é retomável, divergindo do padrão vigente desde o Goal009; as migrations deste Goal corrigem isso para si mesmas e o ensaio prova a reaplicação. A migration do 022 não é reescrita. Documentar em PUBLIC_API_V1 as rotas novas, o campo aditivo do DTO, a regra de confirmação e o fato de a exclusão ser assíncrona e irreversível.",
+            "acceptanceCriteria": [
+              "Existe ensaio em scripts/, registrado como passo de validate-integration.mjs, que aplica limpa em base nova",
+              "O ensaio prova que reaplicar as migrations deste Goal sobre banco já migrado não falha",
+              "PUBLIC_API_V1.md documenta rotas novas, campo novo, regra de confirmação e irreversibilidade",
+              "Os documentos de §11 são atualizados e nenhum documento de fechamento (MIGRATION_STATUS, MASTER_PLAN, DECISIONS, reviews/) é tocado",
+              "Nenhuma afirmação de documentação descreve superfície que o diff não entrega"
+            ],
+            "verification": [
+              "validate-integration"
+            ]
+          },
+          {
+            "id": "WU-10",
+            "objective": "Typecheck do BFF depois do prazo, da purga da central e da varredura.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01",
+              "WU-04",
+              "WU-05"
+            ]
+          },
+          {
+            "id": "WU-11",
+            "objective": "Typecheck da IA depois da rota de purga e da marca de expiração.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/ai-orchestrator",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-02"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "objective": "Typecheck do Scheduling depois da rota de esvaziamento das intenções.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/scheduling-service",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-03"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "objective": "Lint do frontend depois das duas superfícies novas.",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07",
+              "WU-08"
+            ]
+          },
+          {
+            "id": "WU-14",
+            "objective": "Testes dirigidos do BFF sobre prazo, purga da central e varredura.",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/bff",
+            "pattern": "goal023",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-10"
+            ]
+          },
+          {
+            "id": "WU-15",
+            "objective": "Testes dirigidos do frontend sobre a seção Conversas e a conversa expirada.",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/frontend",
+            "pattern": "goal023",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-13"
+            ]
+          },
+          {
+            "id": "WU-16",
+            "objective": "Gate global sem banco: builds e suítes de todos os apps, incluindo o transporte em Go.",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-06",
+              "WU-09",
+              "WU-11",
+              "WU-12",
+              "WU-14",
+              "WU-15"
+            ]
+          },
+          {
+            "id": "WU-17",
+            "objective": "Gate contra PostgreSQL descartável, incluindo o ensaio novo e as suítes de purga.",
+            "type": "DETERMINISTIC",
+            "action": "validate-integration",
+            "complexity": "LOW",
+            "risk": "HIGH",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-18",
+            "objective": "Gate renderizado nas larguras 360, 390, 768, 1024 e 1440, sobre o build produzido pelo validate-core.",
+            "type": "DETERMINISTIC",
+            "action": "validate-ui",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-19",
+            "objective": "Conferência final de higiene do diff.",
+            "type": "DETERMINISTIC",
+            "action": "git-diff-check",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-17",
+              "WU-18"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "022-r2-tech_lead-a097b3e5-a1"
+  }
+}

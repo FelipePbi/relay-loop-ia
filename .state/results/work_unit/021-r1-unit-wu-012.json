@@ -1,0 +1,47 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T15:42:08.188Z",
+  "attemptId": "021-r1-unit-wu-012-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "021-r1-unit-wu-012",
+      "goal": "021",
+      "round": 1,
+      "workUnitId": "WU-012",
+      "status": "COMPLETED",
+      "summary": "Atualizei CURRENT_STATE, GAP_ANALYSIS, REUSE_ANALYSIS e DATA_MIGRATION na medida do diff do Goal021 (lembretes, notificação de alteração e confirmação de presença), sem tocar documentos de controle.",
+      "report": "Li os quatro documentos de migração por inteiro (CURRENT_STATE 1761 linhas, GAP_ANALYSIS 83, REUSE_ANALYSIS 107, DATA_MIGRATION agora 349) e, em paralelo, o diff completo do Goal021 contra a baseline `24b744d`: schema.prisma (ReminderSettings/ReminderRule/AppointmentNotificationIntent/notifiableVersion e seus comentários de projeto), write-policy.ts (appointmentVersionWrite), notification-intent-service.ts, reminder-service.ts, notification-dispatch-service.ts (via `grep` de assinaturas/docstrings, arquivo de 770 linhas), internal-auth.ts (requireDeliveryCaller), internal-api/routes.ts, appointment-lifecycle-service.ts e o provider Atendly (recompute em criar/remarcar/cancelar/concluir/marcar falta), assistant-tools.ts (confirm_appointment_presence), presence.ts, NotificationDeliveryService.ts/Worker.ts e notification-message.ts do ai-orchestrator, rotas do BFF (settings/reminders, notifyCustomer em cancelar/remarcar), o cabeçalho da migration.sql e do script de ensaio, e o passo novo de `validate-integration.mjs` (24→25 passos). Também li o Goal021 completo para confirmar a frase exata sobre \"a janela de duplicata que permanece aberta\" (linha 165 do goal), que reproduzi com a mesma semântica em vez de inventar uma formulação própria.\n\nEditei:\n- `docs/migration/CURRENT_STATE.md`: acrescentei a seção `## Delta implementado — Goal021, 2026-09-15 (round 1, ainda sem review)` ao final do arquivo, com FATOs sobre schema/migration, versionamento do compromisso, recomputação de intenções, aviso de alteração, entrega/revalidação no Scheduling, o worker/serviço de entrega na IA, composição do texto sem LLM, confirmação de presença com `source` derivado do chamador, as rotas/telas do BFF/frontend, e dois LIMITEs — gate operacional (nenhuma mensagem real) e a janela de duplicata (processo morto entre o transporte aceitar o envio e a gravação do resultado, mesma classe do Goal004, `UNKNOWN` terminal).\n- `docs/migration/GAP_ANALYSIS.md`: reescrevi a linha G-27 (estado observado, impacto/risco com o gate operacional e a janela de duplicata, dependências apontando para os outros documentos) e fechei o resíduo de presença do G-18 com o `source` real do evento.\n- `docs/migration/REUSE_ANALYSIS.md`: atualizei a linha \"Jobs de domínio\" (segundo/terceiro loop no mesmo desenho do Goal008/Goal004), a linha de `features/agenda` (notifyCustomer chegou), a linha \"IA graph/tools/LLM gateway\" (tool nova sem LLM na composição) e a linha da porta de envio do canal (reuso para o negócio).\n- `docs/migration/DATA_MIGRATION.md`: já havia uma nota extensa da WU-001 sobre a migration em si (linha ~279-285) que mantive intacta por ser precisa; acrescentei nota de `notifiableVersion` na linha `Appointment`, duas linhas novas de entidade (`ReminderSettings`/`ReminderRule` e `AppointmentNotificationIntent`) na tabela §1, e uma linha de gate em §7 citando o teste de integração real (9 testes, WU-006) e a mesma janela de duplicata declarada.\n\nNenhum comando de validação foi executado por esta unidade (documentação apenas); os números citados (25 passos do gate, 9 testes) vêm de contagem estrutural (`grep -c`) e do relatório já fornecido pela WU-006 concluída, não de execução própria.",
+      "changedFiles": [
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md",
+        "docs/migration/DATA_MIGRATION.md"
+      ],
+      "acceptance": [
+        {
+          "criterion": "CURRENT_STATE, GAP_ANALYSIS, REUSE_ANALYSIS e DATA_MIGRATION atualizados na medida exata do diff",
+          "met": true,
+          "detail": "Os quatro documentos ganharam apenas o conteúdo correspondente às mudanças de código do Goal021 (schema/migration, versionamento, intenção de envio, entrega, tool de presença, rotas e telas), sem tocar seções alheias ao diff."
+        },
+        {
+          "criterion": "Nenhum documento de fechamento, review, MASTER_PLAN, DECISIONS ou MIGRATION_STATUS tocado",
+          "met": true,
+          "detail": "git status mostra apenas os quatro arquivos alvo modificados por mim; goals/, reviews/, MASTER_PLAN.md, DECISIONS.md e MIGRATION_STATUS.md permanecem como estavam na árvore de trabalho recebida."
+        },
+        {
+          "criterion": "O gate operacional declarado — nenhuma mensagem sai para número real, transporte dublê — está registrado",
+          "met": true,
+          "detail": "CURRENT_STATE (LIMITE), GAP_ANALYSIS (coluna Impacto/risco de G-27) e DATA_MIGRATION (linha de gate 'Lembrete e aviso de alteração') registram explicitamente que a entrega roda contra EvolutionProvider/dublê e não há prova de recebimento real."
+        },
+        {
+          "criterion": "A janela de duplicata que permanece aberta está declarada, não escondida",
+          "met": true,
+          "detail": "Os três documentos (CURRENT_STATE, GAP_ANALYSIS, DATA_MIGRATION) descrevem a janela exata citada no Goal021 (processo morto entre o transporte aceitar o envio e a gravação do resultado, sem heartbeat de lease, mesma classe do outbox do Goal004, UNKNOWN terminal em vez de reenvio)."
+        }
+      ]
+    },
+    "attemptId": "021-r1-unit-wu-012-a1"
+  }
+}

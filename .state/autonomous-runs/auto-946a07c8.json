@@ -1,0 +1,33 @@
+{
+  "runMode": "AUTONOMOUS",
+  "autonomousRunId": "auto-946a07c8",
+  "status": "PAUSED_FOR_HUMAN",
+  "startedAt": "2026-09-14T06:08:54.209Z",
+  "currentGoal": "016",
+  "completedGoals": [
+    "014",
+    "015"
+  ],
+  "migrationAcceptedBaseline": "3c3cc16b5f0add1046ba4e0e2978076913601019",
+  "pauseRequested": true,
+  "pauseAfterGoal": true,
+  "attempt": 2,
+  "ownerInstanceId": "10436-ec0d5f5b",
+  "recoveredAt": "2026-09-14T11:31:28.357Z",
+  "recoveryCount": 1,
+  "lastRecovery": {
+    "proof": "PID_REUSED",
+    "from": "27940-d43a9d2a",
+    "at": "2026-09-14T11:31:28.357Z"
+  },
+  "pausedAt": "2026-09-14T12:37:02.158Z",
+  "pauseReason": null,
+  "humanRequired": {
+    "reason": "MAX_CORRECTION_ROUNDS_REACHED",
+    "detail": "Goal 016 ended as HUMAN_REQUIRED",
+    "at": "2026-09-14T15:45:22.270Z"
+  },
+  "archivedAt": "2026-09-14T15:46:00.968Z",
+  "resolvedBy": "operator",
+  "resolutionNote": "Rodada 4 autorizada: os dois blockers da rodada 3 sao de cobertura de teste, com o reviewer confirmando que as correcoes em AgendaBoard.tsx e DayView.tsx estao corretas e especificando os testes a adicionar. Orcamento elevado para 4 apenas nesta execucao."
+}

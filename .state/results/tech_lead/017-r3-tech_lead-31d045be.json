@@ -1,0 +1,558 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T19:02:19.319Z",
+  "attemptId": "017-r3-tech_lead-31d045be-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r3-tech_lead-31d045be",
+      "goal": "017",
+      "decision": "NEXT_GOAL",
+      "nextGoalId": "018",
+      "nextGoalTitle": "Negócio e onboarding em quatro blocos",
+      "nextGoalPath": "docs/migration/goals/018-negocio-onboarding-quatro-blocos.md",
+      "developerProfile": "OPUS_MEDIUM",
+      "developerProfileReason": "Migration de banco, dois contratos públicos com uma mudança subtrativa e projeção versionada entre BFF e IA: o risco está em fronteira de serviço, não em segurança ou isolamento de tenant.",
+      "summary": "Goal017 fechado como ACCEPTED com baseline ea992ec82d337d080a291525d1b7d52ab9796b4b. Roadmap reavaliado: a linha do 018 foi dividida em 018 (negócio e onboarding em quatro blocos, conclusão sem WhatsApp) e 018B (demonstração da IA, consentimento/ignorados, teste real, autoativação e reconciliação), sem renumerar 019–025, porque o teste real depende de um número oficial da Atendly que não existe em camada nenhuma do repositório e porque G-25 exige que a demonstração simulada seja provadamente distinta do teste real. Goal018 escrito e marcado READY; nenhum Goal posterior detalhado; nenhuma decisão nova registrada.",
+      "documentsUpdated": [
+        "docs/migration/MIGRATION_STATUS.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/goals/018-negocio-onboarding-quatro-blocos.md"
+      ],
+      "remainingCriticalGaps": [
+        "G-25 — onboarding/ativação: demonstração, teste real e autoativação dependem de número oficial da Atendly inexistente no ambiente (Goal018B)",
+        "G-26 — negócio: segmento estruturado, modalidades e endereço não existem em camada nenhuma (Goal018)",
+        "G-27 — notificações/jobs (Goals 020/021)",
+        "G-28 — central de alertas (Goal021)",
+        "G-29 — retenção e exclusão recuperável (Goal022)",
+        "G-33 — validação/deploy: CI hospedada nunca executada",
+        "Nenhuma tela autenticada provada em browser: o gate renderizado cobre só rotas públicas"
+      ],
+      "executionPlan": {
+        "goalSummary": "Goal 018 entrega a jornada de entrada do produto. O negócio deixa de ser um par de campos: BusinessProfile ganha modalidades de atendimento (ON_SITE/AT_HOME/ONLINE, ao menos uma), endereço obrigatório apenas quando há local próprio, e versionamento do contexto; a IA passa a receber esse contexto inteiro em projeção versionada e compatível com o settings já gravado, e o prompt diz 'não configurado' em vez de inventar. Falha de projeção deixa de ser silenciosa: o BFF grava versão corrente e versão projetada e expõe projetado/pendente nas leituras, sem virar 500. POST /v1/onboarding/complete deixa de exigir WhatsApp (única mudança subtrativa do Goal) e os códigos de pendência passam a estar nomeados no contrato; concluir continua não ligando a IA, agora com teste que falha se alguém acoplar as duas coisas. No frontend, o onboarding de 2437 linhas é decomposto nos quatro blocos do vault (Seu negócio, Sua agenda, Sua IA, WhatsApp), com progresso por bloco, retomada na próxima pendência, remoção do PrototypeOnboardingScreen inalcançável e de types.ts sem importador, e saída do cenário validacao de texto fixo. O bloco WhatsApp passa a oferecer 'Conectar meu WhatsApp' e 'Fazer isso depois', com conclusão sem WhatsApp e IA inativa. A Home ganha checklist pós-onboarding derivado só de leitura real (serviço operacional, horários, WhatsApp conectado), sem o item 'teste concluído', que não tem produtor. Fecham-se os dois resíduos do review014: PENDING ganha apresentação própria e passa a existir um único poller de GET /v1/status por árvore renderizada, provado por render. Demonstração da IA, consentimento/ignorados, teste real, autoativação e reconciliação automática ficam no Goal018B.",
+        "executionStrategy": "Backend primeiro, do dado para o contrato: BusinessProfile e o schema de contexto da IA são independentes entre si e abrem o caminho; a projeção versionada com estado observável depende dos dois; a conclusão sem WhatsApp depende só do dado novo. Documentação de contrato e adapters do frontend fecham a fronteira antes de qualquer tela. No frontend, a decomposição em blocos é o eixo e as duas unidades de conteúdo (negócio, WhatsApp) penduram nela; a Home é independente da decomposição e pode andar em paralelo, porque toca shell e status, não onboarding. As suítes por Goal vêm depois de tudo que elas provam. A verificação determinística fecha em duas camadas: primeiro dirigida (typecheck dos três apps, lint do frontend, testes goal018), depois global (validate-core, validate-integration por causa da migration, validate-ui depois do core porque é ele que produz o build servido, e git-diff-check no fim).",
+        "workUnits": [
+          {
+            "id": "WU-01",
+            "title": "BFF: perfil do negócio completo, com migration aditiva",
+            "objective": "Acrescentar a BusinessProfile as modalidades de atendimento (ON_SITE/AT_HOME/ONLINE), o endereço nulável e o versionamento do contexto de negócio, por migration aditiva que não fabrica escolha para linha existente, e passar a ler e escrever esses campos em GET/PATCH /v1/settings/business e na seção business de GET/PATCH /v1/onboarding.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/prisma/migrations/",
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/prisma/schema.prisma",
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/product-vault/02-Fluxos/01-Onboarding.md"
+            ],
+            "acceptanceCriteria": [
+              "Migration aplica em banco recriado do zero; linha existente fica com modalidades vazias, endereço nulo e versão projetada distinta da corrente, sem backfill que invente modalidade a partir de categoria, nome ou serviço",
+              "Corpo sem modalities preserva o que estiver gravado e nunca grava conjunto vazio por omissão",
+              "Corpo com ON_SITE e endereço vazio ou ausente é recusado com 400 e código próprio, junto ao campo",
+              "Sem ON_SITE, endereço nulo é aceito; retirar ON_SITE de um perfil que tem endereço não apaga o endereço",
+              "category continua sendo o segmento: nenhuma coluna concorrente de segmento nasce",
+              "Nenhum campo novo é projetado para o Scheduling, e isso é declarado no relatório"
+            ],
+            "implementationHints": "O enum de modalidade é do BFF. Preferir lista de enum no PostgreSQL a JSON livre, para que conjunto vazio seja distinguível de nulo por constraint e não por convenção. A versão do contexto é contador simples incrementado a cada mudança de dado de negócio — não timestamp, que empata sob relógio grosso.",
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-02",
+            "title": "IA: contexto de negócio versionado no schema e no prompt",
+            "objective": "Estender businessContextSchema com version, segment, modalities e address, com defaults que preservem o AiTenantConfig.settings já gravado, e passar buildTenantContextPrompt a usar os campos novos dizendo explicitamente o que não está configurado, sem inventar.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [],
+            "scope": "apps/ai-orchestrator",
+            "expectedFiles": [
+              "apps/ai-orchestrator/src/modules/tenant-config/business-context.ts",
+              "apps/ai-orchestrator/src/modules/prompts/tenant-context.ts",
+              "apps/ai-orchestrator/tests/"
+            ],
+            "relevantFiles": [
+              "apps/ai-orchestrator/src/modules/tenant-config/business-context.ts",
+              "apps/ai-orchestrator/src/modules/prompts/tenant-context.ts",
+              "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+              "apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts"
+            ],
+            "acceptanceCriteria": [
+              "settings gravado com apenas businessName e timezone continua parseando e NÃO cai no DEFAULT_BUSINESS_CONTEXT inteiro",
+              "O formato novo completo é aceito e normalizado",
+              "O prompt imprime segmento, modalidades e endereço, e para cada um ausente diz que não está configurado, sem afirmar modalidade que o negócio não escolheu",
+              "businessContextConfigured continua sendo businessName.length >= 2 e não é endurecido"
+            ],
+            "implementationHints": "normalizeBusinessContext usa safeParse e cai no default inteiro quando falha: campo novo sem default transformaria tenant existente em contexto vazio silenciosamente. Testar exatamente esse caso.",
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-03",
+            "title": "BFF: projeção versionada para a IA, com estado observável",
+            "objective": "Registrar no BFF a versão do contexto de negócio e a versão efetivamente projetada, projetar os campos novos para a IA nos dois caminhos que já projetam hoje, e expor projetado/pendente em GET /v1/settings e GET /v1/onboarding sem transformar falha de projeção em 500.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01",
+              "WU-02"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/src/clients/ai-orchestrator/index.ts",
+              "apps/ai-orchestrator/src/modules/tenant-config/business-context.ts"
+            ],
+            "acceptanceCriteria": [
+              "GET /v1/settings e GET /v1/onboarding expõem o estado de projeção com projetado e pendente distinguíveis",
+              "Projeção falha grava o dado do negócio, responde sucesso com o aviso explícito e não vira 500",
+              "Projeção posterior bem-sucedida faz o estado passar a projetado",
+              "Nenhuma reconciliação automática é implementada: não há retentativa sem ação do negócio"
+            ],
+            "implementationHints": "syncAiConfig (onboarding) e syncAi (settings) são os dois pontos que já projetam; unificar o cálculo do payload para não divergirem. O estado é derivado da comparação entre as duas versões, não de um booleano solto que pode ficar mentindo.",
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-04",
+            "title": "BFF: concluir o onboarding sem WhatsApp, com pendências nomeadas",
+            "objective": "Retirar WHATSAPP_NOT_CONFIGURED e WHATSAPP_NOT_CONNECTED do conjunto bloqueante de POST /v1/onboarding/complete, acrescentar as duas pendências novas de negócio, e garantir por teste que concluir não liga a IA.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-01"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/tests/"
+            ],
+            "relevantFiles": [
+              "apps/bff/src/modules/onboarding/routes.ts",
+              "apps/bff/src/modules/settings/routes.ts",
+              "apps/bff/prisma/schema.prisma"
+            ],
+            "acceptanceCriteria": [
+              "complete conclui com WhatsApp ausente e com WhatsApp desconectado",
+              "WHATSAPP_NOT_CONFIGURED e WHATSAPP_NOT_CONNECTED não aparecem mais em error.details.issues",
+              "As demais pendências continuam bloqueando com 409, e modalidade não escolhida e endereço obrigatório ausente entram no mesmo conjunto",
+              "Concluir não altera AiSettings.enabled nem projeta enabled: true, e o teste falha se alguém acoplar as duas coisas"
+            ],
+            "implementationHints": "A consulta ao Evolution dentro de complete deixa de ser necessária para bloquear; se for mantida para outro fim, ela não pode continuar capaz de derrubar a conclusão.",
+            "verification": [
+              "typecheck",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-05",
+            "title": "Documentação de contrato e de migração afetada pelo diff",
+            "objective": "Atualizar PUBLIC_API_V1.md nos pontos tocados (campos novos de negócio, estado de projeção, códigos de pendência nomeados e a saída dos dois códigos de WhatsApp) e corrigir em docs/migration os documentos que este diff torna falsos.",
+            "type": "STANDARD",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01",
+              "WU-03",
+              "WU-04"
+            ],
+            "scope": "apps/bff",
+            "expectedFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/CURRENT_STATE.md"
+            ],
+            "relevantFiles": [
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/GAP_ANALYSIS.md",
+              "docs/migration/REUSE_ANALYSIS.md",
+              "docs/migration/CURRENT_STATE.md"
+            ],
+            "acceptanceCriteria": [
+              "Os campos novos de negócio e o estado de projeção estão documentados com significado, não só com forma",
+              "Todos os códigos de pendência de complete estão nomeados, com o que significam e como se resolvem",
+              "A mudança subtrativa (complete deixa de recusar por WhatsApp) está declarada como tal",
+              "G-25, G-26 e a linha do onboarding em REUSE_ANALYSIS deixam de afirmar o que o diff tornou falso",
+              "MIGRATION_STATUS.md, MASTER_PLAN.md, DECISIONS.md e os documentos de fechamento não são tocados"
+            ],
+            "implementationHints": "O review017 teve um blocker inteiro por documentação de migração deixada com afirmação que o próprio diff tornou falsa. Corrigir a afirmação e preservar o resíduo verdadeiro, em vez de apagar a linha.",
+            "verification": [
+              "git-diff-check"
+            ]
+          },
+          {
+            "id": "WU-06",
+            "title": "Frontend: schemas e adapters dos campos novos",
+            "objective": "Estender publicApiSchemas, BffOnboardingService e BffSettingsService para modalidades, endereço e estado de projeção, aceitando resposta anterior sem esses campos.",
+            "type": "MECHANICAL",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-01",
+              "WU-03",
+              "WU-04"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/BffOnboardingService.ts",
+              "apps/frontend/src/data/services/BffSettingsService.ts"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+              "apps/frontend/src/data/services/BffOnboardingService.ts",
+              "apps/frontend/src/data/services/BffSettingsService.ts",
+              "apps/bff/PUBLIC_API_V1.md"
+            ],
+            "acceptanceCriteria": [
+              "Resposta anterior, sem os campos novos, continua decodificando",
+              "Resposta com os campos novos decodifica com o tipo correto, e tipo errado é rejeitado",
+              "Nenhum método novo do adapter fica sem consumidor ao fim do Goal"
+            ],
+            "implementationHints": "Seguir o padrão de goal017-schema.test.ts: provar resposta antiga, campo nulo, campo preenchido e tipo errado.",
+            "verification": [
+              "typecheck",
+              "lint"
+            ]
+          },
+          {
+            "id": "WU-07",
+            "title": "Frontend: decomposição do onboarding nos quatro blocos",
+            "objective": "Transformar features/onboarding em módulos com um despachante, organizados pelos quatro blocos do vault, removendo PrototypeOnboardingScreen, a prop preview e types.ts, com progresso por bloco, retomada na próxima pendência e cada cenário sobrevivente alcançável por rota.",
+            "type": "STANDARD",
+            "complexity": "HIGH",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-06"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/onboarding/",
+              "apps/frontend/src/app/onboarding/",
+              "apps/frontend/src/shared/styles/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/onboarding/OnboardingScreen.tsx",
+              "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+              "apps/frontend/src/features/onboarding/OnboardingRuntime.tsx",
+              "apps/frontend/src/features/onboarding/scenarios.ts",
+              "apps/frontend/src/app/onboarding/[step]/page.tsx",
+              "docs/product-vault/03-UX-UI/03-Onboarding-UX.md"
+            ],
+            "acceptanceCriteria": [
+              "features/onboarding é um conjunto de módulos com um despachante; nenhum arquivo concentra o fluxo inteiro",
+              "PrototypeOnboardingScreen, a prop preview e features/onboarding/types.ts não existem mais",
+              "Todo cenário declarado em scenarios.ts é alcançável pelo fluxo do produto, provado por teste de alcance, e cada cenário removido é declarado no relatório",
+              "O progresso é apresentado pelos quatro blocos com o bloco corrente nomeado, e nenhuma contagem de telas aparece em tela",
+              "A retomada abre a próxima pendência real e não força o passo de WhatsApp",
+              "Voltar continua disponível e o progresso continua salvo por etapa concluída"
+            ],
+            "implementationHints": "onboardingOrder alimenta generateStaticParams: remover cenário de scenarios.ts remove rota estática. Os cenários minha-agenda-* continuam servidos com a recusa honesta atual; os importar-* eram só do protótipo e a importação na UI é do Goal019.",
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-08",
+            "title": "Frontend: bloco Seu negócio e a mesma edição em Configurações",
+            "objective": "Coletar segmento (frequentes mais Outro), nome, modalidades múltiplas e endereço condicional no bloco de entrada, e tornar os mesmos campos editáveis na seção de negócio de configuracoes/negocio sem redecompor ProductSettingsScreen.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/onboarding/",
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/shared/styles/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+              "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+              "docs/product-vault/02-Fluxos/01-Onboarding.md",
+              "docs/design-reference/claude-design/prototype/project/Onboarding-1-Negocio-e-Agenda.dc.html"
+            ],
+            "acceptanceCriteria": [
+              "Segmento oferece opções frequentes mais Outro com texto livre, e o valor escolhido chega ao BFF como category",
+              "Modalidades são seleção múltipla com ao menos uma exigida antes de avançar",
+              "O campo de endereço aparece e é exigido quando há local próprio, e não é exigido quando não há",
+              "Segmento e nome podem dividir a mesma tela, como o vault autoriza",
+              "Os mesmos campos são editáveis em configuracoes/negocio, e ProductSettingsScreen não é redecomposto",
+              "O aviso de projeção pendente aparece como aviso, nunca como falha de salvamento"
+            ],
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-09",
+            "title": "Frontend: bloco WhatsApp opcional e conclusão sem ele",
+            "objective": "Explicar o uso de número pessoal antes de oferecer a conexão, oferecer Conectar meu WhatsApp e Fazer isso depois, entregar a conclusão sem WhatsApp com as duas ações do vault, e remover o cenário validacao de texto fixo.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-07"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/onboarding/",
+              "apps/frontend/src/shared/styles/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/features/onboarding/ProductOnboardingScreen.tsx",
+              "apps/frontend/src/features/whatsapp/WhatsAppConnectionPanel.tsx",
+              "docs/product-vault/02-Fluxos/02-Ativacao-e-Teste-do-WhatsApp.md",
+              "docs/design-reference/claude-design/prototype/project/Onboarding-3-IA-e-WhatsApp.dc.html"
+            ],
+            "acceptanceCriteria": [
+              "A orientação sobre número pessoal aparece antes da conexão, com os quatro pontos do vault",
+              "As duas ações existem e pular conclui o onboarding",
+              "A conclusão sem WhatsApp usa a copy do vault com Ir para o início como ação principal e Conectar agora como secundária",
+              "Nenhuma tela afirma que a IA foi ativada",
+              "O cenário validacao com resumo de texto fixo não existe mais, e toda afirmação da conclusão vem de leitura real"
+            ],
+            "implementationHints": "WhatsAppConnectionPanel continua como está: teste real e autoativação são do Goal018B e não podem ser insinuados por copy aqui.",
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-10",
+            "title": "Frontend: checklist da Home, poller único de status e PENDING com voz própria",
+            "objective": "Acrescentar à Home o checklist pós-onboarding derivado só de leitura real, dar a PENDING apresentação distinta de desligada e de indisponível, e passar a existir um único poller de GET /v1/status por árvore renderizada.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-06"
+            ],
+            "scope": "apps/frontend",
+            "expectedFiles": [
+              "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+              "apps/frontend/src/shared/runtime/systemStatus.ts",
+              "apps/frontend/src/shared/layout/AppShell.tsx",
+              "apps/frontend/src/shared/styles/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/src/shared/runtime/systemStatus.ts",
+              "apps/frontend/src/shared/layout/AppShell.tsx",
+              "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+              "apps/bff/PUBLIC_API_V1.md",
+              "docs/migration/reviews/014-review.md"
+            ],
+            "acceptanceCriteria": [
+              "O checklist mostra serviço operacional, horários configurados e WhatsApp conectado, cada um derivado de GET /v1/dashboard ou GET /v1/status e nenhum de configuração local",
+              "Item concluído aparece marcado e o checklist some quando a IA está efetivamente ativa",
+              "O item teste concluído não aparece, e a ausência é declarada no relatório com o destino (Goal018B)",
+              "PENDING tem apresentação própria, distinta de desligada e de indisponível; os quatro estados de GET /v1/status mais o carregamento inicial são distinguíveis em tela",
+              "Existe um único poller de GET /v1/status por árvore renderizada, provado por render da Home dentro do shell real e não por leitura de código"
+            ],
+            "implementationHints": "AppShell e DashboardScreen chamam useSystemStatus separadamente hoje; compartilhar a leitura segue o mesmo espírito da invariante de useShellConfig (D-030/D-031), e a prova é contar as chamadas com a árvore montada.",
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-11",
+            "title": "Suítes goal018 no frontend, no BFF e na IA",
+            "objective": "Escrever as provas do Goal: schema dos campos novos, alcance por rota, blocos e progresso, negócio com modalidade e endereço condicional, WhatsApp opcional e conclusão sem ele, checklist da Home, poller único por render e axe; no BFF, migration, recusa de ON_SITE sem endereço, issues de complete e a invariante de que concluir não liga a IA; na IA, compatibilidade do settings antigo e prompt com os campos novos.",
+            "type": "STANDARD",
+            "complexity": "MEDIUM",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-02",
+              "WU-03",
+              "WU-04",
+              "WU-07",
+              "WU-08",
+              "WU-09",
+              "WU-10"
+            ],
+            "scope": "apps/frontend",
+            "pattern": "goal018",
+            "expectedFiles": [
+              "apps/frontend/tests/",
+              "apps/bff/tests/",
+              "apps/ai-orchestrator/tests/"
+            ],
+            "relevantFiles": [
+              "apps/frontend/tests/goal017-shell-invariant.test.tsx",
+              "apps/frontend/tests/goal017-reachability.test.tsx",
+              "apps/frontend/tests/goal017-schema.test.ts",
+              "apps/frontend/tests/support/a11y.ts",
+              "apps/bff/tests/"
+            ],
+            "acceptanceCriteria": [
+              "Suíte de acessibilidade com axe verde nas telas novas em jsdom",
+              "Cada critério de aceite comportamental do Goal tem prova correspondente",
+              "A sensibilidade à mutação é demonstrada concretamente em pelo menos uma suíte: remover o comportamento derruba o teste",
+              "Nenhum teste depende de WhatsApp real, modelo real ou transcrição real"
+            ],
+            "implementationHints": "Teste que não falharia se o comportamento fosse removido não conta como prova. O lint do frontend cobre tests/ desde o Goal017, então código morto em teste quebra o gate.",
+            "verification": [
+              "typecheck",
+              "lint",
+              "targeted-tests"
+            ]
+          },
+          {
+            "id": "WU-12",
+            "objective": "Typecheck do frontend.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-07",
+              "WU-08",
+              "WU-09",
+              "WU-10",
+              "WU-11"
+            ]
+          },
+          {
+            "id": "WU-13",
+            "objective": "Typecheck do BFF.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/bff",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-03",
+              "WU-04",
+              "WU-05",
+              "WU-11"
+            ]
+          },
+          {
+            "id": "WU-14",
+            "objective": "Typecheck do AI Orchestrator.",
+            "type": "DETERMINISTIC",
+            "action": "typecheck",
+            "scope": "apps/ai-orchestrator",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-02",
+              "WU-11"
+            ]
+          },
+          {
+            "id": "WU-15",
+            "objective": "Lint do frontend cobrindo src e tests com --max-warnings=0.",
+            "type": "DETERMINISTIC",
+            "action": "lint",
+            "scope": "apps/frontend",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-11"
+            ]
+          },
+          {
+            "id": "WU-16",
+            "objective": "Executar as suítes goal018 dirigidas.",
+            "type": "DETERMINISTIC",
+            "action": "targeted-tests",
+            "scope": "apps/frontend",
+            "pattern": "goal018",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-12",
+              "WU-13",
+              "WU-14",
+              "WU-15"
+            ]
+          },
+          {
+            "id": "WU-17",
+            "objective": "Gate core completo, com os skips já declarados do Goal002 e nenhum novo.",
+            "type": "DETERMINISTIC",
+            "action": "validate-core",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-16"
+            ]
+          },
+          {
+            "id": "WU-18",
+            "objective": "Gate de integração contra PostgreSQL descartável, com a migration nova aplicada — exigido porque este Goal tem migration de banco.",
+            "type": "DETERMINISTIC",
+            "action": "validate-integration",
+            "complexity": "LOW",
+            "risk": "MEDIUM",
+            "dependencies": [
+              "WU-17"
+            ]
+          },
+          {
+            "id": "WU-19",
+            "objective": "Gate renderizado nas larguras 360, 390, 768, 1024 e 1440, sobre o build produzido pelo core; continua cobrindo apenas as rotas públicas.",
+            "type": "DETERMINISTIC",
+            "action": "validate-ui",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-17"
+            ]
+          },
+          {
+            "id": "WU-20",
+            "objective": "Verificação de higiene do diff.",
+            "type": "DETERMINISTIC",
+            "action": "git-diff-check",
+            "complexity": "LOW",
+            "risk": "LOW",
+            "dependencies": [
+              "WU-18",
+              "WU-19"
+            ]
+          }
+        ]
+      }
+    },
+    "attemptId": "017-r3-tech_lead-31d045be-a1"
+  }
+}

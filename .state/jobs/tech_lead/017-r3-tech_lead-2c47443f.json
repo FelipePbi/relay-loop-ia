@@ -1,0 +1,102 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:48:01.613Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "017-r3-tech_lead-2c47443f-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "017-r3-tech_lead-2c47443f",
+    "role": "tech_lead",
+    "type": "CLOSURE_DOCUMENTATION",
+    "goal": "017",
+    "round": 3,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-017",
+    "closureContext": {
+      "goal": "017",
+      "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\017-ui-conversas-chat.md",
+      "decision": "ACCEPTED",
+      "finalRound": 3,
+      "previousMigrationBaseline": "8d94acea2c435f3529cfe31c403f6267aef8064e",
+      "executionBase": "6582a650f09e7c54e9a37a5b550c5850d9704574",
+      "worktreeInitialHead": "6582a650f09e7c54e9a37a5b550c5850d9704574",
+      "acceptedSnapshot": {
+        "files": 47,
+        "diffHash": "23424a71a9834c79ff59d24855bc6beb3e08dfeb325663d41c70c39e6b74a2f8"
+      },
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/tests/internal/conversation-controls.routes.test.ts",
+        "apps/bff/.env.example",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/src/clients/ai-orchestrator/index.ts",
+        "apps/bff/src/clients/internal-http-client.ts",
+        "apps/bff/src/config/env.ts",
+        "apps/bff/src/modules/conversations/routes.ts",
+        "apps/bff/tests/goal017-send-status.integration.test.ts",
+        "apps/bff/tests/internal-http-client.test.ts",
+        "apps/frontend/package.json",
+        "apps/frontend/src/data/http/BffHttpClient.ts",
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffConversationService.ts",
+        "apps/frontend/src/features/conversations/ConversationContextPanel.tsx",
+        "apps/frontend/src/features/conversations/ConversationInbox.tsx",
+        "apps/frontend/src/features/conversations/ConversationLoading.tsx",
+        "apps/frontend/src/features/conversations/ConversationRow.tsx",
+        "apps/frontend/src/features/conversations/ConversationSuggestions.tsx",
+        "apps/frontend/src/features/conversations/ConversationThread.tsx",
+        "apps/frontend/src/features/conversations/MessageAttachment.tsx",
+        "apps/frontend/src/features/conversations/MessageTimeline.tsx",
+        "apps/frontend/src/features/conversations/ProductConversationsScreen.tsx",
+        "apps/frontend/src/features/conversations/conversationState.ts",
+        "apps/frontend/src/features/conversations/format.ts",
+        "apps/frontend/src/features/conversations/inboxLenses.ts",
+        "apps/frontend/src/features/conversations/types.ts",
+        "apps/frontend/src/mocks/data/conversations.ts",
+        "apps/frontend/src/shared/styles/atendly-conversations.css",
+        "apps/frontend/tests/bff-http-client.test.ts",
+        "apps/frontend/tests/goal013-media-schema.test.ts",
+        "apps/frontend/tests/goal016-agenda-reachability.test.tsx",
+        "apps/frontend/tests/goal016-agenda-views.test.tsx",
+        "apps/frontend/tests/goal016-appointment-create.test.tsx",
+        "apps/frontend/tests/goal017-a11y.test.tsx",
+        "apps/frontend/tests/goal017-chat-media.test.tsx",
+        "apps/frontend/tests/goal017-contact-profile.test.tsx",
+        "apps/frontend/tests/goal017-delivery-state.test.tsx",
+        "apps/frontend/tests/goal017-human-handling.test.tsx",
+        "apps/frontend/tests/goal017-inbox-tabs.test.tsx",
+        "apps/frontend/tests/goal017-reachability.test.tsx",
+        "apps/frontend/tests/goal017-schema.test.ts",
+        "apps/frontend/tests/goal017-shell-invariant.test.tsx",
+        "apps/frontend/tests/goal017-suggestions.test.tsx",
+        "apps/frontend/tests/support/a11y.test.tsx",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "roundsRun": [
+        {
+          "round": 1,
+          "decision": "CHANGES_REQUIRED",
+          "blockers": 4,
+          "changedFiles": 43
+        },
+        {
+          "round": 2,
+          "decision": "CHANGES_REQUIRED",
+          "blockers": 1,
+          "changedFiles": 47
+        },
+        {
+          "round": 3,
+          "decision": "ACCEPTED",
+          "blockers": 0,
+          "changedFiles": 47
+        }
+      ],
+      "writeScope": "docs/migration/"
+    }
+  },
+  "statusAt": "2026-09-14T18:53:22.303Z"
+}

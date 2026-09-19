@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T04:47:46.667Z",
+  "attemptId": "025-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "025-r1-unit-wu-03",
+      "goal": "025",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Adicionadas as rotas públicas POST/DELETE /v1/account/deletion com reautenticação por senha, o campo accountDeletion em GET /v1/status, e a documentação correspondente em PUBLIC_API_V1.md.",
+      "report": "Criado apps/bff/src/modules/account/routes.ts com duas rotas sob `requireTenantContext` (sessão + CSRF automáticos via `requireAuth`):\n- `POST /v1/account/deletion`: exige `{ password }`; carrega o usuário da sessão (nunca do corpo) e verifica a senha com `verifyPassword` antes de chamar `startAccountDeletion` (serviço da WU-02). Senha errada lança `AppError(\"UNAUTHORIZED\", ..., 401)` antes de qualquer efeito — nenhuma porta de `service.ts` é tocada. `userId`/`tenantId` no corpo nunca são lidos: a identidade vem só de `currentTenantContext`.\n- `DELETE /v1/account/deletion`: cancela via `cancelAccountDeletion`, sem pedir senha de novo (mesmo padrão de outras mutações sob sessão).\n\nRegistrada `registerV1AccountRoutes` em `apps/bff/src/app.ts` (ordem alfabética das importações mantida).\n\n`apps/bff/src/modules/status/routes.ts`: adicionado `accountDeletionStore().find(tenantId)` em paralelo às demais leituras, e o campo `accountDeletion: { status, dueAt }` na resposta (`status: \"NONE\"`/`dueAt: null` quando não há linha). Nenhum campo existente de `GET /v1/status` foi alterado.\n\n`apps/bff/PUBLIC_API_V1.md`: nova linha na tabela de rotas registradas; `accountDeletion` acrescentado ao exemplo JSON e à tabela de campos de `GET /v1/status`; nova seção \"Ciclo de vida da conta (Goal025/WU-03)\" com corpo, exemplo de resposta e tabela de códigos de erro das duas rotas. Nenhuma outra seção do arquivo foi tocada (confirmado por `git diff --stat`, que mostra só essas três inserções e as duas rotas novas de app.ts/status).\n\nTeste novo: `apps/bff/tests/goal025-account-deletion-routes.integration.test.ts`, seguindo o padrão já usado em `goal024-session-revocation.integration.test.ts` (gated por `BFF_RUN_INTEGRATION_TESTS`, com `buildApp`/`registerBusiness`/`app.inject`). Cobre: senha errada recusa com 401 e não grava linha (afirmado explicitamente, com leitura direta do banco); chamada sem sessão recusa antes de qualquer efeito; `userId`/`tenantId` forjados no corpo não afetam o negócio nomeado, só o da sessão; caminho feliz grava `SCHEDULED` com `dueAt` futuro e `GET /v1/status` reflete o mesmo valor; pedido repetido recusa com `409 ACCOUNT_DELETION_ALREADY_SCHEDULED`; cancelamento dentro do prazo devolve `CANCELLED` e `GET /v1/status` acompanha.\n\nComandos executados e resultados:\n- `npx tsc -p tsconfig.json --noEmit` — sem erros.\n- `npx eslint src --max-warnings=0` — sem erros/avisos.\n- `npx vitest run` — 72 passed, 207 skipped (as integrações seguem puladas sem `BFF_RUN_INTEGRATION_TESTS`), 0 falhas.\n- Validação end-to-end real: subi um PostgreSQL descartável via Docker (`postgres:16-alpine`), rodei `npx prisma migrate deploy` (aplicou também a migration `20260916000000_goal025_account_deletion` da WU-01) e um script manual temporário (`tmp-wu03-check.ts`, apagado ao final, nunca commitado) que chamou `buildApp()` de verdade e exercitou por HTTP (`app.inject`) exatamente os cinco cenários acima contra o banco real — todos passaram (`ALL CHECKS PASSED`). Esse script não é o teste committado (que usa o helper `assertDisposableTarget`, cuja checagem de endereço de loopback não é satisfeita pelo NAT do Docker Desktop neste sandbox); ele existiu só para confirmar comportamento real antes de fechar a unidade. Container e arquivos temporários foram removidos ao final (`docker rm -f`, `rm tmp-wu03-check.ts wu03-out.log`); `git status` confirma que nenhum resíduo ficou no worktree.\n\nNenhuma rota existente foi modificada em forma ou código de erro; o script de regressão confirmou login e a forma anterior de `GET /v1/status` (whatsapp/ai/degraded) intactas, com o campo novo apenas acrescentado.",
+      "changedFiles": [
+        "apps/bff/src/modules/account/routes.ts",
+        "apps/bff/src/app.ts",
+        "apps/bff/src/modules/status/routes.ts",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/tests/goal025-account-deletion-routes.integration.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Iniciar a exclusão exige sessão, CSRF e a senha atual, e não aceita userId nem tenantId do corpo",
+          "met": true,
+          "detail": "routes.ts usa preHandler: requireTenantContext (sessão+CSRF via requireAuth) e verifyPassword contra o usuário da sessão; identidade só vem de currentTenantContext, nunca do body. Confirmado por teste real (spoofed userId/tenantId ignorados) e pelo teste sem sessão -> 401."
+        },
+        {
+          "criterion": "Senha errada recusa e não inicia efeito nenhum, afirmado por teste",
+          "met": true,
+          "detail": "goal025-account-deletion-routes.integration.test.ts, teste 'refuses with the wrong password and schedules nothing': asserta 401 e accountDeletion null no banco. Executado de fato contra Postgres descartável via script manual equivalente: 'OK: wrong password does not create a deletion row'."
+        },
+        {
+          "criterion": "GET /v1/status devolve o estado da exclusão e o vencimento",
+          "met": true,
+          "detail": "status/routes.ts adiciona accountDeletion: {status, dueAt} lendo a mesma accountDeletionStore(); verificado ao vivo (status SCHEDULED e dueAt coincidindo com a resposta do POST, depois CANCELLED após o DELETE)."
+        },
+        {
+          "criterion": "PUBLIC_API_V1.md mudou nas rotas novas e no campo novo de status, e em nenhum outro ponto",
+          "met": true,
+          "detail": "git diff --stat mostra só a tabela de rotas, a seção de GET /v1/status e a nova seção final alterados; nenhuma outra linha do arquivo foi tocada."
+        },
+        {
+          "criterion": "Nenhuma rota existente mudou de forma ou de código de erro",
+          "met": true,
+          "detail": "status/routes.ts só acrescenta um campo ao objeto de resposta; typecheck, lint e a suíte de 72 testes unitários passam sem alteração; script manual confirmou login e a forma anterior de GET /v1/status (whatsapp/ai/degraded) intactas."
+        }
+      ]
+    },
+    "attemptId": "025-r1-unit-wu-03-a1"
+  }
+}

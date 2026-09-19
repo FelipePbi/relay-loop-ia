@@ -1,0 +1,24 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:45:18.756Z",
+  "attemptId": "016-r3-tech_lead-c1f9eebe-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r3-tech_lead-c1f9eebe",
+      "goal": "016",
+      "round": 3,
+      "decision": "CHANGES_REQUIRED",
+      "blockers": [
+        "A correcao do esqueleto permanente entrou sem prova: nenhum teste renderizado exerce a aba ja ativa. `AgendaBoard.tsx:184-189` agora sai cedo quando `nextView === view` e a correcao esta certa (verifiquei por leitura e por execucao da suite), mas o blocker da rodada 2 pedia explicitamente cobrir com teste renderizado, e `grep` em `tests/goal016-agenda-views.test.tsx` e `tests/goal016-agenda-reachability.test.tsx` nao encontra nenhum clique na aba corrente — o defeito passava com a suite verde antes do fix e voltaria a passar se a guarda for removida. Correcao: em `tests/goal016-agenda-views.test.tsx`, no describe \"Dia, Semana e Mes alternaveis\", acrescentar um teste que monta o board com `appointmentFixture()`, espera a grade (`findAllByText(\"Ana Paula\")`), clica na aba \"Dia\" (ja ativa) e depois clica duas vezes em \"Semana\", afirmando em cada passo que a grade continua visivel e que `screen.queryByLabelText(\"Carregando agenda\")` e nulo. Nao alterar `AgendaBoard.tsx` — o fix esta correto.",
+        "O filtro por dia do `DayView` entrou sem prova do caso que o motivou: bloco que atravessa a meia-noite. `DayView.tsx:42-50` agora aplica `entriesForDate(entries, date)` antes de `layoutDayEntries`/`timeGridBounds`, o que resolve o desenho no dia errado, mas nenhum teste usa bloco cruzando a virada — `grep -n \"meia-noite|T01:00|T02:00\"` em `apps/frontend/tests/` nao retorna nada, e o unico `timeBlockFixture` existente e intra-dia (12:00-13:00 local). Correcao: em `tests/goal016-agenda-views.test.tsx`, no describe \"Dia na posicao real do tempo\", adicionar um teste com `listTimeBlocks` devolvendo um bloco `startAt` = vespera 23:00 local e `endAt` = dia exibido 01:00 local (a rota `GET /v1/time-blocks` devolve esse bloco por sobreposicao de janela, conforme `time-blocks.ts:listTimeBlocks`), afirmando que ele NAO aparece na grade do dia exibido e que a grade nao estica ate 24h (o eixo continua terminando as 20:00). Alem disso, registrar no relatorio, como limite declarado, que o trecho pos-meia-noite (00:00-01:00 no dia seguinte) permanece nao exibido — limitacao ja anotada em `occupancy.ts:281-283` e sem produtor na UI, ja que `BlockForm.tsx:77-79` so cria bloco intra-dia. Nao alterar `DayView.tsx` nem `occupancy.ts`."
+      ],
+      "nextAction": "RETURN_TO_DEVELOPER",
+      "nextDeveloperProfile": "SONNET_MEDIUM",
+      "nextDeveloperProfileReason": "Restam apenas dois testes renderizados sobre correcoes ja verificadas, sem decisao de arquitetura envolvida.",
+      "summary": "Os dois blockers da rodada 2 foram resolvidos no codigo e a resolucao e correta: `AgendaBoard.tsx:185` faz early return quando a aba clicada ja e a ativa, eliminando o `setLoading(true)` sem efeito correspondente (conferi tambem `goToAdjacent` e `selectDay`: em ambos o `range` sempre muda, entao nao ha outro caminho para loading permanente); e `DayView.tsx:42` passa a filtrar por `entriesForDate(entries, date)` antes de `layoutDayEntries`/`timeGridBounds`, alinhando o Dia ao que a Semana ja fazia em `WeekView.tsx:71`. Evidencia propria: suite completa do frontend verde (27 arquivos, 228 testes), `npx tsc --noEmit` sem erro e `npm run lint` sem warning, tudo rodado por mim na worktree. Spot-check DEEP dos eixos que o Goal manda vigiar continua sadio: `holdSession.ts` cobre reservar/consumir/liberar no unmount/expirar por `expiresAt` com mensagem propria; `AppointmentForm.tsx:244-255` identifica pessoa por `customerId` e so envia `overlapOverride` com motivo; `routes.ts` do BFF deriva `decidedBy` de `internalContext(request).userId` e casa com o refine do Scheduling (`internal-api/routes.ts:241`, decidedBy e decidedReason juntos ou nenhum); `goal016-calendar-routes.integration.test.ts` prova escopo por tenant, janela obrigatoria e `decidedBy` do corpo ignorado. O que impede o aceite e estritamente de prova: os dois blockers pediam nominalmente cobertura de teste e nenhum teste novo foi escrito nesta rodada — ambos os defeitos conviviam com a suite verde, logo sao silenciosamente reintroduziveis. Sao dois testes pequenos em `goal016-agenda-views.test.tsx`, sem tocar codigo de producao."
+    },
+    "attemptId": "016-r3-tech_lead-c1f9eebe-a1"
+  }
+}

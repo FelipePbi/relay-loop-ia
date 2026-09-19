@@ -1,0 +1,56 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T17:24:42.859Z",
+  "attemptId": "017-r1-unit-wu-01-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r1-unit-wu-01",
+      "goal": "017",
+      "round": 1,
+      "workUnitId": "WU-01",
+      "status": "COMPLETED",
+      "summary": "customerId nulável projetado no DTO de conversa da IA e no schema do BFF, teto próprio e configurável para o proxy de mídia, e os cinco códigos de recusa de sugestão mais customerId documentados nominalmente em PUBLIC_API_V1.md.",
+      "report": "O `conversationInclude` da IA já carregava `contact: true` (todas as colunas de `Contact`, `customerId` incluído); só faltava projetar o campo. Adicionei `customerId: string | null` a `ConversationDtoInput.contact` e a linha `customerId: conversation.contact?.customerId ?? null` em `conversationDto()` (apps/ai-orchestrator/src/modules/internal/routes.ts). Todas as chamadas de `conversationDto` (lista, get, category, ignore, takeover, release) usam o mesmo `conversationInclude`, então o campo chega em todas sem tocar em nenhuma outra rota. Nenhuma migration: `Contact.customerId` já existe (`String?`, schema.prisma:282).\n\nNo BFF, `conversationSchema` (apps/bff/src/clients/ai-orchestrator/index.ts) ganhou `customerId: z.string().nullish().optional()`, no mesmo padrão dos outros campos aditivos do Goal005 — decodifica com o campo ausente, nulo ou presente.\n\nPara o teto do proxy de mídia: adicionei `INTERNAL_HTTP_MEDIA_TIMEOUT_MS` em apps/bff/src/config/env.ts (default 90_000ms, maior que `EVOLUTION_DOWNLOAD_MEDIA_TIMEOUT_MS` = 60_000ms da IA) e troquei o `signal` de `requestBinary()` em internal-http-client.ts para usar esse novo teto, em vez de `INTERNAL_HTTP_TIMEOUT_MS`. O `perform()` usado por `request()` (rotas JSON) ficou intacto, ainda com `INTERNAL_HTTP_TIMEOUT_MS`. Adicionei a entrada correspondente em apps/bff/.env.example.\n\nTestes:\n- apps/ai-orchestrator/tests/internal/conversation-controls.routes.test.ts: dois testes novos — \"expoe customerId nulo quando o contato nao tem vinculo\" e \"expoe customerId quando o contato tem vinculo\" (seta `rows[0].contact.customerId = \"customer-123\"`) — cobrindo com e sem vínculo, como pedido.\n- apps/bff/tests/internal-http-client.test.ts (novo, unitário, sem DB): mocka `AbortSignal.timeout` para capturar o ms usado e prova que `request()` usa `10_000` (INTERNAL_HTTP_TIMEOUT_MS) e `requestBinary()` usa `90_000` (INTERNAL_HTTP_MEDIA_TIMEOUT_MS, maior que os 60s da IA) — os dois caminhos distintos, sem depender de banco (os testes de integração existentes de mídia exigem `BFF_RUN_INTEGRATION_TESTS=true` e ficam skip por padrão nesse ambiente).\n\nDocumentação: apps/bff/PUBLIC_API_V1.md ganhou (1) linha `customerId` na tabela de campos aditivos do DTO de conversa (seção \"Conversa: categoria, sessão e atendimento humano\") e (2) tabela nominal dos cinco `upstreamCode` de recusa de sugestão (`CONTACT_IGNORED`, `SESSION_PERSONAL`, `HUMAN_HANDLING_REQUIRED`, `AI_DISABLED`, `NO_TEXTUAL_MESSAGE`) na seção \"Sugestões de resposta no atendimento humano\", substituindo a descrição em prosa que não nomeava os códigos.\n\nComandos executados (todos dentro da worktree, apps/ai-orchestrator e apps/bff):\n- `npm ci` em ambos os apps (node_modules não existia na worktree)\n- `npx prisma generate` em ambos (gera o client, exigido pelos módulos importados nos testes)\n- `npx vitest run tests/internal/conversation-controls.routes.test.ts` (ai-orchestrator): 12 passed\n- `npx vitest run` (ai-orchestrator, suíte completa): 61 files / 542 tests passed, 7 files / 59 tests skipped (fixtures que exigem infraestrutura externa, pré-existentes)\n- `npx vitest run tests/internal-http-client.test.ts` (bff): 2 passed\n- `npx vitest run` (bff, suíte completa): 1 file / 2 tests passed, 12 files / 88 tests skipped (integration tests que exigem `BFF_RUN_INTEGRATION_TESTS=true` + banco descartável, pré-existente, não relacionado a esta unidade)\n- `npx tsc -p tsconfig.json --noEmit` em ambos: limpo, sem erros\n- `npm run lint` em ambos (`eslint src --max-warnings=0`): limpo, sem erros/warnings\n\nNenhuma rota nasceu, nenhuma forma de rota existente mudou, nenhum schema Prisma foi tocado. `git status` confirma que só os arquivos listados abaixo foram alterados; `node_modules` e o client Prisma gerado ficaram fora do controle de versão (gitignored).",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/tests/internal/conversation-controls.routes.test.ts",
+        "apps/bff/src/clients/ai-orchestrator/index.ts",
+        "apps/bff/src/clients/internal-http-client.ts",
+        "apps/bff/src/config/env.ts",
+        "apps/bff/.env.example",
+        "apps/bff/PUBLIC_API_V1.md",
+        "apps/bff/tests/internal-http-client.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "customerId nulável aparece no DTO de conversa da IA, provado com vínculo e sem vínculo em apps/ai-orchestrator/tests/internal/",
+          "met": true,
+          "detail": "conversationDto() projeta customerId (routes.ts); dois testes novos em conversation-controls.routes.test.ts cobrem contato sem vínculo (null) e com vínculo (\"customer-123\"); suíte completa da IA passou (542 passed)."
+        },
+        {
+          "criterion": "O schema do cliente da IA no BFF aceita o campo como opcional e nulável; resposta sem o campo continua decodificando",
+          "met": true,
+          "detail": "conversationSchema ganhou customerId: z.string().nullish().optional() em apps/bff/src/clients/ai-orchestrator/index.ts, mesmo padrão dos outros campos opcionais do Goal005; typecheck do BFF limpo."
+        },
+        {
+          "criterion": "O proxy de mídia usa teto próprio, configurável, maior que EVOLUTION_DOWNLOAD_MEDIA_TIMEOUT_MS, e as rotas JSON mantêm INTERNAL_HTTP_TIMEOUT_MS, provado por teste que distingue os dois caminhos",
+          "met": true,
+          "detail": "INTERNAL_HTTP_MEDIA_TIMEOUT_MS=90_000 (> 60_000 da IA) só em requestBinary(); perform() (rotas JSON) intacto com INTERNAL_HTTP_TIMEOUT_MS; internal-http-client.test.ts prova os dois valores distintos capturando AbortSignal.timeout — 2 passed."
+        },
+        {
+          "criterion": "PUBLIC_API_V1.md lista CONTACT_IGNORED, SESSION_PERSONAL, HUMAN_HANDLING_REQUIRED, AI_DISABLED e NO_TEXTUAL_MESSAGE nominalmente, e documenta customerId",
+          "met": true,
+          "detail": "Tabela nova de upstreamCode na seção de sugestões lista os cinco códigos nominalmente; linha customerId adicionada à tabela de campos do DTO de conversa."
+        },
+        {
+          "criterion": "Nenhuma rota existente muda de forma, nenhum endpoint nasce, nenhum schema Prisma muda",
+          "met": true,
+          "detail": "git diff mostra só adições pontuais em routes.ts, index.ts, internal-http-client.ts, env.ts, .env.example e PUBLIC_API_V1.md, mais o teste novo; nenhuma rota nova, nenhum arquivo de schema.prisma no diff."
+        }
+      ]
+    },
+    "attemptId": "017-r1-unit-wu-01-a1"
+  }
+}

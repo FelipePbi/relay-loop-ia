@@ -1,0 +1,32 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T15:40:59.632Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "005-r2-correction-7c3288b0-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "005-r2-correction-7c3288b0",
+    "role": "developer",
+    "goal": "005",
+    "round": 2,
+    "type": "CORRECTION",
+    "migrationAcceptedBaseline": "ecaf7058f2b81ffe4bd4d2966e233b4b58c16dd5",
+    "executionBase": "8551717940a58128a2af4c40cffeb977334860a5",
+    "worktreeInitialHead": "8551717940a58128a2af4c40cffeb977334860a5",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-005",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\005-contatos-sessao-controle-humano.md",
+    "blockers": [
+      "P1 — A IA não volta em sessão nova depois de atendimento humano, contrariando o critério 3 do Goal. SessionService.assumeHumanControl grava o espelho legado `Conversation.humanHandoff = true` sem `handoffPausedUntil`, e a rota takeover grava `handoffPausedUntil = BOT_OFF_PAUSE_UNTIL` (ano 9999). Em HandoffService.isBotPaused, `humanHandoff` verdadeiro com relógio nulo ou futuro devolve `true` antes de consultar `isHumanControlActive`, então a consulta à sessão só acontece quando um relógio finito venceu. Resultado no grafo: após a expiração por inatividade, loadSession rotaciona a sessão (humanHandling false), mas operationalGuard vê `paused = true`, cai em `humanTakeover = ... || state.conversation.humanHandoff` e sessionGate encerra com `paused_conversation` — para sempre, tanto para a mensagem manual pelo WhatsApp quanto para o takeover pelo painel, até alguém clicar em Retomar IA. O teste de integração 'human control survives the clock inside the session and ends with the session' prova só o SessionService; nenhum teste exercita o guard do grafo com HandoffService real após a rotação. Exigido: fazer o espelho legado acompanhar a sessão — ao rotacionar a sessão em resolveContext (ou em isBotPaused quando a porta de sessão existe), limpar `humanHandoff`/`status`/`handoffPausedUntil` da conversa quando a sessão vigente não está em atendimento humano e o contato não está `aiPaused` nem `ignored`; o takeover pelo painel não deve mais depender do relógio 9999 para persistir dentro da sessão (a sessão já guarda isso); manter `/bot off` e `/ia_pause` (Contact.aiPaused) como pausa que sobrevive à troca de sessão. Testes: em tests/integration com HandoffService, SessionService e grafo reais — mensagem manual do dono pelo WhatsApp → sessão expira → nova mensagem do contato é respondida pela IA; takeover pelo painel → mesma sequência → IA responde; `/bot off` → sessão expira → IA continua sem responder; contato ignorado idem.",
+      "P2 — `/bot on` não devolve a conversa à IA depois de uma mensagem manual do dono. Em handleOwnerActivity, `/bot on` chama handoff.resumeBot e setContactAiPaused(false), mas não libera a sessão: `ConversationSession.humanHandling` continua true se o dono já tinha respondido manualmente (assumeHumanControl via WHATSAPP), então operationalGuard (`!paused && !state.session?.humanHandling`) continua em human_takeover e executionBlockReason bloqueia tool e envio. O teste '/bot on limpa a pausa explicita do contato' não cobre esse caso. Exigido: `/bot on` deve equivaler a Retomar IA na sessão vigente (humanHandling false, contextResetAt, mesmo reset de rascunho de releaseToAi), além de limpar a pausa do contato; teste no grafo: mensagem manual do dono seguida de `/bot on` seguida de mensagem do contato → IA responde."
+    ],
+    "previousImplementationReport": null,
+    "previousDecision": "CHANGES_REQUIRED",
+    "changedFiles": [],
+    "developerProfile": "OPUS_MEDIUM",
+    "developerProfileReason": "Correção envolve a consistência entre sessão persistida, espelho legado da conversa e guard do grafo, com testes de integração contra PostgreSQL."
+  },
+  "statusAt": "2026-09-08T15:50:56.559Z"
+}

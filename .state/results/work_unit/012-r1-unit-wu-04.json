@@ -1,0 +1,51 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-13T20:13:44.070Z",
+  "attemptId": "012-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "012-r1-unit-wu-04",
+      "goal": "012",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Added POST /internal/conversations/:id/suggestions: read-only, no-effect AI suggestions for the human agent, gated by four own refusals and audited via AiRun.kind=SUGGESTION.",
+      "report": "Implementado o endpoint de sugestões (WU-04) sem tocar em nenhum trabalho das WU-01/02/03 já presentes na worktree.\n\n**prompts/suggestion.ts (novo)**: `buildSuggestionModePrompt()` com as instruções do modo sugestão (nenhum efeito, apenas tools de leitura, ignore instruções de agenda/handoff, formato de saída `{\"suggestions\": [...]}`).\n\n**prompts/system.ts**: `BuildSystemPromptInput.mode?: \"assistant\" | \"suggestion\"`; quando `\"suggestion\"`, o formato de saída troca (`buildSuggestionModePrompt()` no lugar de `buildResponsePrompt()`). A seção nova entra em `buildStablePromptContent` (incondicional), então o hash do prompt normal também cobre o template de sugestão — `PROMPT_TEMPLATE_VERSION` subiu para `v2` (mudança semântica consciente) e os três hashes esperados em `tests/prompts/system.test.ts` foram recalculados e atualizados.\n\n**tools/assistant-tools.ts**: `createReadOnlyDefinitions`/`executeReadOnly` com um binding **explícito** (não filtro por nome) de exatamente `list_services`, `get_availability`, `get_customer_context`, `list_customer_appointments`, construído em `createReadOnlyTools`, reaproveitando as implementações privadas já existentes. `executeReadOnly` procura o nome chamado só nessa lista — uma tool com efeito nunca é encontrada, mesmo se o modelo tentar chamá-la por nome.\n\n**assistant/assistant.service.ts**: `generateSuggestions(input)` — não passa pelo grafo (sem `recordInboundText`, sem `sessionGate`, sem `sendResponse`). Porta de entrada na ordem do produto: `CONTACT_IGNORED` (contato ignorado ou `categoryOverride === \"PERSONAL\"`, mesma checagem dupla do `CustomerMemoryService`), `SESSION_PERSONAL` (categoria da sessão vigente), `HUMAN_HANDLING_REQUIRED` (oposto da elegibilidade do turno normal: aqui a sugestão só existe **com** atendimento humano vigente), `AI_DISABLED` (`AiTenantConfig.enabled`). Elegível: monta o prompt (mode \"suggestion\", conhecimento recuperado da última mensagem do contato, memória permitida via a mesma porta do `CustomerMemoryService`), cria `AiRun` com `kind: \"SUGGESTION\"`, roda um laço tools-then-respond com o binding somente leitura (`runSuggestionModel`, até 4 iterações) e devolve até 3 sugestões (`parseSuggestions`). Nenhum `Message`, hold, rascunho (`pendingAction`) ou outbox nasce nesse caminho. Construtor ganhou um 7º parâmetro opcional (`knowledge?: KnowledgeVectorStore`) e o tipo de `customerMemory` foi ampliado para também aceitar `Partial<CustomerMemoryPromptPort>` — mudanças aditivas, compatíveis com `inbound-processor-factory.ts` sem alterá-lo.\n\n**internal/routes.ts**: nova rota `POST /internal/conversations/:id/suggestions`, escopo `conversations:write` (já resolvido pelo `requiredScope` existente, sem mudança nele). Recusa vira `AppError` 409 com `code` = motivo. `InternalRoutesOptions.suggestions?: Pick<AssistantService, \"generateSuggestions\">` injetável; padrão constrói `AssistantService` com `AssistantToolRegistry`, `CustomerMemoryService` e `PGVectorKnowledgeStore` de produção.\n\nTestes novos: `tests/tools/suggestion-out-of-reach.test.ts` (padrão exception-out-of-reach: gateway dublê que explode em qualquer membro com efeito — inclusive se o modelo tentar chamar uma tool de efeito por nome —, contando alcances de leitura para não ser vácuo; Prisma dublê que explode em `Message.create` ou `Conversation.update` com `pendingAction`; mais um describe dedicado que aciona a implementação real de `generateSuggestions` para provar as quatro recusas, incluindo o caso do override manual do contato). `tests/internal/suggestions.routes.test.ts` (rota: sucesso, as quatro recusas com 409, escopo de credencial, sem credencial). `tests/prompts/system.test.ts` ganhou testes de modo sugestão (seção ausente no modo padrão, presente e com formato próprio no modo sugestão, entrada no hash estável, paridade de estilo — regra/formato idênticos nos três estilos, só o registro muda).\n\nComandos executados com resultado real:\n- `npx tsc --noEmit -p .` — limpo, sem erros, após cada rodada de edição.\n- `npx eslint src --max-warnings=0` (script `lint` real do projeto) — limpo.\n- `npx vitest run` — 392 passed | 52 skipped (444 total), 47 arquivos passando, 6 skipped (integração com banco real, fora do escopo desta unidade).\n- `npx vitest run tests/tools/suggestion-out-of-reach.test.ts` — 8 passed.\n- `npx vitest run tests/internal/suggestions.routes.test.ts` — 7 passed.\n- `npx vitest run tests/prompts/system.test.ts` — 24 passed.\n\nNão toquei em `apps/bff`, `docs/`, migrations, `graphify-out/`, nem em nenhum arquivo de outra Work Unit além do necessário (`assistant.service.ts`, `assistant-tools.ts`, `internal/routes.ts`, `prompts/system.ts` já eram modificados por WU-02/03; estendi-os sem reverter nada). Nenhum commit, branch ou push foi feito.",
+      "changedFiles": [
+        "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+        "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+        "apps/ai-orchestrator/src/modules/internal/routes.ts",
+        "apps/ai-orchestrator/src/modules/prompts/system.ts",
+        "apps/ai-orchestrator/src/modules/prompts/suggestion.ts",
+        "apps/ai-orchestrator/tests/tools/suggestion-out-of-reach.test.ts",
+        "apps/ai-orchestrator/tests/internal/suggestions.routes.test.ts",
+        "apps/ai-orchestrator/tests/prompts/system.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Sugestões só nas condições declaradas, com as quatro recusas próprias provadas por teste",
+          "met": true,
+          "detail": "generateSuggestions checa CONTACT_IGNORED (ignored + categoryOverride), SESSION_PERSONAL, HUMAN_HANDLING_REQUIRED, AI_DISABLED nessa ordem; provado contra a implementação real em tests/tools/suggestion-out-of-reach.test.ts (describe dedicado, 5 casos incl. override manual) e no envelope HTTP em tests/internal/suggestions.routes.test.ts (4 casos parametrizados, 409 + code)."
+        },
+        {
+          "criterion": "Nenhuma tool com efeito oferecida ao modelo; nenhum hold, rascunho, Message, outbox ou envio; AiRun.kind = SUGGESTION registrado; asserção de alcance com contagem",
+          "met": true,
+          "detail": "createReadOnlyDefinitions/executeReadOnly expõem só list_services/get_availability/get_customer_context/list_customer_appointments; gateway dublê explode em qualquer membro com efeito (inclusive chamada por nome) e reached.length>3 evita vácuo; Prisma dublê explode em Message.create e em Conversation.update com pendingAction; aiRuns[0].data.kind === 'SUGGESTION' verificado."
+        },
+        {
+          "criterion": "Envio continua exclusivamente pelo caminho humano existente, inalterado",
+          "met": true,
+          "detail": "Nenhuma linha de app.post('/internal/conversations/:id/messages', ...) nem de recordManualOutboundText/markOutboundDelivery foi tocada; diff de routes.ts só acrescenta a rota nova e a opção suggestions."
+        },
+        {
+          "criterion": "Estilo muda só o registro da sugestão, não o conteúdo operacional",
+          "met": true,
+          "detail": "Teste novo em tests/prompts/system.test.ts compara o prompt de sugestão nos três estilos (PROFESSIONAL/BALANCED/CASUAL) fora da seção CONFIGURACAO DA IA e confirma que são idênticos, mesmo padrão do teste equivalente do modo assistant."
+        }
+      ]
+    },
+    "attemptId": "012-r1-unit-wu-04-a1"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T15:30:31.733Z",
+  "attemptId": "021-r1-unit-wu-011-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "A interface envia notifyCustomer sempre explicitamente, marcado por padrão",
+          "met": true,
+          "detail": "CancelFlow.tsx e RescheduleFlow.tsx inicializam notifyCustomer=true e passam o campo sempre no body de cancelAppointment/rescheduleAppointment, nunca omitido. Provado em goal021-notify-and-reminder-state.test.tsx e no assert exato de body em goal016-appointment-create.test.tsx (notifyCustomer:true por padrão; notifyCustomer:false quando desmarcado)."
+        },
+        {
+          "criterion": "Alteração relevante enfatiza a recomendação de notificar; alteração interna não oferece a opção",
+          "met": true,
+          "detail": "Cancelar e remarcar (sempre alterações relevantes ao cliente) mostram texto de ênfase junto ao checkbox ('Cancelamento/Remarcar é uma alteração relevante...'). LifecycleActions (concluir, marcar falta, valor final — alterações internas) não recebeu nenhum campo de notificação."
+        },
+        {
+          "criterion": "O detalhe mostra estado do lembrete e da confirmação a partir da leitura, nunca de texto fixo, com a ausência de confirmação apresentada discretamente",
+          "met": true,
+          "detail": "LifecycleActions (renderizado dentro de AppointmentDetail) lê /v1/settings/reminders e monta o texto do lembrete a partir de rules[].leadMinutes (reminderScheduleLabel); presenceConfirmedAt do próprio agendamento decide 'Presença confirmada' vs 'Aguardando confirmação' (texto discreto, estilo --muted já existente na linha). Provado em goal021-notify-and-reminder-state.test.tsx."
+        },
+        {
+          "criterion": "Sem lembrete configurado, nenhum estado de lembrete é afirmado na tela",
+          "met": true,
+          "detail": "A linha 'Lembrete' só renderiza quando reminderSettings.rules.length>0; com rules:[] nada é afirmado, testado explicitamente em 'sem lembrete configurado: nenhum estado de lembrete é afirmado'."
+        },
+        {
+          "criterion": "Uma única chamada de useShellConfig por árvore renderizada, provada por render",
+          "met": true,
+          "detail": "Nenhum novo useShellConfig foi introduzido; AppointmentFlowShell continua sendo o único chamador. goal016-shell-invariant.test.tsx (atualizado para os novos mocks/textos) continua verde, incluindo os cenários que montam CancelFlow, RescheduleFlow e AppointmentDetail repetidamente."
+        },
+        {
+          "criterion": "Suíte axe das superfícies novas; largura, contraste e foco ficam para o gate validate-ui",
+          "met": true,
+          "detail": "goal021-notify-and-reminder-state.test.tsx tem 3 testes com expectNoA11yViolations: CancelFlow com o campo de notificação, RescheduleFlow com o campo de notificação, e AppointmentDetail com a linha de lembrete — todos passando."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/CancelFlow.tsx",
+        "apps/frontend/src/features/agenda/RescheduleFlow.tsx",
+        "apps/frontend/src/features/agenda/LifecycleActions.tsx",
+        "apps/frontend/src/data/services/BffCalendarService.ts",
+        "apps/frontend/tests/goal016-appointment-create.test.tsx",
+        "apps/frontend/tests/goal016-lifecycle-history.test.tsx",
+        "apps/frontend/tests/goal016-shell-invariant.test.tsx",
+        "apps/frontend/tests/goal021-notify-and-reminder-state.test.tsx"
+      ],
+      "goal": "021",
+      "jobId": "021-r1-unit-wu-011",
+      "protocolVersion": 2,
+      "report": "Implementei a WU-011 inteira dentro do escopo frontend.\n\n**notifyCustomer em Cancelar/Remarcar**: `CancelFlow.tsx` e `RescheduleFlow.tsx` ganharam estado `notifyCustomer` (default `true`) e um checkbox \"Notificar cliente\" (padrão `.switch-row` já usado em `ReminderSettingsSection`), com texto de ênfase explicando que a ação é uma alteração relevante. O valor é sempre passado explicitamente no `input` de `cancelAppointment`/`rescheduleAppointment` — nunca omitido, mesmo quando `false`. `BffCalendarService.ts` ganhou o campo `notifyCustomer?: boolean` no tipo de input de `cancelAppointment` e em `RescheduleAppointmentInput`. Nenhuma opção foi adicionada a `LifecycleActions` (concluir, marcar falta, valor final): essas são as \"alterações internas\" que não oferecem a opção, por omissão deliberada.\n\n**Estado do lembrete e da confirmação no detalhe**: investiguei o schema Prisma e as rotas do scheduling-service/BFF e confirmei que não existe (nem nas dependências completadas WU-009, nem em nenhuma rota pública) um endpoint que exponha por agendamento se um `AppointmentNotificationIntent` foi de fato enviado — isso vive só internamente (`/internal/notification-intents/*`, usado pelo dispatcher da IA). Como a regra do projeto é \"a tela não afirma o que nenhuma camada calcula\", implementei o que a leitura disponível de fato sustenta: `LifecycleActions` (dentro de `AppointmentDetail`) agora busca `GET /v1/settings/reminders` e mostra uma linha \"Lembrete\" com a antecedência configurada (ex.: \"Lembrete 24 horas antes do horário\"), só quando `rules.length > 0` e o agendamento está `CONFIRMED` (reminders só se aplicam a compromisso confirmado, por regra do domínio) — nunca afirmando envio real, só a configuração vigente, lida via `settings.getReminders()`. A linha de presença mudou de \"Presença ainda não confirmada\" para \"Aguardando confirmação\" (texto discreto pedido pelo vault), mantendo o estilo `--muted` já existente na linha; \"Presença confirmada\" permanece inalterado quando `presenceConfirmedAt` está presente.\n\n**Testes ajustados**: `goal016-lifecycle-history.test.tsx` e `goal016-shell-invariant.test.tsx` passaram a mockar `settings.getReminders` (agora uma dependência real de `LifecycleActions`) e tiveram a asserção de texto atualizada para \"Aguardando confirmação\". `goal016-appointment-create.test.tsx` teve as asserções exatas de corpo de `rescheduleAppointment`/`cancelAppointment` atualizadas para incluir `notifyCustomer: true` (comportamento novo, sempre explícito).\n\n**Teste novo**: `apps/frontend/tests/goal021-notify-and-reminder-state.test.tsx` cobre: checkbox marcado por padrão + texto de ênfase em Cancelar e Remarcar; envio explícito de `notifyCustomer:false` ao desmarcar; estado do lembrete (uma e duas regras) e da confirmação lidos, nunca fixos; ausência total da linha de lembrete quando `rules: []`; e 3 testes axe (Cancelar, Remarcar, Detalhe) das superfícies novas.\n\n**Comandos executados**:\n- `npx vitest run tests/goal021-notify-and-reminder-state.test.tsx tests/goal016-lifecycle-history.test.tsx tests/goal016-shell-invariant.test.tsx tests/goal016-appointment-create.test.tsx tests/goal016-a11y.test.tsx` → 5 arquivos, 52 testes, todos verdes.\n- `npx vitest run` (suíte completa do frontend) → 58 arquivos, 558 testes, todos verdes.\n- `npx tsc --noEmit` → sem erros.\n- `npx eslint src tests --max-warnings=0` → sem erros/avisos.\n\nNão toquei em BFF/scheduling-service (fora do escopo desta WU) nem em documentos de controle da migração. Não fiz commit.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "notifyCustomer explícito e marcado por padrão em Cancelar/Remarcar, e estado de lembrete (configuração lida) + confirmação (discreta) no detalhe do agendamento, com testes de comportamento, shell-invariant e axe todos verdes.",
+      "workUnitId": "WU-011"
+    },
+    "attemptId": "021-r1-unit-wu-011-a1"
+  }
+}

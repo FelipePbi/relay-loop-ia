@@ -1,0 +1,35 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-16T05:40:47.919Z",
+  "attemptId": "025-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-integration\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "A falha reportada era `apps/bff/tests/goal022-notification-center.integration.test.ts:253`. Rodei-o (e a suíte inteira do BFF, 35 arquivos/297 testes) contra um PostgreSQL descartável real com o schema atual migrado: todos passam. O script e a lógica do teste não foram alterados, só o dado esperado. Não rodei os ~20 passos completos (Go/scheduling/ai-orchestrator) por falta desses toolchains, mas o passo com a falha foi isolado e comprovado."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "Única alteração: uma linha adicionada ao array esperado em um teste. `git diff` mostra só essa inserção; nenhum código de produção ou outro arquivo tocado."
+        }
+      ],
+      "blockedReason": "",
+      "changedFiles": [
+        "apps/bff/tests/goal022-notification-center.integration.test.ts"
+      ],
+      "goal": "025",
+      "jobId": "025-r1-unit-diag-001",
+      "protocolVersion": 2,
+      "report": "Diagnóstico: o teste `GET /v1/status abre a condição sem mudar a forma da resposta` (Goal022) fixava a lista exata de chaves de `body.data` como `[\"ai\",\"degraded\",\"whatsapp\"]`. Essa asserção ficou desatualizada, não quebrada — `apps/bff/src/modules/status/routes.ts` (alterado por WU-03/WU-08 deste mesmo Goal 025, findingsLedger confirma) passou a incluir, de propósito e documentado no próprio código (comentário \"Goal025/WU-03\"), a chave `accountDeletion` na resposta de `/v1/status`, para a tela contar os dias até a purga da conta. Não há regressão de código: é o contrato novo e intencional do Goal 025 colidindo com uma asserção \"golden\" de um teste de um Goal anterior que ninguém havia atualizado.\n\nCorreção: adicionei `\"accountDeletion\"` à lista esperada em `apps/bff/tests/goal022-notification-center.integration.test.ts:254`, mantendo a asserção exata (não a afrouxei para `expect.objectContaining` nem removi a checagem de forma) — ela continua provando que nenhuma chave *além* das quatro esperadas aparece.\n\nVerificação executada (não simulada): como o ambiente é Windows com Docker Desktop, port-forwarding de containers Linux não satisfaz a checagem `assertDisposableTarget` do próprio harness de teste (que exige que o servidor Postgres veja a conexão como loopback nativo — confirmado experimentalmente com dois containers Docker, que falharam por razões diferentes: porta divergente e depois endereço não-loopback). Por isso provisionei um cluster PostgreSQL 18 standalone (binários já instalados localmente) em `127.0.0.1:55987`, isolado em diretório de scratchpad, com autenticação trust — nunca toquei o serviço PostgreSQL do sistema nem qualquer container pré-existente. Rodei `npx prisma migrate deploy` (aplicou as migrations do schema atual, incluindo `20260916000000_goal025_account_deletion`) e depois:\n- `npx vitest run tests/goal022-notification-center.integration.test.ts` → 9/9 testes passaram (antes: 1 falha, a mesma do relatório).\n- `npx vitest run` (suíte completa do BFF) → 35 arquivos, 297 testes, todos passaram — sem regressão em nenhum outro teste.\n\nAo final, parei e removi o cluster Postgres descartável (`pg_ctl stop` + remoção do diretório de dados) e confirmei que nenhum container Docker ficou órfão (`docker ps -a` vazio para o nome usado). Não commitei, não mudei de branch, não toquei documentos de controle da migração.\n\nNão rodei a suíte `validate:integration` completa de ponta a ponta (ela encadeia ~20 passos, incluindo testes Go do evolution-go, scheduling-service e ai-orchestrator, e ensaios de migration de goals anteriores) porque o ambiente não tem os toolchains/serviços de todos esses passos prontos nesta sessão; o passo relevante para esta Work Unit — onde estava a falha reportada — foi isolado e comprovadamente corrigido.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "A asserção de forma da resposta em goal022-notification-center.integration.test.ts estava desatualizada frente ao campo accountDeletion que este próprio Goal adicionou a /v1/status; corrigi a lista esperada e confirmei via Postgres descartável real que o teste (e toda a suíte do BFF) passa.",
+      "workUnitId": "DIAG-001"
+    },
+    "attemptId": "025-r1-unit-diag-001-a1"
+  }
+}

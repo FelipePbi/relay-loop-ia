@@ -1,0 +1,45 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T21:09:10.161Z",
+  "attemptId": "018-r1-unit-wu-11-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "018-r1-unit-wu-11",
+      "goal": "018",
+      "round": 1,
+      "workUnitId": "WU-11",
+      "status": "COMPLETED",
+      "summary": "Auditei as suítes goal018 já escritas pelas WUs dependentes, confirmei que cobriam quase todo o Goal, e adicionei os dois arquivos que faltavam: axe nas telas novas e o bloco de negócio com modalidade/endereço condicional (que não tinha nenhuma prova em Configurações).",
+      "report": "Auditoria: as WU-01 a WU-10 já haviam deixado 8 suítes `goal018-*` cobrindo quase todo o escopo pedido (schema, alcance por rota, blocos/progresso, WhatsApp opcional, checklist da Home, poller único, migration/ON_SITE/issues de complete/invariante da IA no BFF, compatibilidade de settings antigo e prompt na IA). Duas lacunas concretas ficaram: (1) nenhuma suíte rodava axe nas telas novas do onboarding (bloco de negócio, orientação e conclusão do WhatsApp) nem na seção de negócio de Configurações; (2) `ProductSettingsScreen` (`configuracoes/negocio`) não tinha teste algum — nem antes nem depois deste Goal — apesar do critério 13 do Goal exigir que os mesmos campos do onboarding sejam editáveis lá, e as validações de \"nenhuma modalidade\" / \"endereço em branco\" do bloco de onboarding (`persistBusinessStep`) também não eram exercitadas.\n\nAdicionei dois arquivos:\n- `apps/frontend/tests/goal018-a11y.test.tsx` (6 testes): axe verde em `dados-do-negocio` sem e com ON_SITE/endereço visível, na orientação `whatsapp` e na conclusão `whatsapp-concluido`, e na seção `business` de `ProductSettingsScreen` sem e com ON_SITE/aviso de projeção pendente.\n- `apps/frontend/tests/goal018-business-block.test.tsx` (9 testes): no onboarding, bloqueio sem modalidade, bloqueio com endereço só de espaços (o `required` HTML já barra o campo totalmente vazio — o teste replica o mesmo caso de borda que a suíte de integração do BFF cobre com `\"   \"`), submissão correta com endereço, e o caso de desmarcar ON_SITE depois de digitar endereço enviando `address: null` em vez do texto abandonado. Em Configurações: segmento com frequentes + \"Outro\", os mesmos dois bloqueios de validação, payload exato enviado a `updateBusiness`, e o aviso \"A IA ainda está atualizando o contexto\" quando o servidor devolve `PENDING`.\n\nSensibilidade a mutação, demonstrada concretamente: removi temporariamente a checagem `if (onSite && !ctx.draft.businessAddress.trim())` em `apps/frontend/src/features/onboarding/blocks/business.tsx`, rodei `npx vitest run tests/goal018-business-block.test.tsx -t \"ON_SITE com endereço só espaços bloqueia com mensagem\"` e confirmei falha (timeout esperando a mensagem). Revertida a mutação (`git diff --stat` do arquivo voltou vazio) e a suíte completa voltou a passar (9/9).\n\nComandos executados e resultado:\n- `npx vitest run tests/goal018-business-block.test.tsx tests/goal018-a11y.test.tsx` → 15/15 (após dois ajustes: rótulo real do botão é \"Salvar alterações\", e o `required` HTML nativo bloqueia submissão com campo vazio antes do JS rodar, então o teste do trim() usa `\"   \"`, igual ao precedente do BFF).\n- `npm test` em `apps/frontend` → 42 arquivos / 411 testes, todos verdes.\n- `npm run lint` em `apps/frontend` → limpo (corrigi um import não usado e deixei o autofix reordenar imports).\n- `npx tsc --noEmit` em `apps/frontend` → limpo.\n- `npm test`, `npm run lint`, `npm run typecheck` em `apps/bff` → 5 testes de unidade verdes, 107 testes de integração pulados (sem Postgres descartável neste ambiente — fora do alcance desta WU provisionar; é responsabilidade do gate `validate:integration` do orquestrador), lint e typecheck limpos.\n- `npm test`, `npm run lint`, `npm run typecheck` em `apps/ai-orchestrator` → 548 testes verdes, 59 pulados, lint e typecheck limpos.\n- `git status --porcelain` no fim confere exatamente com a baseline mais os dois arquivos novos — nenhum outro arquivo tocado, nenhuma reimplementação de WU anterior.\n\nNenhum teste depende de WhatsApp real (painel mockado ou `whatsapp.get` mockado), modelo real ou transcrição real.",
+      "changedFiles": [
+        "apps/frontend/tests/goal018-a11y.test.tsx",
+        "apps/frontend/tests/goal018-business-block.test.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Suíte de acessibilidade com axe verde nas telas novas em jsdom",
+          "met": true,
+          "detail": "goal018-a11y.test.tsx (6 testes) cobre dados-do-negocio, whatsapp (orientação), whatsapp-concluido e a seção business de ProductSettingsScreen, todos verdes; goal018-dashboard-status.test.tsx já tinha axe no checklist da Home."
+        },
+        {
+          "criterion": "Cada critério de aceite comportamental do Goal tem prova correspondente",
+          "met": true,
+          "detail": "Mapeei os 20 critérios comportamentais (1-20 da seção 'Testes e critérios de aceite' do Goal) contra as 10 suítes goal018-* existentes e as 2 novas; as únicas lacunas reais eram axe e o bloco de negócio em Configurações, ambas fechadas por este WU."
+        },
+        {
+          "criterion": "A sensibilidade à mutação é demonstrada concretamente em pelo menos uma suíte: remover o comportamento derruba o teste",
+          "met": true,
+          "detail": "Removida temporariamente a checagem de endereço obrigatório em blocks/business.tsx, teste confirmadamente RED, mutação revertida (git diff vazio), teste confirmadamente GREEN de novo — sequência executada e registrada no report."
+        },
+        {
+          "criterion": "Nenhum teste depende de WhatsApp real, modelo real ou transcrição real",
+          "met": true,
+          "detail": "WhatsAppConnectionPanel é mockado, whatsapp.get é vi.fn() mockado, e nenhuma das suítes novas ou pré-existentes chama o orquestrador de IA real ou transcrição real."
+        }
+      ]
+    },
+    "attemptId": "018-r1-unit-wu-11-a1"
+  }
+}

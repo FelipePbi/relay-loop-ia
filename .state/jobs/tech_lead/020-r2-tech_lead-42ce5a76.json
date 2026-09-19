@@ -1,0 +1,65 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T06:53:17.260Z",
+  "status": "FAILED",
+  "attempt": 1,
+  "currentAttemptId": "020-r2-tech_lead-42ce5a76-a1",
+  "attemptStatus": "FAILED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "020-r2-tech_lead-42ce5a76",
+    "role": "tech_lead",
+    "type": "NEXT_GOAL_PLANNING",
+    "goal": "020",
+    "round": 2,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\plan-after-goal-020",
+    "routing": {
+      "role": "tech_lead",
+      "stage": "planning",
+      "modelKey": "opus",
+      "model": "claude-opus-5",
+      "family": "opus",
+      "effort": "high",
+      "complexity": "HIGH",
+      "riskScore": 5,
+      "signals": [
+        "ARCHITECTURE",
+        "CONCURRENCY",
+        "DISTRIBUTED_STATE",
+        "SECURITY",
+        "MIGRATION",
+        "BREAKING_CHANGE",
+        "DATA_CONSISTENCY",
+        "RECOVERY",
+        "INFRA",
+        "API_CONTRACT",
+        "LARGE_REFACTOR",
+        "RUNTIME_CONFIG",
+        "PREVIOUS_ROUND_REJECTED"
+      ],
+      "reason": "TECH_LEAD_STANDARD_MODEL",
+      "fallbackAllowed": false,
+      "mode": "AUTO"
+    },
+    "planningContext": {
+      "closedGoal": "020",
+      "closedGoalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\020-importacao-na-ui-e-historico.md",
+      "closedGoalDecision": "ACCEPTED",
+      "previousMigrationBaseline": "cf4cea91b1fa0b321590cbf865aa7a00618b4247",
+      "migrationAcceptedBaseline": "24b744deda8617a28a115a0ff917973635044435",
+      "sourceClosureCommit": "38c8a44e8a33ab1ba783ca9afe04b6cd1ef1ad56",
+      "integratedClosureCommit": "24b744deda8617a28a115a0ff917973635044435",
+      "closureDocuments": [
+        "docs/migration/reviews/020-review.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "writeScope": "docs/migration/",
+      "instruction": "Escreva SOMENTE o próximo Goal e marque apenas ele READY."
+    }
+  },
+  "statusAt": "2026-09-15T07:00:53.730Z"
+}

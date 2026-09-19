@@ -1,0 +1,53 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T13:22:45.290Z",
+  "attemptId": "016-r1-unit-wu-03-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r1-unit-wu-03",
+      "goal": "016",
+      "round": 1,
+      "workUnitId": "WU-03",
+      "status": "COMPLETED",
+      "summary": "Decomposed the agenda monolith from features/calendar into features/agenda with three files preserving the two-site useShellConfig invariant, and repointed all six agenda routes, with no behavior change.",
+      "report": "Moved apps/frontend/src/features/calendar/ProductAgendaScreen.tsx (1584 lines) into apps/frontend/src/features/agenda/, split into three files following the Goal015 pattern (features/customers, features/services):\n\n- ProductAgendaScreen.tsx: thin dispatcher (30 lines) — the same scenario switch as before, now importing AgendaBoard for \"list\" and the five flow components from AppointmentFlowShell.\n- AgendaBoard.tsx: the list surface (renamed from AppointmentList → AgendaBoard), its single useShellConfig call, plus SourceStrip, AgendaLoading and the formatting/label helpers (formatDate, formatAppointmentDate, customerLabel, serviceNames, sourceLabel, statusLabel, requestError, isoDate) exported for reuse, and board-only helpers (FilterButton, AppointmentRow, groupByDate, compareAppointments, startOfWeek, addDays, formatPeriod, parseDate, lastSyncLabel) kept local.\n- AppointmentFlowShell.tsx: the five flow scenarios (NewAppointment, AppointmentDetail, RescheduleAppointment, CancelAppointment, BlockTime), each still rendering through one private `AppointmentFlowShell` component (renamed from `FlowShell`) that owns the single shared useShellConfig call, importing the shared helpers from AgendaBoard.tsx. Flow-only helpers (Summary, SummaryRow, ReadOnlyState, ReadOnlyNotice, formatMoney, formatIsoDateTime, zonedDateTimeToIso) stayed local to this file.\n\nNo JSX, copy, state logic, effect dependencies, or CSS class names were altered — only identifiers were renamed for clarity (AppointmentList→AgendaBoard, FlowShell→AppointmentFlowShell) and code was redistributed across files with matching imports/exports.\n\nRepointed the six routes under apps/frontend/src/app/(platform)/agenda/ (page.tsx, novo, bloquear, agendamento, reagendar, cancelar) from `@/features/calendar/ProductAgendaScreen` to `@/features/agenda/ProductAgendaScreen`. Deleted the now-empty apps/frontend/src/features/calendar/ProductAgendaScreen.tsx; left features/calendar/types.ts untouched since it backs an unrelated mock file (apps/frontend/src/mocks/data/appointments.ts) outside this WU's scope.\n\nDid not touch apps/frontend/src/shared/styles/atendly-agenda.css or its import in globals.css — Goal014 token inheritance is unaffected because no CSS was changed.\n\nCommands executed (all from the worktree root/apps/frontend):\n- `grep -rln \"features/calendar/ProductAgendaScreen\" apps` (via Grep tool) → no matches, confirming no stale imports remain.\n- `npx tsc --noEmit -p .` → clean, no errors.\n- `npx eslint src/features/agenda \"src/app/(platform)/agenda\"` → clean, no errors.\n- `npx vitest run` → 18 test files, 132 tests, all passed.\n- `git status --porcelain=v1 apps/frontend` → confirms the diff is limited to the six route files, the new features/agenda/ directory, the deleted features/calendar/ProductAgendaScreen.tsx, plus WU-02's already-completed BffCalendarService.ts and goal016-schema.test.ts changes.\n- `grep -n \"useShellConfig(\" apps/frontend/src/features/agenda/*.tsx` → exactly two declaration sites (AgendaBoard.tsx and AppointmentFlowShell.tsx), matching the invariant.\n\nDid not run the Playwright e2e gate (npm run validate:ui) — it's the DETERMINISTIC unit the orchestrator runs separately, not something to invoke ad hoc here, and this WU made no visual/behavioral change that would affect it.",
+      "changedFiles": [
+        "apps/frontend/src/features/agenda/ProductAgendaScreen.tsx",
+        "apps/frontend/src/features/agenda/AgendaBoard.tsx",
+        "apps/frontend/src/features/agenda/AppointmentFlowShell.tsx",
+        "apps/frontend/src/features/calendar/ProductAgendaScreen.tsx",
+        "apps/frontend/src/app/(platform)/agenda/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/novo/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/bloquear/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/agendamento/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/reagendar/page.tsx",
+        "apps/frontend/src/app/(platform)/agenda/cancelar/page.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A agenda vive em features/agenda e as seis rotas continuam funcionando",
+          "met": true,
+          "detail": "features/agenda/{ProductAgendaScreen,AgendaBoard,AppointmentFlowShell}.tsx created; all six route files under app/(platform)/agenda/ repointed to @/features/agenda/ProductAgendaScreen; old features/calendar/ProductAgendaScreen.tsx deleted; tsc --noEmit and eslint both clean, vitest 132/132 passed."
+        },
+        {
+          "criterion": "Cada árvore renderizada faz exatamente uma chamada de useShellConfig, com os valores derivados do estado",
+          "met": true,
+          "detail": "grep confirms exactly two useShellConfig call sites: AgendaBoard.tsx (list scenario) and the private AppointmentFlowShell component in AppointmentFlowShell.tsx (shared by the five flow scenarios), unchanged from the original invariant, both still deriving values from local state (loading, calendar?.source, title)."
+        },
+        {
+          "criterion": "Nenhuma mudança de comportamento observável nesta unidade além da reorganização",
+          "met": true,
+          "detail": "JSX, copy, class names, state/effect logic and dependency arrays were copied verbatim; only identifier renames (AppointmentList→AgendaBoard, FlowShell→AppointmentFlowShell) and file/import restructuring were made. tsc, eslint and the full vitest suite (132 tests) pass unchanged."
+        },
+        {
+          "criterion": "atendly-agenda.css continua herdando os tokens do Goal014",
+          "met": true,
+          "detail": "No CSS files were touched; apps/frontend/src/app/globals.css still imports ../shared/styles/atendly-agenda.css unchanged, confirmed via grep."
+        }
+      ]
+    },
+    "attemptId": "016-r1-unit-wu-03-a1"
+  }
+}

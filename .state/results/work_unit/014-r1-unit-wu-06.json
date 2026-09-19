@@ -1,0 +1,39 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T07:49:16.019Z",
+  "attemptId": "014-r1-unit-wu-06-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "acceptance": [
+        {
+          "criterion": "Início mostra status honesto, pendências e próximos do dashboard existente",
+          "met": true,
+          "detail": "DashboardScreen.tsx: RealDashboard usa useSystemStatus() (mesmo hook/estados do AppShell, via GET /v1/status) para WhatsApp e IA em StatusPoint dentro de operational-strip; pendências vêm de dashboard.ai.conversationsNeedingAttention e próximos de dashboard.scheduling (todayAppointments/nextAppointment), sem alterar /v1/dashboard."
+        },
+        {
+          "criterion": "Skeleton, erro recuperável com retry e empty states conforme os princípios e a copy do vault",
+          "met": true,
+          "detail": "Skeleton mantido. Falha total de /v1/dashboard preserva header+StatusStrip e usa StatePanel (tone=error) com retry contextual (setReload), em vez de substituir a tela inteira. Cartões degradados (agenda/conversas indisponíveis) ganharam botão 'Tentar novamente' próprio via onRetry. Empty states existentes mantidos, já no formato do vault."
+        },
+        {
+          "criterion": "Sem métricas não aprovadas; lint e typecheck verdes",
+          "met": true,
+          "detail": "Nenhuma métrica nova (mantidas as 3 existentes). tsc --noEmit sem erros; npm run lint (max-warnings=0) sem erros; vitest tests/goal014-shell.test.ts 15/15 passando."
+        }
+      ],
+      "changedFiles": [
+        "apps/frontend/src/features/dashboard/DashboardScreen.tsx"
+      ],
+      "goal": "014",
+      "jobId": "014-r1-unit-wu-06",
+      "protocolVersion": 2,
+      "report": "Reescrevi apps/frontend/src/features/dashboard/DashboardScreen.tsx (o Início consumido por app/(platform)/inicio/page.tsx, que já existia e não precisou mudar) para atender WU-06.\n\nMudanças principais:\n1. Status honesto de WhatsApp/IA: adicionei `useSystemStatus()` (mesmo hook que o AppShell usa para a sidebar, lendo GET /v1/status) e um componente `StatusPoint`/`StatusStrip` que reproduz os 4 estados do shell (active/loading/off/unknown) e a mesma copy (\"WhatsApp conectado\"/\"desconectado\"/\"não confirmado\"/\"Verificando\"; equivalente para IA). Esses pontos foram inseridos na faixa operacional já existente (`operational-strip`/`operational-points`), ao lado do ponto de Agenda que continua vindo de /v1/dashboard (Agenda não faz parte do contrato de /v1/status).\n2. Erro recuperável preservando estrutura: quando GET /v1/dashboard falha por completo, a tela deixou de trocar por um card solto — agora mantém o header \"Início\" e a StatusStrip (independente, lida de /v1/status) e usa o primitivo `StatePanel` (tone=\"error\") com retry contextual (só refaz o fetch do dashboard). Os dois estados degradados dentro do dashboard já carregado (consulta de agenda indisponível; conversas/métricas de IA indisponíveis) ganharam botão \"Tentar novamente\" próprio, ligado ao mesmo `onRetry`.\n3. Pendências e próximos continuam vindo do DTO existente de /v1/dashboard, sem alterar o contrato (implementationHint respeitado — nenhuma chamada nova nem mudança de shape).\n4. Nenhuma métrica nova foi adicionada; mantidas as três já existentes (agendamentos pela IA, conversas automatizadas, receita estimada hoje) — central de alertas e métricas adicionais ficam fora do escopo (023).\n\nComandos executados e resultado:\n- `npx tsc --noEmit -p tsconfig.json` (apps/frontend) — sem output, sem erros.\n- `npx eslint src/features/dashboard/DashboardScreen.tsx` — sem output, sem erros.\n- `npm run lint` (apps/frontend, eslint src --max-warnings=0) — passou sem erros/avisos em todo `src`.\n- `npx vitest run tests/goal014-shell.test.ts` — 15/15 testes passando (cobre o mapeamento de estados de status e navegação usados pelo hook reaproveitado; não há teste de conteúdo específico do Início hoje, isso é responsabilidade de WU-10/WU-12).\n\nNão toquei em `apps/frontend/src/app/(platform)/inicio/page.tsx` (já correto, só renderiza `ProductDashboardScreen`) nem em `apps/frontend/src/features/dashboard/types.ts` (removido por outra Work Unit anterior). Não alterei CSS, /v1/dashboard, /v1/status, documentos de controle da migração, nem dei commit/push.",
+      "round": 1,
+      "status": "COMPLETED",
+      "summary": "Início (dashboard) agora mostra status de WhatsApp/IA via o mesmo hook do shell (/v1/status), com erro recuperável de estrutura preservada e retry contextual; typecheck e lint do frontend verdes.",
+      "workUnitId": "WU-06"
+    },
+    "attemptId": "014-r1-unit-wu-06-a1"
+  }
+}

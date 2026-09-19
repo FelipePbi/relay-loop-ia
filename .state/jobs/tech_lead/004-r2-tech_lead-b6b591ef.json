@@ -1,0 +1,134 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-08T01:09:31.465Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "004-r2-tech_lead-b6b591ef-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "004-r2-tech_lead-b6b591ef",
+    "role": "tech_lead",
+    "goal": "004",
+    "round": 2,
+    "reviewLevel": "DEEP",
+    "migrationAcceptedBaseline": "588b70f575670eeda015750b400a09752ceb5490",
+    "executionBase": "b3a019c94b8e89f48db5ab017866ff9e325d7d82",
+    "worktreeInitialHead": "b3a019c94b8e89f48db5ab017866ff9e325d7d82",
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-004",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\004-transporte-mensagens-duraveis.md",
+    "changedFiles": [
+      "apps/ai-orchestrator/.env.example",
+      "apps/ai-orchestrator/prisma.config.ts",
+      "apps/ai-orchestrator/prisma/migrations/20260907160000_goal004_durable_transport/migration.sql",
+      "apps/ai-orchestrator/prisma/schema.prisma",
+      "apps/ai-orchestrator/src/app.ts",
+      "apps/ai-orchestrator/src/config/env.ts",
+      "apps/ai-orchestrator/src/modules/assistant/assistant.service.ts",
+      "apps/ai-orchestrator/src/modules/channel/ChannelConnectionService.ts",
+      "apps/ai-orchestrator/src/modules/channel/InboundMessageProcessor.ts",
+      "apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionInboundMapper.ts",
+      "apps/ai-orchestrator/src/modules/channel/adapters/evolution/EvolutionProvider.ts",
+      "apps/ai-orchestrator/src/modules/channel/inbound-processor-factory.ts",
+      "apps/ai-orchestrator/src/modules/channel/routes/evolutionWebhook.routes.ts",
+      "apps/ai-orchestrator/src/modules/graph/graph-state.ts",
+      "apps/ai-orchestrator/src/modules/graph/message-graph.ts",
+      "apps/ai-orchestrator/src/modules/inbox/InboundEventDispatcher.ts",
+      "apps/ai-orchestrator/src/modules/inbox/InboxStore.ts",
+      "apps/ai-orchestrator/src/modules/inbox/InboxWorker.ts",
+      "apps/ai-orchestrator/src/modules/inbox/inbox-policy.ts",
+      "apps/ai-orchestrator/src/modules/internal/routes.ts",
+      "apps/ai-orchestrator/src/modules/outbox/OutboxStore.ts",
+      "apps/ai-orchestrator/src/modules/outbox/outbox-policy.ts",
+      "apps/ai-orchestrator/tests/channel/inbound-message-processor.test.ts",
+      "apps/ai-orchestrator/tests/channel/webhook-inbox.routes.test.ts",
+      "apps/ai-orchestrator/tests/inbox/inbox-policy.test.ts",
+      "apps/ai-orchestrator/tests/inbox/inbox-worker.test.ts",
+      "apps/ai-orchestrator/tests/integration/inbox-dispatch.test.ts",
+      "apps/ai-orchestrator/tests/integration/transport-durability.test.ts",
+      "apps/ai-orchestrator/tests/outbox/outbound-delivery.test.ts",
+      "apps/ai-orchestrator/tests/outbox/owner-send.routes.test.ts",
+      "apps/ai-orchestrator/tests/outbox/send-classification.test.ts",
+      "apps/ai-orchestrator/tests/security/webhook-credential-transition.test.ts",
+      "apps/ai-orchestrator/vitest.config.ts",
+      "apps/bff/PUBLIC_API_V1.md",
+      "apps/bff/src/clients/ai-orchestrator/index.ts",
+      "apps/bff/src/modules/whatsapp/instance-link.ts",
+      "apps/bff/src/modules/whatsapp/routes.ts",
+      "apps/bff/tests/tenant-instance-link.integration.test.ts",
+      "apps/evolution-go/cmd/evolution-go/main.go",
+      "apps/evolution-go/docs/wiki/guias-api/api-interactive.md",
+      "apps/evolution-go/docs/wiki/recursos-avancados/events-system.md",
+      "apps/evolution-go/pkg/events/webhook/webhook_durability_test.go",
+      "apps/evolution-go/pkg/events/webhook/webhook_outbox.go",
+      "apps/evolution-go/pkg/events/webhook/webhook_outbox_persistence_test.go",
+      "apps/evolution-go/pkg/events/webhook/webhook_producer.go",
+      "apps/evolution-go/pkg/sendMessage/service/send_service.go",
+      "apps/evolution-go/pkg/whatsmeow/service/webhook_payload_test.go",
+      "apps/evolution-go/pkg/whatsmeow/service/whatsmeow.go",
+      "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+      "docs/migration/VALIDATION_GATE.md",
+      "scripts/goal004-migration-rehearsal.mjs",
+      "scripts/tests/validate-integration.test.mjs",
+      "scripts/validate-integration.mjs"
+    ],
+    "diffStat": "apps/ai-orchestrator/.env.example                  |  17 +-\n apps/ai-orchestrator/prisma.config.ts              |   4 +\n apps/ai-orchestrator/prisma/schema.prisma          |  93 +++++-\n apps/ai-orchestrator/src/app.ts                    |  41 ++-\n apps/ai-orchestrator/src/config/env.ts             |  17 +\n .../src/modules/assistant/assistant.service.ts     |  60 +++-\n .../modules/channel/ChannelConnectionService.ts    |  34 ++\n .../src/modules/channel/InboundMessageProcessor.ts | 114 ++++++-\n .../adapters/evolution/EvolutionInboundMapper.ts   | 161 +++++++++\n .../adapters/evolution/EvolutionProvider.ts        |  39 ++-\n .../channel/routes/evolutionWebhook.routes.ts      | 366 +++++++++++++++------\n .../src/modules/graph/graph-state.ts               |   4 +\n .../src/modules/graph/message-graph.ts             | 125 +++++--\n .../ai-orchestrator/src/modules/internal/routes.ts |  77 ++++-\n .../channel/inbound-message-processor.test.ts      |  11 +-\n .../security/webhook-credential-transition.test.ts |  11 +-\n apps/ai-orchestrator/vitest.config.ts              |   5 +\n apps/bff/PUBLIC_API_V1.md                          |  17 +\n apps/bff/src/clients/ai-orchestrator/index.ts      |   8 +\n apps/bff/src/modules/whatsapp/instance-link.ts     |   8 +-\n apps/bff/src/modules/whatsapp/routes.ts            |  10 +-\n .../tests/tenant-instance-link.integration.test.ts |  33 ++\n apps/evolution-go/cmd/evolution-go/main.go         |  31 +-\n .../docs/wiki/guias-api/api-interactive.md         |   6 +-\n .../docs/wiki/recursos-avancados/events-system.md  |  14 +-\n .../pkg/events/webhook/webhook_producer.go         | 248 +++++++++++++-\n .../pkg/sendMessage/service/send_service.go        |   2 -\n .../pkg/whatsmeow/service/whatsmeow.go             |  15 +-\n apps/frontend/src/data/mappers/publicApiSchemas.ts |   8 +\n docs/migration/VALIDATION_GATE.md                  |  58 +++-\n scripts/tests/validate-integration.test.mjs        |  34 +-\n scripts/validate-integration.mjs                   |  48 +++\n 32 files changed, 1504 insertions(+), 215 deletions(-)",
+    "implementationReport": "RODADA 2 — CORREÇÃO DOS BLOCKERS DO REVIEW 004\n\nPonto de partida honesto: a worktree já continha, no início desta rodada, alterações de código endereçando P0, P1, P2-janela e P2-lint (mtime 07/09 19:07–19:13, posterior ao review da rodada 1). Nenhuma delas estava provada nem executável no gate. Inspecionei cada uma no código real antes de decidir o que faltava, e o trabalho desta rodada foi completar a prova e destravar a execução.\n\n== P0 — mensagem única descartada como duplicata ==\nEstado encontrado no código: `InboundExecutionOptions.eventAlreadyGuarded` existe em `InboundMessageProcessor` (linhas 60-70), `handleInboundBatch` passa `eventAlreadyGuarded: true` também no ramo de uma mensagem só (linha 269) e o guard do grafo o honra (`message-graph.ts:224` — `state.eventAlreadyGuarded || idempotency.remember(...)`). O dedupe do webhook segue intacto: `evolutionWebhook.routes.ts` grava a linha única antes do 202 e devolve `duplicate` sem novo efeito.\nTeste exigido pelo blocker (`tests/integration/inbox-dispatch.test.ts`, exercitando `InboundEventDispatcher` com `InboxStore` e `IdempotencyStore` reais contra PostgreSQL): existia, mas NÃO rodava — o beforeAll falhava com `The table public.AiTenantConfig does not exist`, e o arquivo ainda quebrava `validate:core` com TS2345 no mock de `sendText`. Ou seja, o P0 não estava provado.\nO que fiz:\n- `scripts/goal004-migration-rehearsal.mjs`: acrescentei `SUPPORT_SCHEMA`, aplicado DEPOIS de todas as asserções do ensaio (inventário M0, contagens, backfill retomável), criando `AiTenantConfig`, `AiRun` e `Handoff` sem semear uma linha sequer. Motivo registrado em comentário: o cluster descartável não tem pgvector, então `prisma migrate deploy` da IA não roda ali; o gate continua com um alvo só e a suíte passa a exercitar o caminho durável inteiro. Nada do que o ensaio prova mudou (saída do script permanece idêntica, mais uma linha de log).\n- `tests/integration/inbox-dispatch.test.ts`: corrigi o mock do provider (`provider: \"evolution-go\" as const`), que era o erro de tipo que derrubava `build:ai-orchestrator`; e completei a automação simulada com `recordInboundText`/`handleBufferedText` — sem eles o teste do lote agrupado caía no caminho mensagem-a-mensagem e enviava duas respostas, deixando de provar o agrupamento. Passou a assertar a resposta única sobre os dois fragmentos, na ordem.\nResultado: os 4 testes rodam e passam. O caso central — evento único reivindicado termina em `replied`, não `duplicate`, com um envio — está verde contra PostgreSQL real.\n\n== P1 — bloqueio de fila pelo evento mais antigo ==\nEstado encontrado: `InboxStore.claimNext` já seleciona candidatos (`candidateScanLimit`, default 20) com `NOT EXISTS` excluindo conversas em `PROCESSING` com lease vivo, itera até achar conversa livre, e preserva `FOR UPDATE SKIP LOCKED` mais `pg_try_advisory_xact_lock` por conversa (a variante `try`, que não segura o ciclo). Faltava exatamente o teste do blocker: o caso existente (`runs one claim at a time...`) grava o evento de B só depois do claim de A, então nunca exercita cabeça ocupada.\nO que fiz — novo teste em `tests/integration/transport-durability.test.ts`: `claims a free conversation instead of stopping behind a busy one`. A em PROCESSING com lease vivo; evento mais antigo pendente é de A; evento de B chega depois; `claimNext` do mesmo ciclo devolve B. Em seguida prova que A continua serializada (novo claim devolve null enquanto o lease vive) e que, concluído o lote de A, o evento pendente dela é reivindicado. Verde.\n\n== P2 — janela de fragmentos e espera de mensagem ambígua ==\nEstado encontrado: `inbox-policy.ts` já tem `conversationWindowMs` (política adaptativa: `AI_DEBOUNCE_MIN_SECONDS`, degraus de 12 s/18 s por texto longo ou vários fragmentos, seguimento urgente encurtando, teto `AI_DEBOUNCE_MAX_SECONDS` e limite `AI_DEBOUNCE_MAX_WAIT_SECONDS` desde o primeiro evento) e `isAmbiguousFirstContact` (heurística de transporte: primeiro contato sem histórico + saudação curta), com `AI_AMBIGUOUS_WAIT_SECONDS=120` e `AI_AMBIGUOUS_MAX_WAIT_SECONDS=300` em `config/env.ts` e `.env.example`. `InboxStore.applyConversationWindow` recalcula a janela sobre os pendentes e escreve `nextAttemptAt` do grupo inteiro (ignorando linhas com `attempts > 0`, que são backoff); a rota do webhook a chama após o `record`. Faltava prova: nenhum teste de política de janela, nenhum teste sobre a inbox persistida, nenhuma verificação de fiação na rota.\nO que fiz:\n- `tests/inbox/inbox-policy.test.ts` (+7 casos): janela mínima; extensão por texto longo/vários fragmentos; encurtamento em seguimento urgente; teto de max-wait desde o primeiro fragmento (inclusive chegando a 0); espera de ~2 min da primeira mensagem ambígua contada desde o primeiro evento; teto de ~5 min; fim da espera quando a pessoa diz o que quer (segundo fragmento, contato conhecido, pedido explícito); saudação composta ainda é ambígua.\n- `tests/integration/transport-durability.test.ts` (+5 casos sobre a inbox persistida): recálculo da janela quando chega fragmento novo (todos os pendentes recebem o mesmo `nextAttemptAt`, o claim só sai depois dele e sai com os dois fragmentos, em ordem); janela nunca ultrapassa o max-wait desde o primeiro fragmento; primeira mensagem ambígua de contato sem histórico fica adiada 120 s (claim em +60 s devolve null, claim em +125 s reivindica); a espera acaba quando o segundo fragmento traz o pedido; contato com histórico (Message existente na conversa) não espera, volta à janela de 8 s.\n- `tests/channel/webhook-inbox.routes.test.ts` (+1 caso): a rota aplica o piso da janela no `record` e pede ao inbox o recálculo com a chave de conversa e o texto — prova de fiação, com o comportamento provado na suíte de integração.\n- `docs/migration/VALIDATION_GATE.md`: registro pedido pelo blocker. Corrigi a lista de passos do gate (dizia cinco; são dez, com os três do Goal004), documentei por que o banco do passo 6 não usa `prisma migrate deploy` e o que as tabelas de apoio existem para servir, e acrescentei a seção \"Transporte durável do Goal004\" — recebimento antes do ACK, dedupe no lugar certo, fila sem bloqueio de cabeça, janela/espera ambígua sobre `nextAttemptAt` com os nomes das variáveis e das suítes, entrega sem promessa falsa, e a dependência de operação (capacidade de execução contínua do worker) que segue fora do gate. Não toquei em `goals/`, `reviews/` nem `MIGRATION_STATUS.md`.\n\n== P2 — lint da IA ==\nOs três erros (duas ordenações de import e a asserção de tipo desnecessária) já não existiam no código encontrado. Confirmei executando: `npm run lint --prefix apps/ai-orchestrator` exit 0 e `npm run lint --prefix apps/bff` exit 0. (Uma medição intermediária minha reportou exit 1 por artefato de redirecionamento do wrapper de shell; repetida com a saída capturada em arquivo, ambos dão 0 — é o resultado válido.)\n\n== Comandos executados e resultados ==\n- `npm run lint --prefix apps/ai-orchestrator` → exit 0 (eslint src --max-warnings=0).\n- `npm run lint --prefix apps/bff` → exit 0.\n- `npx tsc -p tsconfig.json --noEmit` (apps/ai-orchestrator) → exit 0.\n- `npx vitest run tests/inbox/inbox-policy.test.ts` → 18 testes, todos passando.\n- `npx vitest run tests/channel/webhook-inbox.routes.test.ts tests/inbox` → 33 testes, todos passando.\n- `node scripts/goal004-migration-rehearsal.mjs` (BFF_TEST_DATABASE_URL no cluster descartável 127.0.0.1:55432) → PASSED; M0: 3 eventos, 3 mensagens (2 OUTBOUND, 1 INBOUND); pós-migration LEGACY=3, OUTBOUND/UNKNOWN=2, INBOUND/null=1; backfill retomável; \"support tables created for the durability suite — no rows seeded\".\n- `npx vitest run tests/integration` com `AI_TEST_DATABASE_URL` no banco do ensaio → 2 arquivos, 22 testes, todos passando (RED/GREEN observado no caminho: antes da correção do banco de apoio a suíte de dispatch falhava no beforeAll; antes da correção do mock, o lote agrupado enviava 2 respostas em vez de 1).\n- `npm run validate:core` → exit 0. 13 passos passados, 4 skips já existentes (test:bff, scheduling-service, contracts, health-worker). Primeira execução falhou em `build:ai-orchestrator` pelo TS2345 herdado no teste de dispatch; após a correção, verde.\n- `BFF_TEST_DATABASE_URL=... npm run validate:integration` → exit 0. 10/10 passos: bff-prisma, migrate, bff-integration (28 testes), rehearse:goal003, provision:evolution + ownership, rehearse:goal004, generate:ai-prisma, test:ai-orchestrator-transport-durability (22 testes) e test:evolution-go-webhook-outbox.\n- `git diff --check` → exit 0. `git log --oneline -1` → b3a019c (HEAD inalterado; nenhum commit, push, merge, PR ou troca de branch).\n\n== Arquivos alterados nesta rodada ==\n- apps/ai-orchestrator/tests/integration/transport-durability.test.ts (6 casos novos: 1 de P1, 5 de P2; helpers `policy` e `windowTarget`)\n- apps/ai-orchestrator/tests/integration/inbox-dispatch.test.ts (correção de tipo do mock; automação com recordInboundText/handleBufferedText; asserção do texto agrupado)\n- apps/ai-orchestrator/tests/inbox/inbox-policy.test.ts (7 casos novos de janela/ambiguidade)\n- apps/ai-orchestrator/tests/channel/webhook-inbox.routes.test.ts (1 caso de fiação da janela)\n- scripts/goal004-migration-rehearsal.mjs (SUPPORT_SCHEMA pós-asserções)\n- docs/migration/VALIDATION_GATE.md (lista de passos correta + seção do transporte durável do Goal004)\nNenhum arquivo de produção foi alterado nesta rodada: as correções de comportamento dos blockers já estavam no código encontrado e foram verificadas linha a linha antes de eu escrever as provas. Nada fora dos blockers foi revertido ou reimplementado.\n\n== Limitações ==\n1. Infraestrutura de teste: iniciei o cluster PostgreSQL descartável já provisionado em /c/tmp/atendly-pgtest (porta 55432, trust em loopback) para rodar o gate; ele ficou de pé ao fim da execução, para que o review possa repetir `validate:integration` sem reprovisionar. O descarte está documentado em VALIDATION_GATE.md. Nenhum banco de desenvolvimento foi tocado.\n2. `prisma migrate diff` da IA continua sem execução por falta de pgvector no cluster descartável — mesma justificativa registrada na rodada anterior, agora explicitada no VALIDATION_GATE.\n3. A suíte de dispatch simula modelo e transporte (o que sairia da máquina); o que está sob teste com dependência real é inbox, idempotência, runtime do grafo e handoff sobre PostgreSQL. Sem WhatsApp real, como o Goal exige.\n4. Capacidade de execução contínua do worker (número de instâncias, disponibilidade) segue como dependência de operação, não contratada aqui.\n5. Não reexecutei uma varredura ampla dos demais critérios do Goal além dos gates completos: o que prova ausência de regressão nesta rodada é `validate:core` e `validate:integration` verdes de ponta a ponta, mais lint e `git diff --check`.",
+    "validations": [
+      {
+        "name": "npm run lint --prefix apps/ai-orchestrator",
+        "passed": true,
+        "detail": "exit 0 (eslint src --max-warnings=0); os três erros do blocker P2-lint já não existiam e a execução confirma o estado limpo"
+      },
+      {
+        "name": "npm run lint --prefix apps/bff",
+        "passed": true,
+        "detail": "exit 0"
+      },
+      {
+        "name": "npx tsc -p tsconfig.json --noEmit (apps/ai-orchestrator)",
+        "passed": true,
+        "detail": "exit 0 após corrigir TS2345 no mock de sendText de tests/integration/inbox-dispatch.test.ts"
+      },
+      {
+        "name": "vitest tests/inbox + tests/channel/webhook-inbox.routes.test.ts",
+        "passed": true,
+        "detail": "33 testes passando, incluindo os 7 casos novos de janela/mensagem ambígua e o caso de fiação da janela na rota"
+      },
+      {
+        "name": "node scripts/goal004-migration-rehearsal.mjs",
+        "passed": true,
+        "detail": "PASSED — M0 3 eventos/3 mensagens; LEGACY=3; OUTBOUND/UNKNOWN=2; INBOUND sem estado; backfill retomável; tabelas de apoio criadas sem semear linha"
+      },
+      {
+        "name": "vitest tests/integration (PostgreSQL real)",
+        "passed": true,
+        "detail": "22 testes passando: evento único claimado responde 'replied' e não 'duplicate' (P0); conversa livre é reivindicada com a cabeça ocupada (P1); janela adaptativa e espera de ~2 min da mensagem ambígua sobre nextAttemptAt (P2)"
+      },
+      {
+        "name": "npm run validate:core",
+        "passed": true,
+        "detail": "exit 0 — 13 passos passados, 4 skips preexistentes"
+      },
+      {
+        "name": "npm run validate:integration",
+        "passed": true,
+        "detail": "exit 0 — 10/10 passos contra 127.0.0.1:55432/atendly_bff_test, com 28 testes do BFF e 22 de persistência/concorrência da IA"
+      },
+      {
+        "name": "git diff --check",
+        "passed": true,
+        "detail": "exit 0; HEAD segue b3a019c, sem commit, push, merge, PR ou troca de branch"
+      }
+    ],
+    "previousBlockers": [
+      "P0 — Toda mensagem única processada pelo worker é descartada como duplicata. O webhook grava o evento em ProcessedEvent com eventKey `evolution-go:<instanceId>:<messageId>` (classifyEvolutionEvent, EvolutionInboundMapper.ts) antes do 202. No worker, InboundEventDispatcher.dispatch → InboundMessageProcessor.handleInboundBatch → para lote de uma mensagem chama handleInboundMessage, que invoca workflow.invoke({ message, conversationId }) sem eventAlreadyGuarded; o guard do grafo (message-graph.ts linhas 224–229) chama idempotency.remember(message), cujo buildEventKey produz `${provider}:${instanceId}:${messageId}` com provider 'evolution-go' e instanceId/messageId vindos das mesmas fontes (payload.instanceId||payload.instance e data.Info.ID) — a unique (tenantId, provider, eventKey) dispara P2002, remember devolve false e o grafo encerra com action 'duplicate'. Resultado: nenhuma mensagem isolada do cliente é registrada nem respondida pelo caminho durável; só lotes de duas ou mais mensagens (que passam eventAlreadyGuarded: true) funcionam. Nenhum teste cobre esse caminho: transport-durability usa só InboxStore, webhook-inbox mocka a inbox e os testes de processador mockam remember=true. Exigido: no caminho do dispatcher, marcar eventAlreadyGuarded para lote de uma mensagem (ou fazer o guard reconhecer a linha da inbox já reivindicada), manter o dedupe do webhook intacto, e adicionar teste que exercite InboundEventDispatcher com InboxStore e IdempotencyStore reais contra PostgreSQL (na suíte tests/integration) provando que um evento único é processado e respondido, não marcado 'duplicate'.",
+      "P1 — Bloqueio de fila pelo evento mais antigo em InboxStore.claimNext. O candidato é sempre a linha RECEIVED mais antiga global (LIMIT 1); se a conversa dela estiver PROCESSING com lease vivo, a função devolve null e InboxWorker.runOnce interrompe o ciclo (if (!claim) break), sem tentar outras conversas. Com uma instância — o cenário documentado — todas as conversas atrás dessa cabeça ficam paradas enquanto a ocupada executa (LLM, tools, envio de até 15 s), e o ciclo seguinte repete a mesma cabeça. 'Conversas distintas em paralelo' só vale quando a mais antiga pendente não está ocupada; o teste existente não cobre cabeça ocupada com outra conversa pendente. Exigido: selecionar candidatos excluindo conversas com PROCESSING de lease vivo (NOT EXISTS) ou iterar candidatos até achar uma conversa livre dentro do mesmo ciclo, mantendo SKIP LOCKED e o lock consultivo; teste de integração com A em PROCESSING e evento mais antigo pendente de A mais evento de B → B é reivindicada no mesmo ciclo, e A permanece serializada.",
+      "P2 — Janela de fragmentos regrediu e a espera de mensagem ambígua do item 2 do Goal não foi implementada. No caminho durável o processador roda com debounce:false e a única janela é fragmentWindowMs = AI_DEBOUNCE_MIN_SECONDS fixo (8 s) aplicado em nextAttemptAt no record; a extensão adaptativa do baseline (getDebounceDelayMs: texto longo ou vários fragmentos até AI_DEBOUNCE_MAX_SECONDS, seguimento urgente encurta, limite AI_DEBOUNCE_MAX_WAIT_SECONDS desde a primeira) foi perdida, e não existe nenhuma espera de ~2 min (até ~5 min desde a primeira) para primeira mensagem ambígua de número sem histórico, exigida explicitamente no §2 do Goal sobre trabalho persistido. Exigido: (a) reproduzir a política adaptativa sobre a inbox — calcular a janela no record e estendê-la quando novo fragmento da mesma conversa chega, limitada pelo max-wait desde o primeiro evento; (b) implementar a espera de mensagem ambígua como adiamento de nextAttemptAt, por heurística de transporte (primeira mensagem de conversa sem histórico, texto curto de saudação), com limites configuráveis de ~2 min e ~5 min desde a primeira, sem classificação (que é do Goal005); (c) testes sobre a inbox persistida para os dois comportamentos e registro em VALIDATION_GATE/relatório.",
+      "P2 — Lint da IA falha. `npm run lint` em apps/ai-orchestrator (eslint --max-warnings=0) retorna 3 erros: dois de ordenação de imports (simple-import-sort) e uma asserção de tipo desnecessária na linha 272 de um arquivo alterado. validate:core não executa lint, mas o padrão do repositório e o review003 exigem lint limpo. Exigido: corrigir os três erros e reportar `npm run lint` exit 0 em apps/ai-orchestrator (BFF já está limpo)."
+    ],
+    "packetPath": "E:\\Projetos\\atendly-ia\\tools\\ia-loop\\.state\\artefacts\\004-r2\\review-packet.json"
+  },
+  "statusAt": "2026-09-08T01:12:14.660Z"
+}

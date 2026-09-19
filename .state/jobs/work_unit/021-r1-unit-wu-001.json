@@ -1,0 +1,43 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T13:49:47.142Z",
+  "status": "COMPLETED",
+  "attempt": 1,
+  "currentAttemptId": "021-r1-unit-wu-001-a1",
+  "attemptStatus": "COMPLETED",
+  "attemptHistory": [],
+  "job": {
+    "protocolVersion": 2,
+    "jobId": "021-r1-unit-wu-001",
+    "role": "work_unit",
+    "goal": "021",
+    "round": 1,
+    "workUnitId": "WU-001",
+    "unitType": "COMPLEX",
+    "complexity": "HIGH",
+    "risk": "HIGH",
+    "action": null,
+    "scope": null,
+    "worktree": "E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-021",
+    "goalPath": "E:\\Projetos\\atendly-ia\\docs\\migration\\goals\\021-lembretes-confirmacao-e-notificacao-de-alteracao.md",
+    "parentJobId": "021-r1-developer-1ed08aa2",
+    "routing": {
+      "role": "developer",
+      "stage": "work_unit",
+      "modelKey": "opus",
+      "model": "claude-opus-5",
+      "family": "opus",
+      "effort": "high",
+      "complexity": "HIGH",
+      "riskScore": null,
+      "signals": [
+        "COMPLEX",
+        "RISK_HIGH"
+      ],
+      "reason": "COMPLEX_WORK_UNIT",
+      "fallbackAllowed": false,
+      "mode": "AUTO"
+    }
+  },
+  "statusAt": "2026-09-15T13:59:10.552Z"
+}

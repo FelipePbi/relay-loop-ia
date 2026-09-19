@@ -1,0 +1,76 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T07:42:31.029Z",
+  "attemptId": "014-r1-unit-wu-04-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "014-r1-unit-wu-04",
+      "goal": "014",
+      "round": 1,
+      "workUnitId": "WU-04",
+      "status": "COMPLETED",
+      "summary": "Shell mobile-first com cinco destinos, layout compartilhado em (platform), status real de WhatsApp/IA via /v1/status e remoção do preview foram implementados; as 8 telas reais que montavam AppShell foram adaptadas para o novo ShellConfig, e /sistema foi refeito com as primitivas.",
+      "report": "O que mudou e por quê:\n\n1) Layout compartilhado: criei `src/shared/layout/ShellConfig.tsx` (contexto + `useShellConfig`) e `src/app/(platform)/layout.tsx`, que monta o `AppShell` uma única vez para todo o grupo de rotas autenticadas. As telas não montam mais o próprio `<AppShell>`; declaram `active`, `title` e `action` (contextual) via `useShellConfig`, mantendo os outros campos (`module`, `source`, `attention`, `loading`, `mainClassName`, `showBottomNav`, `showMobileHeader`) para preservar o comportamento visual específico de cada tela sem redesenhá-las. `useShellConfig` usa `useLayoutEffect` isomórfico (sem lista de dependências) para evitar tanto a violação de \"setState durante render de outro componente\" quanto o \"flash\" do destino anterior ao trocar de rota.\n\n2) AppShell.tsx (reescrito): bottom nav mobile agora tem cinco destinos — Início/Conversas/Agenda/Clientes (abas próprias) + Mais (aba sintética que fica ativa para Serviços/Configurações e abre a lista, incluindo Serviços agora). Adicionei um botão `+` contextual (`.fab`, só mobile) que cada tela declara via `action`. A sidebar (tablet/notebook/desktop) manteve os breakpoints já existentes (768px e 1099px, pré-existentes, não alterados). Removi a prop `whatsapp` (que podia \"nascer conectada\") e passei a derivar dois indicadores reais — WhatsApp e IA — de `GET /v1/status` via o novo hook `useSystemStatus`. Adicionei foco no `<main>` após navegação (via `pathname` + ref, pulando o primeiro render) e `document.title` a partir do `title` declarado.\n\n3) Status honesto (Goal014/WU-02): adicionei `systemStatusSchema`/`SystemStatus` em `publicApiSchemas.ts`, `BffStatusService` (registrado em `registry.ts`/`data/index.ts`) e `src/shared/runtime/systemStatus.ts` com `whatsappStatusView`/`aiStatusView` — funções puras que só retornam `\"active\"` quando a fase é `\"loaded\"` e o valor confirma `CONNECTED`/`ACTIVE`; erro de rede vira `\"unknown\"`, ausência de resposta ainda vira `\"loading\"`. `PENDING` (IA desejada mas não efetiva) cai em `\"off\"` para caber nos quatro estados pedidos. Testado em `tests/goal014-shell.test.ts`.\n\n4) Modelo de navegação puro: `src/shared/layout/navigation.ts` (`SIDEBAR_DESTINATIONS`, `MOBILE_TAB_SECTIONS`, `MORE_DESTINATIONS`, `isMobileTab`/`isMoreActive`/`isDestinationActive`), testado no mesmo arquivo de teste.\n\n5) Adaptação das 8 telas reais que montavam `AppShell` (cobrindo os pontos de montagem que existiam nos 12 arquivos originalmente listados): `DashboardScreen.tsx` (`ProductDashboardScreen`+`RealDashboard`), `ProductDirectoryScreen.tsx` (5 pontos: clientes/serviços lista e formulários, com `action` de \"+\" só nas listas), `ProductAgendaScreen.tsx` (lista + `FlowShell` compartilhado, com `action` \"Novo agendamento\" quando a capacidade permite), `ProductConversationsScreen.tsx` (lista e detalhe, preservando `mainClassName=\"conversation-detail-main\"`/`showBottomNav=false` no chat full-screen), `ProductSettingsScreen.tsx`, `ProductMigrationScreen.tsx` (`MigrationShell`), `SystemScreen.tsx` (reescrita).\n\n6) `/sistema/[state]` refeito com as primitivas de `shared/ui` (`PageHeader`, `Badge`, `StatePanel` já existiam de WU-03; usei `PageHeader`+`Badge` na tela normal). O cenário `session-expired` usa `chrome: false` em `useShellConfig` para pular o AppShell inteiro (tela de interrupção de sessão, sem sidebar/bottom nav), preservando o comportamento anterior.\n\n7) Limpeza de preview: removi `src/app/_preview/` e `src/features/preview/PreviewScreen.tsx`. Como isso deixava `features/calendar/AgendaScreen.tsx`, `features/conversations/ConversationsScreen.tsx` e `features/directory/DirectoryScreen.tsx` (variantes \"mock\" de cenário) sem nenhum importador restante, apaguei os três — e removi a função mock `MigrationScreen` de `features/migration/MigrationScreen.tsx` (mantendo `Stepper/Route/SideNotes/Status/Frame`, reaproveitados pelo `ProductMigrationScreen`) e a função mock `DashboardScreen`+`scenarioContent` de `features/dashboard/DashboardScreen.tsx` (mantendo `LoadingDashboard`/`ProductDashboardScreen`/`RealDashboard`). `features/settings/SettingsScreen.tsx` virou um repasse fino para `ProductSettingsScreen` (a ramificação `preview` que ela tinha nunca era usada pelas rotas reais). Também tirei `/_preview` de `RouteAnnouncer.tsx` e o desvio `isPreviewPath` de `ProductRuntime.tsx`. Apaguei `features/dashboard/types.ts`, órfão após a remoção do mock.\n\n8) CSS: ao investigar por que o bottom nav teria 4 colunas, descobri que cada módulo (`atendly-agenda.css`, `atendly-conversations.css`, `atendly-directory.css`, `atendly-settings.css`, além de `atendly.css` para o dashboard) já tem seu próprio bloco completo de shell/bottom-nav/mobile-header responsivo — não é um bug de classes ausentes, é arquitetura por módulo. Atualizei `grid-template-columns` de `repeat(4,1fr)` para `repeat(5,1fr)` nos cinco blocos reais (deixei intactas as classes `.shell-bottom-nav`/`.bottom-nav` genéricas, que eram exclusivas do preview removido). Adicionei `.status-dot.neutral` (loading/unknown) e `.fab` (botão contextual mobile, oculto ≥768px) em `atendly.css`.\n\nComandos executados e resultado:\n- `cd apps/frontend && rm -rf .next && npm run typecheck` → `tsc --noEmit` sem erros.\n- `npm run lint` → `eslint src --max-warnings=0` sem erros/avisos.\n- `npm test` → `vitest run`: 14 arquivos, 96 testes, todos passando (inclui o novo `tests/goal014-shell.test.ts` e os testes pré-existentes, incluindo a11y).\n- `npm run build` → `next build` concluído com sucesso; todas as 82 páginas estáticas geradas sem erro, incluindo `/sistema/sessao-expirada` (rota com `chrome:false`) e as rotas dinâmicas de agenda/clientes/conversas/migração.\n\nSobre a matriz de larguras (360/390/768/1024/1440): não executei o gate renderizado (`npm run validate:ui`) porque ele deliberadamente só cobre rotas públicas sem sessão (`e2e/routes.ts`, documentado em `AGENTS.md`: \"Extending the gate past this list means giving it a real session, which is its own decision\") — nenhuma delas passa pelo `AppShell`. Não tenho ferramenta de browser/screenshot neste ambiente para verificar visualmente o shell autenticado. A verificação que fiz foi estática: os breakpoints do shell (bottom nav/mobile header <768px; sidebar em ícone 768–1099px; sidebar completa ≥1100px) já existiam por módulo antes desta unidade e não foram alterados — só o número de colunas do bottom nav (4→5) e o novo `.fab` (oculto ≥768px) foram adicionados, dentro dos mesmos breakpoints. Isso foi confirmado por leitura de código e pelo build de produção bem-sucedido, não por captura visual em cada largura — registro essa limitação explicitamente em vez de declarar uma verificação visual que não fiz.\n\nNão toquei em `docs/product-vault/`, `docs/architecture/` nem `PUBLIC_API_V1.md`: nenhum conceito, contrato ou regra de produto mudou (a regra de status honesto já estava documentada por WU-02); só a implementação de shell/preview. `apps/frontend/README.md` não menciona preview nem a arquitetura de shell, então não precisou de atualização.",
+      "changedFiles": [
+        "apps/frontend/src/app/(platform)/layout.tsx",
+        "apps/frontend/src/app/%5Fpreview/page.tsx",
+        "apps/frontend/src/app/%5Fpreview/[slug]/page.tsx",
+        "apps/frontend/src/data/index.ts",
+        "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+        "apps/frontend/src/data/services/BffStatusService.ts",
+        "apps/frontend/src/data/services/registry.ts",
+        "apps/frontend/src/features/calendar/AgendaScreen.tsx",
+        "apps/frontend/src/features/calendar/ProductAgendaScreen.tsx",
+        "apps/frontend/src/features/conversations/ConversationsScreen.tsx",
+        "apps/frontend/src/features/conversations/ProductConversationsScreen.tsx",
+        "apps/frontend/src/features/dashboard/DashboardScreen.tsx",
+        "apps/frontend/src/features/dashboard/types.ts",
+        "apps/frontend/src/features/directory/DirectoryScreen.tsx",
+        "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+        "apps/frontend/src/features/migration/MigrationScreen.tsx",
+        "apps/frontend/src/features/migration/ProductMigrationScreen.tsx",
+        "apps/frontend/src/features/preview/PreviewScreen.tsx",
+        "apps/frontend/src/features/settings/ProductSettingsScreen.tsx",
+        "apps/frontend/src/features/settings/SettingsScreen.tsx",
+        "apps/frontend/src/features/system/SystemScreen.tsx",
+        "apps/frontend/src/shared/layout/AppShell.tsx",
+        "apps/frontend/src/shared/layout/ShellConfig.tsx",
+        "apps/frontend/src/shared/layout/navigation.ts",
+        "apps/frontend/src/shared/runtime/ProductRuntime.tsx",
+        "apps/frontend/src/shared/runtime/systemStatus.ts",
+        "apps/frontend/src/shared/styles/atendly-agenda.css",
+        "apps/frontend/src/shared/styles/atendly-conversations.css",
+        "apps/frontend/src/shared/styles/atendly-directory.css",
+        "apps/frontend/src/shared/styles/atendly-settings.css",
+        "apps/frontend/src/shared/styles/atendly.css",
+        "apps/frontend/src/shared/ui/RouteAnnouncer.tsx",
+        "apps/frontend/tests/goal014-shell.test.ts"
+      ],
+      "acceptance": [
+        {
+          "criterion": "Cinco destinos no mobile, `+` contextual, \"Mais\" como lista; sidebar em larguras maiores; layout compartilhado em (platform)",
+          "met": true,
+          "detail": "AppShell.tsx: bottom nav com 4 abas (Início/Conversas/Agenda/Clientes) + 'Mais' (5ª); FAB `.fab` contextual declarado por tela (agenda/clientes/serviços); Dialog 'Mais' lista Serviços+Configurações; sidebar inalterada nos breakpoints existentes; app/(platform)/layout.tsx + ShellConfig.tsx montam o shell uma vez, telas usam useShellConfig."
+        },
+        {
+          "criterion": "As 12 telas existentes continuam funcionais dentro do shell novo; preview e personas removidos; /sistema refeito",
+          "met": true,
+          "detail": "8 arquivos com pontos de montagem de AppShell adaptados (build/typecheck/lint/vitest verdes, 82 rotas geradas no `next build`); features/preview e app/_preview removidos, junto dos 3 mocks órfãos (AgendaScreen/ConversationsScreen/DirectoryScreen) e das funções mock em MigrationScreen/DashboardScreen; personas já removidas por WU-03; SystemScreen.tsx reescrita com PageHeader/Badge/StatePanel."
+        },
+        {
+          "criterion": "Status de IA e WhatsApp vem de /v1/status com carregando, desconhecido, ativo e desligado distintos; nenhum default conectado no código, provado por teste de mapeamento",
+          "met": true,
+          "detail": "BffStatusService+systemStatusSchema+registry; useSystemStatus + whatsappStatusView/aiStatusView (loading/error nunca retornam 'active'); AppShell mostra duas StatusLine (WhatsApp/IA) reais; tests/goal014-shell.test.ts cobre as 4 combinações e a ausência de 'active' fora de phase='loaded'."
+        },
+        {
+          "criterion": "Acessibilidade preservada: skip link, aria-current, anúncio de rota, foco, teclado; matriz de larguras conferida e relatada",
+          "met": true,
+          "detail": "skip-link e aria-current mantidos/estendidos aos 5 destinos; RouteAnnouncer preservado (só removida entrada /_preview); foco em #main-content após troca de pathname; Escape fecha menu de conta. Matriz de larguras verificada por revisão de breakpoints (não alterados, exceto colunas do bottom-nav e .fab) + build de produção bem-sucedido — não houve captura visual por largura, pois não há ferramenta de browser disponível e o gate Playwright deliberadamente só cobre rotas públicas sem sessão."
+        }
+      ]
+    },
+    "attemptId": "014-r1-unit-wu-04-a1"
+  }
+}

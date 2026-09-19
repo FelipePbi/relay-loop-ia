@@ -1,0 +1,120 @@
+{
+  "fingerprintVersion": 1,
+  "capturedAt": "2026-09-09T18:06:58.159Z",
+  "base": "26593db458137ac6cb49821a552faeebb2be4ce2",
+  "worktreeInitialHead": "26593db458137ac6cb49821a552faeebb2be4ce2",
+  "head": "26593db458137ac6cb49821a552faeebb2be4ce2",
+  "branch": "ai-loop/goal-008",
+  "trackedDiffHash": "008f016f542cdca6dc5b028adb5ceb47cb8621b1758ede39a652e8f61cb26e30",
+  "trackedFileCount": 28,
+  "trackedFiles": [
+    "apps/ai-orchestrator/src/modules/scheduling-service/client.ts",
+    "apps/ai-orchestrator/src/modules/scheduling-service/types.ts",
+    "apps/ai-orchestrator/src/modules/tools/assistant-tools.ts",
+    "apps/ai-orchestrator/tests/tools/assistant-tools.test.ts",
+    "apps/bff/PUBLIC_API_V1.md",
+    "apps/bff/src/clients/scheduling/index.ts",
+    "apps/bff/src/modules/calendar/routes.ts",
+    "apps/frontend/src/data/mappers/publicApiSchemas.ts",
+    "apps/frontend/src/data/services/BffCalendarService.ts",
+    "apps/frontend/src/features/calendar/ProductAgendaScreen.tsx",
+    "apps/frontend/src/features/directory/ProductDirectoryScreen.tsx",
+    "apps/scheduling-service/prisma/schema.prisma",
+    "apps/scheduling-service/src/app/build-app.ts",
+    "apps/scheduling-service/src/config/env.ts",
+    "apps/scheduling-service/src/modules/availability/atendly-availability.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-provider.ts",
+    "apps/scheduling-service/src/modules/calendar/calendar-service.ts",
+    "apps/scheduling-service/src/modules/calendar/idempotency.ts",
+    "apps/scheduling-service/src/modules/calendar/routes.ts",
+    "apps/scheduling-service/src/modules/integrations/atendly/provider.ts",
+    "apps/scheduling-service/src/modules/integrations/minha-agenda/provider.ts",
+    "apps/scheduling-service/src/modules/internal-api/routes.ts",
+    "apps/scheduling-service/src/modules/migrations/calendar-migration-service.ts",
+    "apps/scheduling-service/tests/integration/customer-identity.test.ts",
+    "apps/scheduling-service/tests/integration/service-catalog.test.ts",
+    "apps/scheduling-service/tests/unit/support/database-double.ts",
+    "scripts/tests/validate-integration.test.mjs",
+    "scripts/validate-integration.mjs"
+  ],
+  "untrackedHash": "bd11829f3589682f43c4af578754cad3a73fadc4a05a2997a0b673e260a395bb",
+  "untrackedFileCount": 15,
+  "untracked": [
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260909180000_goal008_agenda_expand/migration.sql",
+      "sha256": "cfb0a46063922b83a682c7ef5675ade78b85669506500260c9e6da8396f06896",
+      "bytes": 9002
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260909181000_goal008_appointment_status/migration.sql",
+      "sha256": "551f0b50460de4697851f47a780b6809570d49ecf2a1097a9b5093d8e2fb47f6",
+      "bytes": 3666
+    },
+    {
+      "path": "apps/scheduling-service/prisma/migrations/20260909182000_goal008_agenda_fixups/migration.sql",
+      "sha256": "4b5b8d7e85b7719d0a72fb9672eb675518f17ac998b7146e6d3f4af0bd59edec",
+      "bytes": 4372
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/appointments/appointment-event-service.ts",
+      "sha256": "f347bf7fe3e6993188538301269e1653f128717b47c8d4ed0a758b0dbe84a59e",
+      "bytes": 2948
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/appointments/appointment-lifecycle-service.ts",
+      "sha256": "da1be366539f16fb68f1e44eb5c5d10fa034c7f75cb9ef7d7db5ffe47b08a0b1",
+      "bytes": 12806
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/appointments/auto-complete-loop.ts",
+      "sha256": "d71548266a0759224acccd2929a67fac8109f50476d645eddc50b86b4373f9b4",
+      "bytes": 4165
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/time-blocks.ts",
+      "sha256": "85a6c484bcfe7e4cde46c7007f6ec95c3fcb9045e439ce48f731438db76a28d8",
+      "bytes": 2594
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/calendar/write-policy.ts",
+      "sha256": "43def70fc4d93c7609e6d560a4c60040776f03f5a271afc4f244d8bb86ce9205",
+      "bytes": 5502
+    },
+    {
+      "path": "apps/scheduling-service/src/modules/holds/appointment-hold-service.ts",
+      "sha256": "9a960ce7a1da78477f7929ebdd36bea8131b06b55b5541e53248e873c9b0e7af",
+      "bytes": 11499
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/goal008-agenda.test.ts",
+      "sha256": "6a3c657b2bd912f0a6eacfe7c6a600921ceda4b0a13a5f7c7bc921728e3bbdf2",
+      "bytes": 29458
+    },
+    {
+      "path": "apps/scheduling-service/tests/integration/support/reset-tenant.ts",
+      "sha256": "ec9aa2fdcc1262402a1dbaf91bf2b30aa1d46b94fdd660f9c17415da1a133552",
+      "bytes": 1764
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/agenda-write-policy.test.ts",
+      "sha256": "4ab8d4c167ba225884d24cf4a4b3ec48d27eddbc59c9e574164dc364187e24a9",
+      "bytes": 20271
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/appointment-hold.test.ts",
+      "sha256": "23ae994a92ad928dc7ebfcae1e26bd5aa7af174aaf6e6d6de9877ca7348725bf",
+      "bytes": 13278
+    },
+    {
+      "path": "apps/scheduling-service/tests/unit/appointment-lifecycle.test.ts",
+      "sha256": "f9686858fd0508684eeb7d01defbebc3a67fb0b77a8908671eb31de02634a9bb",
+      "bytes": 16641
+    },
+    {
+      "path": "scripts/goal008-migration-rehearsal.mjs",
+      "sha256": "4b2c529fbdb9f7471c1accb16dbe0720f67767b6822055743834a0e887dc5319",
+      "bytes": 29710
+    }
+  ],
+  "contentHash": "02a6f900e85299858f3168a02e7d78ef69f7ed6bfa9233b105e6fcbaa4d46072"
+}

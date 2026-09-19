@@ -1,0 +1,25 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T18:53:22.302Z",
+  "attemptId": "017-r3-tech_lead-2c47443f-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "017-r3-tech_lead-2c47443f",
+      "goal": "017",
+      "summary": "Fechamento documental do Goal017 (ACCEPTED na rodada 3) registrado em seis documentos de docs/migration/. Novo reviews/017-review.md com a decisão, a identidade do diff (47 arquivos, hash 23424a71…, base 6582a65 sobre a baseline aceita 8d94ace), o histórico das rodadas 1 (quatro blockers: setIgnored sem consumidor, player de áudio ausente e não declarado fora, 201 sempre com copy afirmando entrega, docs de migração com afirmação falsa) e 2 (um blocker: G-09 negando a composição visual do estado de entrega), o que o diff entrega e os limites. CURRENT_STATE ganhou a seção de delta do Goal017 com os fatos verificados (customerId nulável e aditivo, 201/202 repassados pelo BFF via requestWithStatus, INTERNAL_HTTP_MEDIA_TIMEOUT_MS de 90s só em requestBinary, monolito de 964 linhas virou despachante de 28 sobre doze módulos com um useShellConfig por cenário, inbox servida por category/ignored/search, seis estados derivados do contrato, remoção completa de unreadCount, mídia e transcrição sempre pelo proxy, deliveryState nos quatro valores sem reenvio em UNKNOWN, assunção no envio, sugestões com as cinco recusas nomeadas, lint cobrindo tests) e cinco LIMITEs. DECISIONS ganhou D-033 com os contratos adotados e teve a consequência de D-032 corrigida (o buraco de lint em apps/frontend/tests/ foi fechado). TARGET_ARCHITECTURE estendeu o parágrafo da camada de frontend ao Goal017 e passou as telas restantes para 018 e 023. MASTER_PLAN ganhou a entrada v32 no histórico, sem reavaliar roadmap. GAP_ANALYSIS e REUSE_ANALYSIS receberam a linha de atualização por review017 e a correção dos ponteiros que ainda dirigiam trabalho ao Goal017 (G-21, G-24, G-31 e as duas linhas de reuso); as células de G-09, G-22, G-23 e G-31 já haviam sido atualizadas pelo executor sob os blockers. Resíduos desfavoráveis registrados explicitamente: goal017-send-status.integration.test.ts nunca foi executado por falta de PostgreSQL descartável; eventos internos recolhíveis não têm contrato e não foram declarados fora pelo executor; IA com instabilidade é derivada por substring sobre handoffReason livre. Nada fora de docs/migration/ foi tocado; nenhum Goal criado ou marcado READY, MIGRATION_STATUS intacto e nenhum SHA de baseline novo registrado.",
+      "documentsUpdated": [
+        "docs/migration/reviews/017-review.md",
+        "docs/migration/CURRENT_STATE.md",
+        "docs/migration/DECISIONS.md",
+        "docs/migration/TARGET_ARCHITECTURE.md",
+        "docs/migration/MASTER_PLAN.md",
+        "docs/migration/GAP_ANALYSIS.md",
+        "docs/migration/REUSE_ANALYSIS.md"
+      ],
+      "notes": "GAP_ANALYSIS.md e REUSE_ANALYSIS.md já vinham modificados pelo executor (blockers das rodadas 1 e 2); o fechamento acrescentou apenas a linha de atualização por review017 e a correção dos ponteiros restantes ao Goal017. O contexto do job apontava reviews/003-review.md como \"o review desta execução\" — esse arquivo é o review do Goal003 e não foi tocado; segui a convenção do repositório e criei reviews/017-review.md."
+    },
+    "attemptId": "017-r3-tech_lead-2c47443f-a1"
+  }
+}

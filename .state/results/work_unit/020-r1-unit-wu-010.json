@@ -1,0 +1,56 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-15T05:55:00.744Z",
+  "attemptId": "020-r1-unit-wu-010-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "020-r1-unit-wu-010",
+      "goal": "020",
+      "round": 1,
+      "workUnitId": "WU-010",
+      "status": "COMPLETED",
+      "summary": "Removido o protocolo legado de migração da UI (tela, rotas /migracao, folha CSS e referência no RouteAnnouncer), sem afetar as rotas de backend /v1/calendar/migrations.",
+      "report": "Removi `apps/frontend/src/features/migration/` (ProductMigrationScreen.tsx, MigrationScreen.tsx, types.ts) e `apps/frontend/src/app/(platform)/migracao/` (layout.tsx e [step]/page.tsx) via `git rm -r`, que eram os três consumidores citados no hint (ProductMigrationScreen.tsx:118 diagnose, :150 create, :496 get) e a rota dinâmica que os expunha, incluindo a chave `para-minha-agenda`. Removi também `apps/frontend/src/shared/styles/atendly-migration.css` e sua linha `@import` em `apps/frontend/src/app/globals.css`, para não deixar folha importada apontando para diretório vazio. Como consequência direta da remoção da rota, tirei a entrada `[/^\\/migracao/, \"Migração de agenda\"]` de `apps/frontend/src/shared/ui/RouteAnnouncer.tsx`, que ficaria morta. Não toquei em `BffMigrationService.ts`, `publicApiSchemas.ts` nem nas rotas do BFF/scheduling-service que atendem `/v1/calendar/migrations` — a retirada delas é do Goal025, conforme o escopo desta unidade.\n\nComandos executados (todos em `E:\\Projetos\\atendly-ia\\.ai-worktrees\\goal-020`, exceto onde indicado):\n- `git status`, `git rm -r apps/frontend/src/features/migration apps/frontend/src/app/(platform)/migracao apps/frontend/src/shared/styles/atendly-migration.css` — remoção rastreada pelo git.\n- Edits em `globals.css` (remoção do `@import`) e `RouteAnnouncer.tsx` (remoção da entrada de rota).\n- Em `apps/frontend/`: `rm -rf .next && npx tsc --noEmit -p tsconfig.json` — passou limpo (o erro inicial de `.next/types/validator.ts` referenciando os arquivos apagados era cache stale; sumiu após limpar `.next`).\n- `npx eslint src/shared/ui/RouteAnnouncer.tsx src/app/globals.css` — 0 erros (só aviso de arquivo CSS ignorado por config, esperado).\n- `npx vitest run tests/goal018-onboarding-reachability.test.tsx tests/goal020-imports-entry.test.tsx tests/goal020-import-settings-section.test.tsx` — 3 arquivos, 75 testes, todos passaram.\n- `npx vitest run` (suíte completa do frontend) — 49/50 arquivos passaram; `tests/goal016-a11y.test.tsx` falhou (2 testes) por timeout num rádio de horário no fluxo de agenda, sem relação com migração/importação. Confirmei que é pré-existente: fiz `git stash push -u -m \"wu010-verify-baseline-<ts>\" -- apps/frontend`, rodei o mesmo teste isolado contra o baseline (falhou igual), depois `git stash apply <sha>` + `git stash drop stash@{0}` para restaurar meu trabalho — `git status` após a restauração confirma que nada foi perdido.\n- `npx eslint .` no app inteiro mostrou 3 erros pré-existentes e não relacionados (parsing de `eslint.config.mjs` e `scripts/check-legal-config.mjs` fora do tsconfig, e ordenação de import em `next.config.ts`); nenhum arquivo tocado por esta unidade aparece na lista.\n\nVerifiquei ausência de resíduos com `grep`/`ls`: nenhuma referência a `features/migration`, `ProductMigrationScreen`, `MigrationScreen`, `/migracao`, `para-minha-agenda` ou `atendly-migration.css` restou em `apps/frontend/src` (fora do comentário explicativo pré-existente em `features/imports/types.ts`, que documenta a substituição de `migration/types.ts` e não é um import real); os diretórios `apps/frontend/src/features/migration` e `apps/frontend/src/app/(platform)/migracao` não existem mais no disco.",
+      "changedFiles": [
+        "apps/frontend/src/features/migration/ProductMigrationScreen.tsx",
+        "apps/frontend/src/features/migration/MigrationScreen.tsx",
+        "apps/frontend/src/features/migration/types.ts",
+        "apps/frontend/src/app/(platform)/migracao/[step]/page.tsx",
+        "apps/frontend/src/app/(platform)/migracao/layout.tsx",
+        "apps/frontend/src/shared/styles/atendly-migration.css",
+        "apps/frontend/src/app/globals.css",
+        "apps/frontend/src/shared/ui/RouteAnnouncer.tsx"
+      ],
+      "acceptance": [
+        {
+          "criterion": "ProductMigrationScreen, as rotas migracao/[step] e a direção para-minha-agenda saem da interface",
+          "met": true,
+          "detail": "features/migration/ e app/(platform)/migracao/ removidos via git rm -r; a chave 'para-minha-agenda' do steps map desapareceu junto com o arquivo que a continha."
+        },
+        {
+          "criterion": "Nenhuma tela consome /v1/calendar/migrations",
+          "met": true,
+          "detail": "grep por 'migration.diagnose|migration.create|migration.get' em apps/frontend/src/data mostra só BffMigrationService.ts, publicApiSchemas.ts e BffOnboardingService.ts (camada de dados, fora do escopo); nenhuma tela (.tsx de features/app) referencia mais esses métodos após a remoção."
+        },
+        {
+          "criterion": "As rotas /v1/calendar/migrations continuam existindo e respondendo como hoje",
+          "met": true,
+          "detail": "Não editei apps/bff/src/modules/migrations/routes.ts nem apps/scheduling-service/src/modules/migrations/*; git status confirma que só arquivos de apps/frontend foram tocados por esta unidade."
+        },
+        {
+          "criterion": "Nenhuma folha de estilo fica importada apontando para diretório vazio",
+          "met": true,
+          "detail": "atendly-migration.css removido junto com a linha '@import \"../shared/styles/atendly-migration.css\";' em globals.css; grep por 'atendly-migration' em src não retorna nada."
+        },
+        {
+          "criterion": "Nenhum arquivo órfão sobra no módulo retirado",
+          "met": true,
+          "detail": "ls confirma que apps/frontend/src/features/migration e apps/frontend/src/app/(platform)/migracao não existem mais; typecheck limpo (rm -rf .next && tsc --noEmit) descarta imports pendentes para os arquivos removidos."
+        }
+      ]
+    },
+    "attemptId": "020-r1-unit-wu-010-a1"
+  }
+}

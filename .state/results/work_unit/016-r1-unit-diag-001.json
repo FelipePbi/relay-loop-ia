@@ -1,0 +1,34 @@
+{
+  "storeVersion": 1,
+  "publishedAt": "2026-09-14T15:07:59.315Z",
+  "attemptId": "016-r1-unit-diag-001-a1",
+  "result": {
+    "ok": true,
+    "result": {
+      "protocolVersion": 2,
+      "jobId": "016-r1-unit-diag-001",
+      "goal": "016",
+      "round": 1,
+      "workUnitId": "DIAG-001",
+      "status": "COMPLETED",
+      "summary": "A causa real não era código: `node_modules` de packages/contracts, apps/ai-orchestrator e apps/health-worker nunca haviam sido instalados nesta worktree; instalei as dependências e aprovei os install scripts legítimos do ai-orchestrator, e validate:core agora passa com exit 0.",
+      "report": "Diagnóstico: `validate:core` falhava em `build:contracts` com \"'tsc' não é reconhecido\" porque `packages/contracts/node_modules` não existia — nenhum `npm install` havia sido rodado ali nesta worktree (cada pacote/app deste monorepo tem seu próprio `node_modules`, sem workspaces raiz). Ao investigar os demais pacotes usados pelo gate, `apps/ai-orchestrator` e `apps/health-worker` também estavam sem `node_modules`.\n\nCorreção:\n1. `npm ci` em `packages/contracts` (tsc passou a existir).\n2. `npm ci` em `apps/health-worker` (nada de especial).\n3. `npm ci` em `apps/ai-orchestrator` — o npm 11 (feature nova de allow-scripts) pulou os postinstall de `@prisma/engines`, `esbuild` e `prisma` por não estarem na allowlist do projeto. Como `apps/ai-orchestrator`'s `build` roda `prisma generate && tsc`, isso quebraria o build em seguida. Rodei `npm approve-scripts --all` (aprova só os pacotes já declarados no lockfile, nenhuma dependência nova) e depois `npm rebuild` para executar os scripts agora aprovados. Isso adicionou o campo `allowScripts` ao `apps/ai-orchestrator/package.json` (a única alteração de código/config que fiz).\n4. Rodei o gate completo: `npm run validate:core` (a partir da raiz do worktree) — passou com exit 0, 14 passed, 3 skipped (os mesmos skips já declarados intencionalmente no script: test:bff, test:contracts, test:health-worker), 0 failed, 0 not_run.\n\nNenhuma verificação foi desabilitada, pulada ou afrouxada — `scripts/validate-core.mjs` não foi tocado. Nenhum outro arquivo rastreado pelo git foi alterado por mim; todas as demais modificações no `git status` já pré-existiam na worktree (trabalho de outras Work Units do Goal 016) e não foram tocadas nem revertidas.",
+      "changedFiles": [
+        "apps/ai-orchestrator/package.json"
+      ],
+      "acceptance": [
+        {
+          "criterion": "A verificação \"validate-core\" passa (exit 0) sem que ela própria tenha sido alterada, desabilitada ou afrouxada.",
+          "met": true,
+          "detail": "npm run validate:core a partir da raiz do worktree terminou com 'validate:core PASSED' e o JSON de resumo mostra failed:0, notRun:0 (14 passed, 3 skipped, os mesmos skips já declarados no script). scripts/validate-core.mjs não foi editado."
+        },
+        {
+          "criterion": "Nenhum critério de aceite já atendido por outra Work Unit foi revertido.",
+          "met": true,
+          "detail": "git status --short mostra apenas apps/ai-orchestrator/package.json como alteração minha; todas as demais modificações (frontend/agenda, bff, scheduling-service) já existiam antes desta unidade e não foram tocadas."
+        }
+      ]
+    },
+    "attemptId": "016-r1-unit-diag-001-a1"
+  }
+}
