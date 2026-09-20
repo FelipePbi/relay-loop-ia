@@ -332,6 +332,16 @@ async function main() {
     await persistClosure({ acceptedSnapshot: snapshot }, machine.state);
     emit(`  files: ${snapshot.fileCount} · diffHash: ${snapshot.diffHash.slice(0, 16)}`);
     emit('');
+  } else if (closure.closureDocsJobId) {
+    // Closure documentation already ran and wrote under CLOSURE_WRITE_PREFIX
+    // — its own scope was already checked by assertClosureScope right after
+    // that step ran. The only way to land here is a commit failure AFTER
+    // docs were written, so the tree has legitimately moved past the
+    // snapshot already; re-verifying it now would reject the very files
+    // closure itself was supposed to add.
+    emit('Accepted snapshot already verified before closure documentation was written; not re-checking a tree closure itself changed.');
+    emit(`  files: ${snapshot.fileCount} · diffHash: ${snapshot.diffHash.slice(0, 16)}`);
+    emit('');
   } else {
     emit('Verifying the accepted snapshot…');
     assertSnapshotUnchanged(snapshot, buildAcceptedSnapshot({
