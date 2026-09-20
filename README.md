@@ -1,4 +1,4 @@
-# Relay IA
+# Relay Loop IA
 
 Extraído do `tools/ia-loop/` do monorepo `atendly-ia` em 2026-09-19 como
 projeto standalone. Antes era "ferramental isolado do IA Loop" dentro daquele
@@ -14,7 +14,7 @@ monorepo — não fazia parte do runtime do Atendly nem era importado por
 > reescrito. Comandos que dependem de `docs/migration/` (`ia-loop:auto`,
 > `ia-loop:goal`, `ia-loop:close`, `ia-loop:recover`) vão falhar com uma
 > mensagem `Blocker: [...]` limpa até que um fluxo de goals próprio do
-> Relay IA exista aqui — isso é esperado.
+> Relay Loop IA exista aqui — isso é esperado.
 
 Duas etapas concluídas (no contexto original, atendly-ia):
 
