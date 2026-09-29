@@ -1,17 +1,40 @@
 # Relay Loop IA
 
 **Relay Loop IA** é um orquestrador autônomo de agentes de IA para automação de
-projetos de engenharia de software. Ele conduz um Goal (uma unidade de
-trabalho) do início ao fim sem intervenção humana: implementação, revisão,
-correções, aceite e fechamento, coordenando dois papéis de agente (um Tech
-Lead que planeja e revisa, um Developer que implementa) sobre um protocolo
-próprio de jobs, leases e worktrees em disco, com recuperação de falhas,
-roteamento adaptativo de modelo e telemetria de custo desde a primeira chamada.
+projetos de engenharia de software. Ele conduz um Goal (uma etapa de trabalho)
+do início ao fim: implementação, revisão, correções, aceite e fechamento. Só
+para quando uma condição realmente exige uma pessoa. Coordena dois papéis de
+agente (um Tech Lead que planeja e revisa, um Developer que implementa) sobre um
+protocolo próprio de jobs, leases e worktrees em disco, com recuperação de
+falhas, roteamento adaptativo de modelo e telemetria de custo desde a primeira
+chamada.
 
-Foi extraído do `tools/ia-loop/` do monorepo `atendly-ia`, onde nasceu e foi
-usado em produção para conduzir uma migração real de dezenas de Goals
-sequenciais. Este repositório é a versão standalone: mesmo motor, pronta para
-ser usada em outros projetos e domínios além daquele em que nasceu.
+**Em números** (ledger real de uso, mais de 70 Goals):
+
+- **52%** das unidades de trabalho resolvidas em código, sem chamar modelo
+- **32,6%** a menos de custo equivalente de API com o roteamento adaptativo,
+  contra usar Opus em tudo
+- **1.617** testes automatizados, nenhum com chamada real a modelo
+
+**Stack:** Node.js ≥ 20, JavaScript ESM, zero dependências de runtime (só
+builtins do Node), SQLite nativo (`node:sqlite`) para telemetria. Os agentes são
+executados pelo Claude Code CLI.
+
+**Autor:** Felipe Borges ·
+[LinkedIn](https://www.linkedin.com/in/felipe-borges-pbi) ·
+[GitHub](https://github.com/FelipePbi)
+
+## Origem
+
+O Relay Loop IA nasceu em `tools/ia-loop/` dentro do monorepo `atendly-ia`. O
+Atendly começou como uma ferramenta de atendimento via WhatsApp para uso
+pessoal. Depois que ela provou funcionar, a decisão foi transformá-la em um
+produto multi-tenant para outros profissionais autônomos. Essa migração, de
+todo o legado para um produto novo, é conduzida pelo Relay Loop IA em dezenas
+de Goals sequenciais.
+
+Este repositório é a versão standalone, extraída em 2026-09-19: mesmo motor,
+para ser usado em outros projetos e domínios.
 
 ## Por que existe
 
@@ -47,10 +70,15 @@ Goal (READY) → Developer implementa → Tech Lead revisa
 ```
 
 - **Dois papéis, dois perfis de execução.** O **Tech Lead** roda em sessão
-  persistente (modelo padrão `claude-fable-5-1`) e é responsável por planejar
-  e revisar. O **Developer** roda como processo stateless por rodada (modelo
-  padrão `claude-opus-5`, mas com roteamento adaptativo, veja abaixo), e é
-  responsável por implementar.
+  persistente e é responsável por planejar e revisar. O **Developer** roda como
+  processo stateless por rodada e é responsável por implementar.
+- **Roteamento adaptativo de modelo.** Cada Work Unit é classificada por
+  natureza e complexidade. Unidades determinísticas (typecheck, lint, testes de
+  integração) nunca chamam modelo. Para as que precisam de modelo, o Developer
+  começa sempre no perfil `SONNET_HIGH` e só escala para Opus com evidência: o
+  Tech Lead pediu escalação na revisão, ou o próprio Developer pediu durante a
+  rodada. Uma rodada de correção sem escalação mantém o perfil anterior; o
+  número da rodada, sozinho, nunca muda o modelo.
 - **Protocolo em arquivo, não em banco.** Jobs, leases, resultados e o estado
   da run autônoma vivem em `.state/` como JSON/JSONL com escrita atômica
   (arquivo temporário + rename). Não há dependência de um banco externo para
@@ -62,13 +90,13 @@ Goal (READY) → Developer implementa → Tech Lead revisa
   uma lease só declara um worker morto depois de evidência comprovada
   (heartbeat expirado e processo comprovadamente ausente), nunca por hábito.
 - **Recuperação depois de um crash ou reboot** é um comando dedicado
-  (`ia-loop:recover`), separado da retomada depois de um limite de uso da API
+  (`ia-loop:recover`), separado da retomada depois de um limite de uso
   (`ia-loop:resume`): são duas situações diferentes e pedem respostas
   diferentes.
-- **Roteamento adaptativo de modelo.** Cada Work Unit é classificada por
-  natureza e complexidade; unidades determinísticas nunca chamam modelo, e
-  unidades que precisam de modelo são roteadas por sinais explícitos (não por
-  "sempre o mesmo modelo para tudo").
+- **Gate humano por política.** Um Goal pausa com `humanRequired` em caso de
+  violação de política ou falha de capacidade, e só volta a andar depois de
+  resolvido explicitamente. Fora isso, o ciclo planeja, desenvolve, revisa e
+  fecha sem aprovação humana.
 - **Telemetria de custo desde a primeira chamada.** Toda execução de modelo
   vira uma linha no ledger de uso: tokens, custo reportado pelo provider,
   modelo servido de fato (nunca assumido), o suficiente para comparar
@@ -78,11 +106,17 @@ Goal (READY) → Developer implementa → Tech Lead revisa
 Cada uma dessas decisões de design tem sua motivação registrada em detalhe no
 [log de engenharia](docs/ENGINEERING_LOG.md) (30 versões, V1 a V30).
 
-## Resultados em produção (Atendly)
+## Resultados de uso real (monorepo atendly-ia)
 
-Números abaixo vêm do ledger real de uso do projeto de origem (`atendly-ia`),
+Números abaixo vêm do ledger real de uso no projeto de origem (`atendly-ia`),
 extraídos via `run-metrics.mjs` sobre mais de **70 Goals** já concluídos.
 Não são projeção nem simulação. Cobertura de custo do provider: 99,6%.
+
+**Sobre os valores em dólar:** o Relay Loop IA executa os agentes pelo Claude
+Code CLI, não por chamada direta de API. Os valores abaixo são o **custo
+equivalente de API** reportado pelo provider, não gasto efetivo. As comparações
+percentuais valem do mesmo jeito, porque os dois lados usam a mesma tabela de
+preços.
 
 ### Roteamento determinístico vs. LLM
 
@@ -92,19 +126,25 @@ Não são projeção nem simulação. Cobertura de custo do provider: 99,6%.
 | Resolvidas em código (sem modelo) | 1.242 (52%) |
 | Resolvidas por LLM | 1.147 (48%) |
 
-### Economia de custo
+### Economia de custo equivalente
+
+**Medido:**
 
 | Camada | Como funciona | Economia |
 | --- | --- | --- |
-| Roteamento de modelo | Custo real $3.318,41 vs. baseline hipotético "tudo em Opus" de $4.923,11 | $1.604,70 (32,6%) |
-| Desvio para execução determinística | ~1.242 chamadas de modelo evitadas (confiança LOW, n=589) | $1.178,67 a $5.175,93 (central $2.511,37) |
-| **Total combinado (ESTIMATED)** | Soma das duas camadas acima | **$2.783,37 a $6.780,63 (central $4.116,07)** |
+| Roteamento de modelo | Custo equivalente de $3.318,41 vs. baseline hipotético "tudo em Opus" de $4.923,11 | **$1.604,70 (32,6%)** |
 
 Quase toda a economia de roteamento vem do Sonnet ($1.566,99). O Fable, quando
-usado, custou $152,71 a mais que Opus, não menos. O total combinado é rotulado
-**ESTIMATED**, nunca apresentado como medição exata.
+usado, custou $152,71 a mais que o Opus, não menos.
 
-### Custo por unidade de trabalho
+**Estimado (confiança baixa, não é medição direta):**
+
+| Camada | Como funciona | Economia estimada |
+| --- | --- | --- |
+| Desvio para execução determinística | ~1.242 chamadas de modelo evitadas (confiança LOW, n=589) | $1.178,67 a $5.175,93 (central $2.511,37) |
+| Total combinado (ESTIMATED) | Soma da camada medida com a estimada | $2.783,37 a $6.780,63 (central $4.116,07) |
+
+### Custo equivalente por unidade de trabalho
 
 | Métrica | Valor |
 | --- | --- |
@@ -146,10 +186,15 @@ cerca de 5 pontos.
 O Fable não era roteamento adaptativo: era taxa fixa disfarçada. Todo Goal
 caía nele por uma regra de segurança (regex `tenant|session|auth`) que batia
 em praticamente qualquer arquivo do projeto de origem. Nos últimos 10 Goals
-executados depois da correção, o roteamento real é Opus 5.5 e Sonnet 5 em
-quase todo Goal, Haiku aparecendo uma única vez, e **zero** Fable. O
-`claude-fable-5-1` citado como padrão do Tech Lead acima é o valor de
-configuração, não o que o roteamento adaptativo de fato escolhe hoje.
+executados depois da correção, o roteamento real é Opus e Sonnet em quase todo
+Goal, Haiku aparecendo uma única vez, e **zero** Fable.
+
+### Custo cresce de forma quadrática com os turnos
+
+O ledger mostrou que o consumo de uma sessão cresce de forma quadrática com o
+número de turnos: tokens(n) ≈ 29k·n + 872·n². Por isso o motivo principal para
+decompor um Goal em Work Units é resetar o contexto, e não só escolher o
+modelo.
 
 ## Requisitos
 
@@ -207,9 +252,13 @@ o papel de cada um está documentado na seção "Como executar" do
 | Variável | Efeito |
 | --- | --- |
 | `IA_LOOP_CLAUDE_BIN` | Caminho explícito do executável do Claude Code CLI |
-| `IA_LOOP_TECH_LEAD_MODEL` | Modelo do Tech Lead (padrão `claude-fable-5-1`) |
-| `IA_LOOP_DEVELOPER_MODEL` | Modelo do Developer (padrão `claude-opus-5`) |
+| `IA_LOOP_TECH_LEAD_MODEL` | Modelo do Tech Lead (padrão no código: `claude-fable-5-1`; recomendado: `claude-opus-5`, veja abaixo) |
+| `IA_LOOP_DEVELOPER_MODEL` | Modelo do Developer (padrão `claude-opus-5`; o roteamento adaptativo começa em `SONNET_HIGH`) |
 | `IA_LOOP_TIMEOUT_MS` | Timeout por processo de agente |
+
+**Sobre o modelo do Tech Lead:** o Fable foi o padrão inicial, mas o ledger
+mostrou que ele custava mais que o Opus sem entregar valor proporcional. A
+recomendação é definir `IA_LOOP_TECH_LEAD_MODEL=claude-opus-5`.
 
 Nenhuma saída do harness imprime prompt completo, token, credencial, session
 id ou dado pessoal.
