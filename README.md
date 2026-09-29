@@ -22,7 +22,6 @@ executados pelo Claude Code CLI.
 
 **Autor:** Felipe Borges ·
 [LinkedIn](https://www.linkedin.com/in/felipe-borges-pbi) ·
-[GitHub](https://github.com/FelipePbi)
 
 ## Origem
 
