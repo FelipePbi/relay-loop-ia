@@ -78,6 +78,52 @@ Goal (READY) → Developer implementa → Tech Lead revisa
 Cada uma dessas decisões de design tem sua motivação registrada em detalhe no
 [log de engenharia](docs/ENGINEERING_LOG.md) (30 versões, V1 a V30).
 
+## Resultados em produção (Atendly)
+
+Números abaixo vêm do ledger real de uso do projeto de origem (`atendly-ia`),
+extraídos via `run-metrics.mjs` sobre mais de **70 Goals** já concluídos —
+não são projeção nem simulação. Cobertura de custo do provider: 99,6%.
+
+**Roteamento determinístico vs. LLM.** Das 2.389 unidades de trabalho
+registradas no ledger, 1.242 (52%) foram resolvidas em código, sem chamar
+nenhum modelo, e 1.147 (48%) exigiram uma chamada de LLM.
+
+**Economia de custo, em duas camadas separadas:**
+
+- **Roteamento de modelo** (LLM mais barato capaz da tarefa, em vez de sempre
+  o mesmo modelo): custo real $3.318,41 contra um baseline hipotético
+  "tudo em Opus" de $4.923,11 — economia de $1.604,70 (32,6%). Quase toda essa
+  economia vem do Sonnet ($1.566,99); o Fable, quando usado, custou $152,71
+  **a mais** que Opus, não menos.
+- **Desvio para execução determinística** (unidades que nunca chamam modelo):
+  ~1.242 chamadas de modelo evitadas, economia estimada entre $1.178,67 e
+  $5.175,93 (ponto central $2.511,37; confiança **LOW**, n=589 — estimativa,
+  não medição direta).
+- **Total combinado estimado:** entre $2.783,37 e $6.780,63, ponto central
+  $4.116,07 — rotulado **ESTIMATED**, nunca apresentado como medição exata.
+
+**Custo por unidade de trabalho:** ~$3,33 por Work Unit bem-sucedida;
+~$51 por Goal em média (mediana $42; mínimo $3,42; máximo $198,66; sobre 64
+Goals com custo registrado, soma $3.281,34).
+
+**Fallback e escalação entre modelos são raros e sempre por motivo técnico
+explícito**, nunca por "o modelo travou" ou falha de qualidade: 32 de 1.147
+chamadas (2,8%) — 10 fallback (todos por `USAGE_LIMIT`) e 22 escalação
+(13 `TOOLING_PERMISSION_DENIED`, 6 `PLAN_INCOMPATIBILITY`,
+2 `COMPLEXITY_DISCOVERED`, 1 `REVIEW_INCONCLUSIVE`). No nível de job, 31 de
+1.041 (3,0%) tiveram fallback ou escalação; desses, 93,5% concluíram — contra
+98,7% dos jobs sem fallback/escalação. A tarefa quase sempre termina depois
+do fallback, mas a taxa de conclusão cai cerca de 5 pontos.
+
+**Achado que corrigiu o próprio roteamento (V28):** o Fable não era
+roteamento adaptativo — era taxa fixa disfarçada. Todo Goal caía nele por
+uma regra de segurança (regex `tenant|session|auth`) que batia em
+praticamente qualquer arquivo do projeto de origem. Nos últimos 10 Goals
+executados depois da correção, o roteamento real é Opus 5.5 + Sonnet 5 em
+quase todo Goal, Haiku aparecendo uma única vez, e **zero** Fable — o
+`claude-fable-5-1` citado como padrão do Tech Lead acima é o valor de
+configuração, não o que o roteamento adaptativo de fato escolhe hoje.
+
 ## Requisitos
 
 - **Node.js ≥ 20**
